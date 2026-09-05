@@ -210,16 +210,27 @@ class AudibleProvider(BaseMetadataProvider):
                 await client.aclose()
 
     async def search(self, query: str, **kwargs: Any) -> SearchResponse:
-        if not query.strip():
+        """Search by free-text keywords and/or author name.
+
+        ``author`` (kwarg) uses the catalog API's ``author=`` parameter;
+        when both are given, Audible ANDs them (title keywords + author).
+        """
+        if not query.strip() and not (kwargs.get("author") or "").strip():
             return SearchResponse(results=[], query_used=query)
 
         page_size = int(kwargs.get("page_size", DEFAULT_PAGE_SIZE))
         params: dict[str, Any] = {
-            "keywords": query.strip(),
             "num_results": page_size,
             "response_groups": CATALOG_RESPONSE_GROUPS,
         }
-        log.info("Audible search for %r region=%s", query, self.region)
+        if query.strip():
+            params["keywords"] = query.strip()
+        author = (kwargs.get("author") or "").strip()
+        if author:
+            params["author"] = author
+        log.info(
+            "Audible search for %r author=%r region=%s", query, author, self.region
+        )
 
         client = self._make_client()
         try:
