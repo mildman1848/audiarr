@@ -3,8 +3,8 @@ FROM ghcr.io/linuxserver/baseimage-ubuntu:${LSIO_BASE_VERSION}
 
 ARG LSIO_BASE_VERSION
 ARG APP_VERSION=0.1.0
-ARG IMAGE_REVISION=mldm1
-ARG VERSION=0.1.0-mldm1
+ARG IMAGE_REVISION=mldm2
+ARG VERSION=0.1.0-mldm2
 ARG BUILD_DATE=unknown
 ARG VCS_REF=unknown
 
@@ -37,6 +37,11 @@ RUN chown -R abc:abc /app/audiarr/app /app/audiarr/requirements.txt \
     && python3 -m venv /app/venv \
     && /app/venv/bin/pip install --no-cache-dir --upgrade pip setuptools wheel \
     && /app/venv/bin/pip install --no-cache-dir -r /app/audiarr/requirements.txt \
+    && /app/venv/bin/pip uninstall -y pip setuptools wheel \
+    && apt-get purge -y --auto-remove \
+      python3-pip python3-setuptools python3-wheel \
+      python3-pip-whl python3-setuptools-whl python3-venv python3.12-venv \
+    && rm -rf /var/lib/apt/lists/* /root/.cache/pip \
     && chown -R abc:abc /app/venv
 
 COPY root/ /

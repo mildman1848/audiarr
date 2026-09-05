@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.1.0-mldm2
+
+- Update FastAPI, Starlette, Pydantic, Uvicorn, and Jinja2 pins for security.
+- Remove pip, setuptools, wheel, and system Python build helpers from the runtime image after dependency installation.
+- Keep the image LSIO/s6-compatible while reducing runtime scanner noise and attack surface.
+
 ## 0.1.0-mldm1
 
 - Initial Audiarr scaffold.

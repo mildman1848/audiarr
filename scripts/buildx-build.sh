@@ -2,10 +2,10 @@
 set -euo pipefail
 DOCKER="${DOCKER:-docker}"
 IMAGE_NAME="${IMAGE_NAME:-local/audiarr}"
-IMAGE_TAG="${IMAGE_TAG:-0.1.0-mldm1}"
-VERSION="${VERSION:-0.1.0-mldm1}"
+IMAGE_TAG="${IMAGE_TAG:-0.1.0-mldm2}"
+VERSION="${VERSION:-0.1.0-mldm2}"
 APP_VERSION="${APP_VERSION:-0.1.0}"
-IMAGE_REVISION="${IMAGE_REVISION:-mldm1}"
+IMAGE_REVISION="${IMAGE_REVISION:-mldm2}"
 PLATFORMS="${PLATFORMS:-linux/amd64}"
 PUSH_OR_LOAD="${1:---load}"
 

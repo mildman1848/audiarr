@@ -1,13 +1,13 @@
 services:
   audiarr:
-    image: local/audiarr:0.1.0-mldm1
+    image: local/audiarr:0.1.0-mldm2
     build:
       context: .
       args:
         LSIO_BASE_VERSION: noble
         APP_VERSION: 0.1.0
-        IMAGE_REVISION: mldm1
-        VERSION: 0.1.0-mldm1
+        IMAGE_REVISION: mldm2
+        VERSION: 0.1.0-mldm2
     container_name: audiarr
     restart: unless-stopped
     ports:

@@ -4,7 +4,7 @@ SHELL := /bin/bash
 
 IMAGE_NAME ?= audiarr
 APP_VERSION ?= 0.1.0
-IMAGE_REVISION ?= mldm1
+IMAGE_REVISION ?= mldm2
 VERSION ?= $(APP_VERSION)-$(IMAGE_REVISION)
 IMAGE_TAG ?= $(VERSION)
 REGISTRY ?= ghcr.io/mildman1848
