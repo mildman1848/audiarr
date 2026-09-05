@@ -17,7 +17,13 @@ from fastapi import FastAPI
 from fastapi.staticfiles import StaticFiles
 
 from app import __version__
-from app.api import routes_connections, routes_metadata, routes_settings, routes_system
+from app.api import (
+    routes_connections,
+    routes_library,
+    routes_metadata,
+    routes_settings,
+    routes_system,
+)
 from app.config import get_db_path, load_settings
 from app.db import init_db
 from app.logging_conf import configure_logging
@@ -47,6 +53,7 @@ def create_app() -> FastAPI:
     app.include_router(routes_settings.router)
     app.include_router(routes_metadata.router)
     app.include_router(routes_connections.router)
+    app.include_router(routes_library.router)
     app.include_router(web_routes.router)
 
     return app
