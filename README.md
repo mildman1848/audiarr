@@ -63,7 +63,9 @@ Important defaults:
 | Port | `8787` |
 | Config | `/config/audiarr` |
 | Media root | `/data/audiobooks` |
-| Audible locale | `de` |
+| Audible locale | `us` |
+| UI language | `en`, with `de` available |
+| Optional translation backend | `none` by default; LibreTranslate-compatible backend optional |
 | Version | `0.1.0-mldm1` |
 
 ## Publishing policy
