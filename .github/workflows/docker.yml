@@ -1,0 +1,102 @@
+name: Docker
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+    inputs:
+      push:
+        description: Push image to configured registries
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+  packages: write
+
+jobs:
+  docker:
+    runs-on: ubuntu-latest
+    env:
+      IMAGE_NAME: audiarr
+      APP_VERSION: 0.1.0
+      IMAGE_REVISION: mldm1
+      VERSION: 0.1.0-mldm1
+      DOCKERHUB_USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}
+      DOCKERHUB_TOKEN: ${{ secrets.DOCKERHUB_TOKEN }}
+      GITLAB_REGISTRY_IMAGE: ${{ secrets.GITLAB_REGISTRY_IMAGE }}
+      GITLAB_REGISTRY_USER: ${{ secrets.GITLAB_REGISTRY_USER }}
+      GITLAB_REGISTRY_TOKEN: ${{ secrets.GITLAB_REGISTRY_TOKEN }}
+      CODEBERG_REGISTRY_IMAGE: ${{ secrets.CODEBERG_REGISTRY_IMAGE }}
+      CODEBERG_REGISTRY_USER: ${{ secrets.CODEBERG_REGISTRY_USER }}
+      CODEBERG_REGISTRY_TOKEN: ${{ secrets.CODEBERG_REGISTRY_TOKEN }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: docker/setup-buildx-action@v3
+      - name: Resolve image targets
+        id: images
+        shell: bash
+        run: |
+          {
+            echo 'images<<EOF'
+            echo "ghcr.io/${GITHUB_REPOSITORY_OWNER}/${IMAGE_NAME}"
+            if [[ -n "${DOCKERHUB_USERNAME}" ]]; then echo "docker.io/${DOCKERHUB_USERNAME}/${IMAGE_NAME}"; fi
+            if [[ -n "${GITLAB_REGISTRY_IMAGE}" ]]; then echo "${GITLAB_REGISTRY_IMAGE}"; fi
+            if [[ -n "${CODEBERG_REGISTRY_IMAGE}" ]]; then echo "${CODEBERG_REGISTRY_IMAGE}"; fi
+            echo 'EOF'
+          } >> "$GITHUB_OUTPUT"
+      - name: Login to GHCR
+        if: github.event_name == 'push' || (github.event_name == 'workflow_dispatch' && inputs.push)
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ github.token }}
+      - name: Login to Docker Hub
+        if: (github.event_name == 'push' || (github.event_name == 'workflow_dispatch' && inputs.push)) && env.DOCKERHUB_USERNAME != '' && env.DOCKERHUB_TOKEN != ''
+        uses: docker/login-action@v3
+        with:
+          registry: docker.io
+          username: ${{ env.DOCKERHUB_USERNAME }}
+          password: ${{ env.DOCKERHUB_TOKEN }}
+      - name: Login to GitLab Registry
+        if: (github.event_name == 'push' || (github.event_name == 'workflow_dispatch' && inputs.push)) && env.GITLAB_REGISTRY_IMAGE != '' && env.GITLAB_REGISTRY_USER != '' && env.GITLAB_REGISTRY_TOKEN != ''
+        uses: docker/login-action@v3
+        with:
+          registry: registry.gitlab.com
+          username: ${{ env.GITLAB_REGISTRY_USER }}
+          password: ${{ env.GITLAB_REGISTRY_TOKEN }}
+      - name: Login to Codeberg Registry
+        if: (github.event_name == 'push' || (github.event_name == 'workflow_dispatch' && inputs.push)) && env.CODEBERG_REGISTRY_IMAGE != '' && env.CODEBERG_REGISTRY_USER != '' && env.CODEBERG_REGISTRY_TOKEN != ''
+        uses: docker/login-action@v3
+        with:
+          registry: codeberg.org
+          username: ${{ env.CODEBERG_REGISTRY_USER }}
+          password: ${{ env.CODEBERG_REGISTRY_TOKEN }}
+      - name: Docker metadata
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ steps.images.outputs.images }}
+          tags: |
+            type=raw,value=${{ env.VERSION }}
+            type=sha,prefix=sha-
+            type=raw,value=latest,enable={{ is_default_branch }}
+      - name: Build image
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: Dockerfile
+          platforms: linux/amd64,linux/arm64
+          push: ${{ github.event_name == 'push' || (github.event_name == 'workflow_dispatch' && inputs.push) }}
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          build-args: |
+            VERSION=${{ env.VERSION }}
+            APP_VERSION=${{ env.APP_VERSION }}
+            IMAGE_REVISION=${{ env.IMAGE_REVISION }}
+            VCS_REF=${{ github.sha }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max

@@ -1,0 +1,34 @@
+services:
+  audiarr:
+    image: local/audiarr:0.1.0-mldm1
+    build:
+      context: .
+      args:
+        LSIO_BASE_VERSION: noble
+        APP_VERSION: 0.1.0
+        IMAGE_REVISION: mldm1
+        VERSION: 0.1.0-mldm1
+    container_name: audiarr
+    restart: unless-stopped
+    ports:
+      - "8787:8787"
+    environment:
+      PUID: "1000"
+      PGID: "1000"
+      TZ: Europe/Berlin
+      UMASK: "002"
+      AUDIARR_HOST: 0.0.0.0
+      AUDIARR_PORT: "8787"
+      AUDIARR_CONFIG_DIR: /config
+      AUDIARR_DEFAULT_ROOT_FOLDER: /data/audiobooks
+      # FILE__AUDIOBOOKSHELF_API_KEY: /run/secrets/audiobookshelf_api_key
+      # FILE__M4B_CONVERTARR_API_KEY: /run/secrets/m4b_convertarr_api_key
+    volumes:
+      - ./config:/config
+      - /mnt/qnap/mediacenter/data:/data
+    networks:
+      - media_apps
+
+networks:
+  media_apps:
+    external: true

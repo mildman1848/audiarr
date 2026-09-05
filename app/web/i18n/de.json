@@ -1,0 +1,17 @@
+{
+  "app_name": "Audiarr",
+  "nav_dashboard": "Übersicht",
+  "nav_library": "Bibliothek",
+  "nav_metadata": "Metadaten-Suche",
+  "nav_connections": "Verbindungen",
+  "nav_settings": "Einstellungen",
+  "dashboard_title": "Übersicht",
+  "dashboard_welcome": "Willkommen bei Audiarr, deiner Hörbuch-Bibliotheksverwaltung.",
+  "card_root_folders": "Stammordner",
+  "card_quality_profiles": "Qualitätsprofile",
+  "card_connections": "Verbindungen",
+  "card_metadata_provider": "Primärer Metadaten-Anbieter",
+  "status_ok": "OK",
+  "status_not_configured": "Nicht konfiguriert",
+  "footer_note": "MVP-Gerüst. Siehe docs/parity-targets.md für die Feature-Roadmap."
+}

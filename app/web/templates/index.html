@@ -1,0 +1,50 @@
+<!DOCTYPE html>
+<html lang="{{ lang }}">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{{ t.app_name }}</title>
+  <link rel="stylesheet" href="/static/css/style.css">
+</head>
+<body>
+  <div class="layout">
+    <aside class="sidebar">
+      <div class="brand">{{ t.app_name }}</div>
+      <nav>
+        <a href="/" class="active">{{ t.nav_dashboard }}</a>
+        <a href="#library">{{ t.nav_library }}</a>
+        <a href="#metadata">{{ t.nav_metadata }}</a>
+        <a href="#connections">{{ t.nav_connections }}</a>
+        <a href="#settings">{{ t.nav_settings }}</a>
+      </nav>
+    </aside>
+    <main class="main">
+      <h1>{{ t.dashboard_title }}</h1>
+      <p>{{ t.dashboard_welcome }}</p>
+
+      <div class="card-grid">
+        <div class="card">
+          <h2>{{ t.card_root_folders }}</h2>
+          <div class="value">{{ root_folder_count }}</div>
+        </div>
+        <div class="card">
+          <h2>{{ t.card_quality_profiles }}</h2>
+          <div class="value">{{ quality_profile_count }}</div>
+        </div>
+        <div class="card">
+          <h2>{{ t.card_metadata_provider }}</h2>
+          <div class="value">{{ primary_metadata_provider }}</div>
+        </div>
+        <div class="card">
+          <h2>{{ t.card_connections }}</h2>
+          <span class="badge">Audiobookshelf: {{ audiobookshelf_status }}</span><br><br>
+          <span class="badge">m4b-convertarr: {{ m4b_convertarr_status }}</span>
+        </div>
+      </div>
+
+      <footer>{{ t.footer_note }} — Audiarr v{{ version }}</footer>
+    </main>
+  </div>
+  <script src="/static/js/app.js"></script>
+</body>
+</html>

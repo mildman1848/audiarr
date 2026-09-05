@@ -1,0 +1,39 @@
+name: Mirror
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  mirror:
+    runs-on: ubuntu-latest
+    env:
+      CODEBERG_SSH_KEY: ${{ secrets.CODEBERG_SSH_KEY }}
+      GITLAB_SSH_KEY: ${{ secrets.GITLAB_SSH_KEY }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Configure SSH
+        if: env.CODEBERG_SSH_KEY != '' || env.GITLAB_SSH_KEY != ''
+        shell: bash
+        run: |
+          mkdir -p ~/.ssh
+          chmod 700 ~/.ssh
+          if [[ -n "${CODEBERG_SSH_KEY}" ]]; then printf '%s
+' "${CODEBERG_SSH_KEY}" > ~/.ssh/codeberg; chmod 600 ~/.ssh/codeberg; fi
+          if [[ -n "${GITLAB_SSH_KEY}" ]]; then printf '%s
+' "${GITLAB_SSH_KEY}" > ~/.ssh/gitlab; chmod 600 ~/.ssh/gitlab; fi
+          ssh-keyscan codeberg.org gitlab.com >> ~/.ssh/known_hosts
+      - name: Mirror to Codeberg
+        if: env.CODEBERG_SSH_KEY != ''
+        run: |
+          GIT_SSH_COMMAND='ssh -i ~/.ssh/codeberg' git push --mirror git@codeberg.org:mildman1848/audiarr.git
+      - name: Mirror to GitLab
+        if: env.GITLAB_SSH_KEY != ''
+        run: |
+          GIT_SSH_COMMAND='ssh -i ~/.ssh/gitlab' git push --mirror git@gitlab.com:mildman1848/audiarr.git

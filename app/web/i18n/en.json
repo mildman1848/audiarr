@@ -1,0 +1,17 @@
+{
+  "app_name": "Audiarr",
+  "nav_dashboard": "Dashboard",
+  "nav_library": "Library",
+  "nav_metadata": "Metadata Search",
+  "nav_connections": "Connections",
+  "nav_settings": "Settings",
+  "dashboard_title": "Dashboard",
+  "dashboard_welcome": "Welcome to Audiarr, your audiobook library manager.",
+  "card_root_folders": "Root Folders",
+  "card_quality_profiles": "Quality Profiles",
+  "card_connections": "Connections",
+  "card_metadata_provider": "Primary Metadata Provider",
+  "status_ok": "OK",
+  "status_not_configured": "Not configured",
+  "footer_note": "MVP scaffold. See docs/parity-targets.md for the feature roadmap."
+}
