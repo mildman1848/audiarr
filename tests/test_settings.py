@@ -4,7 +4,8 @@ def test_get_settings_defaults(app_client):
     body = response.json()
     assert body["ui"]["language"] == "en"
     assert body["metadata"]["provider_order"] == ["audible", "audnexus"]
-    assert body["metadata"]["audible_locale"] == "de"
+    assert body["metadata"]["audible_locale"] == "us"
+    assert body["translation"]["backend"] == "none"
 
 
 def test_put_settings_persists(app_client):

@@ -20,8 +20,8 @@ from typing import Literal
 
 from pydantic import BaseModel, Field
 
-# Audible marketplaces we know about. "de" is the default for German users
-# per the project requirements; more can be added as providers mature.
+# Supported Audible marketplaces. The project default is now the US
+# marketplace, with German still fully supported as a first-class locale.
 AudibleLocale = Literal["us", "uk", "de", "fr", "ca", "au", "it", "es", "jp", "in"]
 
 
@@ -106,7 +106,7 @@ class MetadataSettings(BaseModel):
     """
 
     provider_order: list[str] = Field(default_factory=lambda: ["audible", "audnexus"])
-    audible_locale: AudibleLocale = "de"
+    audible_locale: AudibleLocale = "us"
     audnexus_base_url: str = "https://api.audnex.us"
 
 
@@ -116,6 +116,20 @@ class UiSettings(BaseModel):
     language: Literal["en", "de"] = "en"
     theme: Literal["dark", "light"] = "dark"
     date_format: str = "YYYY-MM-DD"
+
+
+class TranslationSettings(BaseModel):
+    """Optional community/open-source translation backend settings.
+
+    The default is offline-safe and sends no text anywhere. Users can opt
+    into a LibreTranslate-compatible backend, preferably self-hosted.
+    """
+
+    backend: Literal["none", "libretranslate"] = "none"
+    base_url: str = ""
+    api_key: str = ""
+    default_source_language: str = "en"
+    default_target_language: str = "de"
 
 
 class LoggingSettings(BaseModel):
@@ -182,6 +196,7 @@ class Settings(BaseModel):
     connect: list[ConnectNotification] = Field(default_factory=list)
     metadata: MetadataSettings = Field(default_factory=MetadataSettings)
     ui: UiSettings = Field(default_factory=UiSettings)
+    translation: TranslationSettings = Field(default_factory=TranslationSettings)
     logging: LoggingSettings = Field(default_factory=LoggingSettings)
     updates: UpdateSettings = Field(default_factory=UpdateSettings)
     backup: BackupSettings = Field(default_factory=BackupSettings)

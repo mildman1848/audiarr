@@ -14,12 +14,19 @@ from pathlib import Path
 
 I18N_DIR = Path(__file__).parent / "i18n"
 SUPPORTED_LANGUAGES = ("en", "de")
-DEFAULT_LANGUAGE = "en"
+def get_default_ui_language() -> str:
+    """Return the default UI language for new installations.
+
+    The project is English-first with German as a supported first-class
+    alternative. Providers/metadata can keep their own locale defaults
+    independently of the UI language.
+    """
+    return "en"
 
 
 @lru_cache(maxsize=len(SUPPORTED_LANGUAGES))
 def load_strings(language: str) -> dict[str, str]:
     if language not in SUPPORTED_LANGUAGES:
-        language = DEFAULT_LANGUAGE
+        language = get_default_ui_language()
     path = I18N_DIR / f"{language}.json"
     return json.loads(path.read_text(encoding="utf-8"))
