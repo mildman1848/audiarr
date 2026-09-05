@@ -8,6 +8,7 @@ from typing import Any
 from pydantic import BaseModel, Field
 
 from app.providers.base import (
+    BaseMetadataProvider,
     BrowseResponse,
     SearchResponse,
 )
@@ -34,9 +35,25 @@ class ProviderChain:
       request; empty results are treated as "no match", not as an error.
     """
 
-    def __init__(self, *, config: ProviderChainConfig | None = None) -> None:
+    def __init__(
+        self,
+        *,
+        config: ProviderChainConfig | None = None,
+        provider_overrides: dict[str, BaseMetadataProvider] | None = None,
+    ) -> None:
         self.config = config or ProviderChainConfig()
         self._registry = ProviderRegistry
+        # Direct instance overrides, checked before the registry. Lets
+        # callers (and tests) inject pre-configured provider instances.
+        self._overrides: dict[str, BaseMetadataProvider] = dict(provider_overrides or {})
+
+    def _resolve_provider(self, name: str) -> BaseMetadataProvider | None:
+        """Return a provider instance: override first, registry second."""
+        if name in self._overrides:
+            return self._overrides[name]
+        if not self._registry.has_provider(name):
+            return None
+        return self._registry.by_name(name, **self._provider_ctor_kwargs(name))
 
     def _provider_ctor_kwargs(self, provider_name: str) -> dict[str, Any]:
         """Map chain config to provider constructor kwargs."""
@@ -50,14 +67,12 @@ class ProviderChain:
             return SearchResponse(results=[], query_used=query)
 
         for provider_name in self.config.provider_order:
-            if not self._registry.has_provider(provider_name):
+            provider = self._resolve_provider(provider_name)
+            if provider is None:
                 log.debug("provider %s not registered, skipping", provider_name)
                 continue
 
             try:
-                provider = self._registry.by_name(
-                    provider_name, **self._provider_ctor_kwargs(provider_name)
-                )
                 response = await provider.search(query, **kwargs)
                 if response.results:
                     log.debug(
@@ -66,6 +81,8 @@ class ProviderChain:
                         len(response.results),
                         query,
                     )
+                    response.provider_metadata = dict(response.provider_metadata)
+                    response.provider_metadata["provider_used"] = provider_name
                     return response
                 log.debug(
                     "provider %s returned no results for %r", provider_name, query
@@ -89,12 +106,10 @@ class ProviderChain:
         filter: str = "",
     ) -> BrowseResponse:
         for provider_name in self.config.provider_order:
-            if not self._registry.has_provider(provider_name):
+            provider = self._resolve_provider(provider_name)
+            if provider is None:
                 continue
             try:
-                provider = self._registry.by_name(
-                    provider_name, **self._provider_ctor_kwargs(provider_name)
-                )
                 response = await provider.browse(
                     page=page, page_size=page_size, sort=sort, filter=filter
                 )
@@ -112,20 +127,15 @@ class ProviderChain:
         return BrowseResponse(results=[], page=page, page_size=page_size)
 
     async def healthcheck(self) -> dict[str, bool]:
-        """Run healthchecks of all registered providers concurrently."""
-        names = [
-            name
-            for name in self.config.provider_order
-            if self._registry.has_provider(name)
-        ]
+        """Run healthchecks of all configured providers concurrently."""
+        names = [n for n in self.config.provider_order if self._resolve_provider(n) is not None]
         if not names:
             return {}
 
         async def _check(name: str) -> tuple[str, bool]:
             try:
-                provider = self._registry.by_name(
-                    name, **self._provider_ctor_kwargs(name)
-                )
+                provider = self._resolve_provider(name)
+                assert provider is not None
                 return name, await provider.healthcheck()
             except Exception:  # noqa: BLE001
                 return name, False
