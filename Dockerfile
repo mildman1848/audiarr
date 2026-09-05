@@ -33,9 +33,11 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 
 COPY app /app/audiarr/app
 COPY requirements.txt /app/audiarr/requirements.txt
-RUN python3 -m venv /app/venv \
+RUN chown -R abc:abc /app/audiarr/app /app/audiarr/requirements.txt \
+    && python3 -m venv /app/venv \
     && /app/venv/bin/pip install --no-cache-dir --upgrade pip setuptools wheel \
-    && /app/venv/bin/pip install --no-cache-dir -r /app/audiarr/requirements.txt
+    && /app/venv/bin/pip install --no-cache-dir -r /app/audiarr/requirements.txt \
+    && chown -R abc:abc /app/venv
 
 COPY root/ /
 RUN chmod +x /usr/local/bin/start-audiarr-api \
