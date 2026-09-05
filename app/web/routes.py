@@ -34,10 +34,14 @@ async def dashboard(request: Request) -> HTMLResponse:
             settings.metadata.provider_order[0] if settings.metadata.provider_order else "none"
         ),
         "audiobookshelf_status": (
-            strings["status_ok"] if settings.connections.audiobookshelf.enabled else strings["status_not_configured"]
+            strings["status_ok"]
+            if settings.connections.audiobookshelf.enabled
+            else strings["status_not_configured"]
         ),
         "m4b_convertarr_status": (
-            strings["status_ok"] if settings.connections.m4b_convertarr.enabled else strings["status_not_configured"]
+            strings["status_ok"]
+            if settings.connections.m4b_convertarr.enabled
+            else strings["status_not_configured"]
         ),
     }
     return templates.TemplateResponse(request, "index.html", context)
