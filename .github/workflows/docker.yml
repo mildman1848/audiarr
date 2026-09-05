@@ -22,8 +22,8 @@ jobs:
     env:
       IMAGE_NAME: audiarr
       APP_VERSION: 0.1.0
-      IMAGE_REVISION: mldm1
-      VERSION: 0.1.0-mldm1
+      IMAGE_REVISION: mldm2
+      VERSION: 0.1.0-mldm2
       DOCKERHUB_USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}
       DOCKERHUB_TOKEN: ${{ secrets.DOCKERHUB_TOKEN }}
       GITLAB_REGISTRY_IMAGE: ${{ secrets.GITLAB_REGISTRY_IMAGE }}
