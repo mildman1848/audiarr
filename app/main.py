@@ -19,6 +19,7 @@ from fastapi.staticfiles import StaticFiles
 from app import __version__
 from app.api import (
     routes_connections,
+    routes_import,
     routes_library,
     routes_metadata,
     routes_settings,
@@ -54,6 +55,7 @@ def create_app() -> FastAPI:
     app.include_router(routes_metadata.router)
     app.include_router(routes_connections.router)
     app.include_router(routes_library.router)
+    app.include_router(routes_import.router)
     app.include_router(web_routes.router)
 
     return app
