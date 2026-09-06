@@ -226,6 +226,18 @@ async def _import_one(
     book_id = _persist_book(conn, hit, locale)
     _persist_files(conn, book_id, candidate, locale)
 
+    # Offer MP3-source candidates to the conversion backend (no-op when
+    # conversion is disabled; the backend owns file movement).
+    if candidate.dominant_format in ("mp3", "m4a"):
+        try:
+            from app.conversion.worker import enqueue_for_book
+
+            await enqueue_for_book(
+                conn, book_id, candidate.folder_path, output_path=""
+            )
+        except Exception:  # noqa: BLE001 — conversion must never break imports
+            log.warning("auto-enqueue conversion failed for book %d", book_id, exc_info=True)
+
     base.status = "matched"
     base.matched_book_id = book_id
     return base

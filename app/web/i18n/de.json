@@ -13,5 +13,9 @@
   "card_metadata_provider": "Primärer Metadaten-Anbieter",
   "status_ok": "OK",
   "status_not_configured": "Nicht konfiguriert",
-  "footer_note": "MVP-Gerüst. Siehe docs/parity-targets.md für die Feature-Roadmap."
+  "footer_note": "MVP-Gerüst. Siehe docs/parity-targets.md für die Feature-Roadmap.",
+  "dashboard_conversion_title": "Konvertierungs-Jobs",
+  "dashboard_conversion_loading": "Konvertierungs-Jobs werden geladen…",
+  "conversion_empty": "Noch keine Konvertierungs-Jobs.",
+  "conversion_error": "Konvertierungs-Status nicht verfügbar."
 }

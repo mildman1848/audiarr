@@ -22,7 +22,7 @@ from pathlib import Path
 
 log = logging.getLogger("audiarr.db")
 
-SCHEMA_VERSION = 2  # keep in sync with the highest migration file
+SCHEMA_VERSION = 3  # keep in sync with the highest migration file
 
 # Test hook: when set, init_db/migrate use this path instead of config.
 _db_path_override: Path | None = None

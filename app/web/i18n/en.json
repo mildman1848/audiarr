@@ -13,5 +13,9 @@
   "card_metadata_provider": "Primary Metadata Provider",
   "status_ok": "OK",
   "status_not_configured": "Not configured",
-  "footer_note": "MVP scaffold. See docs/parity-targets.md for the feature roadmap."
+  "footer_note": "MVP scaffold. See docs/parity-targets.md for the feature roadmap.",
+  "dashboard_conversion_title": "Conversion Jobs",
+  "dashboard_conversion_loading": "Loading conversion jobs…",
+  "conversion_empty": "No conversion jobs yet.",
+  "conversion_error": "Conversion status unavailable."
 }

@@ -110,6 +110,27 @@ class MetadataSettings(BaseModel):
     audnexus_base_url: str = "https://api.audnex.us"
 
 
+class ConversionSettings(BaseModel):
+    """MP3 -> M4B conversion backend settings (roadmap #6).
+
+    ``backend`` selects the mode:
+    - ``m4b-convertarr``: talk to a running m4b-convertarr container
+      (HTTP POST /api/convert with optional bearer/api key).
+    - ``command``: run a local command template per job (e.g. ffmpeg
+      wrapper); ``{{source}}`` and ``{{output}}`` are substituted.
+
+    ``delete_originals`` defaults to False — originals are NEVER deleted
+    unless the user explicitly opts in (safe default; the conversion
+    backend owns file movements).
+    """
+
+    backend: Literal["disabled", "m4b-convertarr", "command"] = "disabled"
+    base_url: str = "http://localhost:8080"
+    api_key: str = ""
+    command_template: str = ""
+    delete_originals: bool = False
+
+
 class UiSettings(BaseModel):
     """UI/localization settings."""
 
@@ -195,6 +216,7 @@ class Settings(BaseModel):
     indexers: list[Indexer] = Field(default_factory=list)
     connect: list[ConnectNotification] = Field(default_factory=list)
     metadata: MetadataSettings = Field(default_factory=MetadataSettings)
+    conversion: ConversionSettings = Field(default_factory=ConversionSettings)
     ui: UiSettings = Field(default_factory=UiSettings)
     translation: TranslationSettings = Field(default_factory=TranslationSettings)
     logging: LoggingSettings = Field(default_factory=LoggingSettings)
