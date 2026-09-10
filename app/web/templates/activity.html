@@ -1,0 +1,38 @@
+{% extends "base.html" %}
+
+{% block page_title %}{{ t.activity_title }}{% endblock %}
+{% block page_eyebrow %}{{ t.activity_eyebrow }}{% endblock %}
+{% block page_heading %}{{ t.activity_title }}{% endblock %}
+
+{% block content %}
+  <p class="section-hint">{{ t.activity_subtitle }}</p>
+
+  <div class="card-grid wide">
+    <section class="card">
+      <div class="section-head">
+        <span class="eyebrow">{{ t.activity_eyebrow }}</span>
+        <h2>{{ t.activity_queue_heading }}</h2>
+      </div>
+      <div id="activity-queue">
+        <p class="muted">{{ t.activity_loading }}</p>
+      </div>
+    </section>
+
+    <section class="card">
+      <div class="section-head">
+        <span class="eyebrow">{{ t.activity_eyebrow }}</span>
+        <h2>{{ t.activity_history_heading }}</h2>
+      </div>
+      <div class="toolbar">
+        <button type="button" id="history-refresh-btn" class="btn btn-secondary">{{ t.activity_refresh }}</button>
+      </div>
+      <div id="activity-history">
+        <p class="muted">{{ t.activity_loading }}</p>
+      </div>
+    </section>
+  </div>
+{% endblock %}
+
+{% block scripts %}
+  <script src="/static/js/activity.js?v={{ version }}"></script>
+{% endblock %}

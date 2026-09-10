@@ -117,7 +117,48 @@ def test_dashboard_page_renders(app_client, language, welcome_marker):
     assert welcome_marker in dashboard.text
 
 
-ALL_PAGES = ("/", "/library", "/metadata", "/connections", "/settings")
+@pytest.mark.parametrize(
+    ("language", "search_marker", "activity_marker"),
+    [
+        ("en", "Search your indexers via Prowlarr", "live SABnzbd download queue"),
+        ("de", "Durchsuche deine Indexer über Prowlarr", "aktuelle SABnzbd-Download-Warteschlange"),
+    ],
+)
+def test_search_and_activity_pages_render(
+    app_client, language, search_marker, activity_marker
+):
+    _set_ui_language(app_client, language)
+
+    search = app_client.get("/search")
+    assert search.status_code == 200
+    assert search_marker in search.text
+    assert "/static/js/search.js" in search.text
+
+    activity = app_client.get("/activity")
+    assert activity.status_code == 200
+    assert activity_marker in activity.text
+    assert "/static/js/activity.js" in activity.text
+
+
+def test_search_and_activity_mark_nav_active(app_client):
+    _set_ui_language(app_client, "en")
+
+    search = app_client.get("/search")
+    assert '<a href="/search" class="active">' in search.text
+
+    activity = app_client.get("/activity")
+    assert '<a href="/activity" class="active">' in activity.text
+
+
+ALL_PAGES = (
+    "/",
+    "/library",
+    "/metadata",
+    "/search",
+    "/activity",
+    "/connections",
+    "/settings",
+)
 
 
 @pytest.mark.parametrize("path", ALL_PAGES)

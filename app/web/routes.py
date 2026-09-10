@@ -83,3 +83,13 @@ async def connections_page(request: Request) -> HTMLResponse:
 @router.get("/settings", response_class=HTMLResponse)
 async def settings_page(request: Request) -> HTMLResponse:
     return templates.TemplateResponse(request, "settings.html", _base_context("settings"))
+
+
+@router.get("/search", response_class=HTMLResponse)
+async def search_page(request: Request) -> HTMLResponse:
+    return templates.TemplateResponse(request, "search.html", _base_context("search"))
+
+
+@router.get("/activity", response_class=HTMLResponse)
+async def activity_page(request: Request) -> HTMLResponse:
+    return templates.TemplateResponse(request, "activity.html", _base_context("activity"))

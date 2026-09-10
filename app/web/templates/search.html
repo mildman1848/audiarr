@@ -1,0 +1,39 @@
+{% extends "base.html" %}
+
+{% block page_title %}{{ t.search_title }}{% endblock %}
+{% block page_eyebrow %}{{ t.search_eyebrow }}{% endblock %}
+{% block page_heading %}{{ t.search_title }}{% endblock %}
+
+{% block content %}
+  <p class="section-hint">{{ t.search_subtitle }}</p>
+
+  <section class="panel">
+    <div class="section-head">
+      <span class="eyebrow">{{ t.search_eyebrow }}</span>
+      <h2>{{ t.search_form_heading }}</h2>
+    </div>
+    <div class="card">
+      <form id="release-search-form" class="inline-form toolbar">
+        <label>{{ t.search_query_label }}
+          <input type="text" id="rs-query" required>
+        </label>
+        <label>{{ t.search_limit_label }}
+          <select id="rs-limit">
+            <option value="25">25</option>
+            <option value="50" selected>50</option>
+            <option value="100">100</option>
+          </select>
+        </label>
+        <button type="submit" class="btn btn-primary">{{ t.search_submit }}</button>
+      </form>
+    </div>
+  </section>
+
+  <div id="release-results" class="card">
+    <p class="muted">{{ t.search_results_hint }}</p>
+  </div>
+{% endblock %}
+
+{% block scripts %}
+  <script src="/static/js/search.js?v={{ version }}"></script>
+{% endblock %}
