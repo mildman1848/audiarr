@@ -125,7 +125,11 @@ async def grab_release(request: GrabRequest) -> GrabResponse:
     sab = _require_sabnzbd()
 
     prowlarr = ProwlarrClient(base_url=indexer.url, api_key=indexer.api_key or None)
-    nzb = await prowlarr.download_nzb(request.indexer_id, request.download_url)
+    # The search result's download_url is already a self-contained Prowlarr
+    # proxy URL, so no indexer_id is needed for the fetch; we keep it in the
+    # request for forward-compat and log it.
+    log.debug("Grab %r: indexer_id=%s", request.title, request.indexer_id)
+    nzb = await prowlarr.download_nzb(request.download_url)
     if nzb is None:
         log.warning("Grab %r: NZB fetch from Prowlarr failed", request.title)
         return GrabResponse(

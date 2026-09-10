@@ -1,8 +1,8 @@
 """Client for a Prowlarr indexer manager.
 
-Audiarr does not implement search/grab against Prowlarr yet; this client
-only covers the health/status check used by the Settings "Indexers"
-section so users can verify their Prowlarr URL and API key.
+This client covers the health/status check used by the Settings "Indexers"
+section (so users can verify their Prowlarr URL and API key) plus the
+interactive release search and NZB grab used by the Arr-core loop.
 
 Prowlarr uses the Servarr v3 API shape: ``GET /api/v1/system/status`` with
 the API key in an ``X-Api-Key`` header. The key can also come from a
@@ -40,7 +40,14 @@ class ProwlarrClient:
     async def _get_client(self) -> tuple[httpx.AsyncClient, bool]:
         if self._client is not None:
             return self._client, False
-        return httpx.AsyncClient(base_url=self.base_url, timeout=10.0), True
+        # follow_redirects: Prowlarr's proxy download URL 301s to the actual
+        # indexer NZB endpoint (e.g. file.treasure-maps.com/getnzb/...).
+        return (
+            httpx.AsyncClient(
+                base_url=self.base_url, timeout=30.0, follow_redirects=True
+            ),
+            True,
+        )
 
     @staticmethod
     def _normalize_release(raw: dict) -> dict:
@@ -100,19 +107,25 @@ class ProwlarrClient:
             if owns_client:
                 await client.aclose()
 
-    async def download_nzb(self, indexer_id: int, download_url: str) -> bytes | None:
+    async def download_nzb(self, download_url: str) -> bytes | None:
         """Fetch the NZB file for a usenet release via Prowlarr.
 
+        ``download_url`` is the ``downloadUrl`` from a Prowlarr search result,
+        which is already a self-contained proxy URL
+        (``{base}/{n}/download?apikey=...&link=<token>&file=<name>``). We GET
+        it as-is — httpx uses absolute URLs unchanged even with ``base_url``
+        set — and still pass the API key header to cover edge cases.
+
+        Prowlarr follows redirects; a release that resolves to a magnet link
+        comes back as a ``magnet:`` body. We only support usenet here, so that
+        is treated as a failure.
+
         Returns the raw NZB bytes, or None on any failure (transport error,
-        non-200, empty body).
+        non-200, empty body, magnet redirect).
         """
         client, owns_client = await self._get_client()
         try:
-            response = await client.get(
-                f"/api/v1/indexer/{indexer_id}/download",
-                params={"link": download_url},
-                headers=self._headers(),
-            )
+            response = await client.get(download_url, headers=self._headers())
             if response.status_code != 200:
                 log.warning("Prowlarr NZB download: HTTP %s", response.status_code)
                 return None
@@ -120,9 +133,10 @@ class ProwlarrClient:
             if not content:
                 log.warning("Prowlarr NZB download: empty response body")
                 return None
-            log.debug(
-                "Prowlarr NZB download from indexer %s -> %d byte(s)", indexer_id, len(content)
-            )
+            if content[:7].lower().startswith(b"magnet:"):
+                log.info("Prowlarr NZB download: release is a magnet link, not usenet")
+                return None
+            log.debug("Prowlarr NZB download -> %d byte(s)", len(content))
             return content
         except httpx.HTTPError as exc:
             log.warning("Prowlarr NZB download failed: %s", exc)

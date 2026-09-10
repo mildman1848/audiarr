@@ -1,9 +1,8 @@
 """Client for a SABnzbd download client.
 
-Audiarr does not implement the full grab/queue workflow yet; this client
-only covers the health/version check used by the Settings "Download
-Clients" section so users can verify their SABnzbd URL and API key before
-the rest of the pipeline lands.
+This client covers the health/version check used by the Settings "Download
+Clients" section (so users can verify their SABnzbd URL and API key) plus
+the grab/queue/history workflow used by the Arr-core loop.
 
 SABnzbd exposes a single ``/api`` endpoint driven by a ``mode`` query
 parameter. The version probe is unauthenticated-friendly on some setups

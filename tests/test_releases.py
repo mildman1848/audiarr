@@ -95,17 +95,19 @@ async def test_search_returns_empty_on_transport_error():
     await mock.aclose()
 
 
+_PROXY_URL = "http://p.local/1/download?apikey=p-key&link=Zm9vYmFy&file=book.nzb"
+
+
 @pytest.mark.asyncio
 async def test_download_nzb_returns_bytes():
     def handler(request: httpx.Request) -> httpx.Response:
-        assert request.url.path == "/api/v1/indexer/4/download"
-        assert request.url.params["link"] == "https://indexer.example/d.nzb"
+        assert request.url.path.startswith("/1/download")
         return httpx.Response(200, content=b"<nzb>payload</nzb>")
 
     mock = httpx.AsyncClient(transport=httpx.MockTransport(handler), base_url="http://p.local")
     client = ProwlarrClient(base_url="http://p.local", api_key="p-key", client=mock)
 
-    assert await client.download_nzb(4, "https://indexer.example/d.nzb") == b"<nzb>payload</nzb>"
+    assert await client.download_nzb(_PROXY_URL) == b"<nzb>payload</nzb>"
     await mock.aclose()
 
 
@@ -117,7 +119,19 @@ async def test_download_nzb_none_on_404():
     mock = httpx.AsyncClient(transport=httpx.MockTransport(handler), base_url="http://p.local")
     client = ProwlarrClient(base_url="http://p.local", client=mock)
 
-    assert await client.download_nzb(4, "https://indexer.example/d.nzb") is None
+    assert await client.download_nzb(_PROXY_URL) is None
+    await mock.aclose()
+
+
+@pytest.mark.asyncio
+async def test_download_nzb_none_on_magnet_redirect():
+    def handler(request: httpx.Request) -> httpx.Response:
+        return httpx.Response(200, content=b"magnet:?xt=urn:btih:deadbeef&dn=book")
+
+    mock = httpx.AsyncClient(transport=httpx.MockTransport(handler), base_url="http://p.local")
+    client = ProwlarrClient(base_url="http://p.local", client=mock)
+
+    assert await client.download_nzb(_PROXY_URL) is None
     await mock.aclose()
 
 
@@ -344,7 +358,7 @@ def test_grab_endpoint_success(app_client, monkeypatch):
     _configure(app_client)
 
     def prowlarr_handler(request: httpx.Request) -> httpx.Response:
-        assert request.url.path == "/api/v1/indexer/4/download"
+        assert request.url.path.startswith("/1/download")
         return httpx.Response(200, content=b"<nzb>payload</nzb>")
 
     def sab_handler(request: httpx.Request) -> httpx.Response:
@@ -365,7 +379,7 @@ def test_grab_endpoint_success(app_client, monkeypatch):
         json={
             "indexer_id": 4,
             "guid": "abc-123",
-            "download_url": "https://indexer.example/d.nzb",
+            "download_url": "http://prowlarr.local/1/download?apikey=p-key&link=Zm9v&file=d.nzb",
             "title": "Der Vorleser",
         },
     )
@@ -396,7 +410,7 @@ def test_grab_endpoint_failure_when_nzb_fetch_returns_none(app_client, monkeypat
         json={
             "indexer_id": 4,
             "guid": "abc-123",
-            "download_url": "https://indexer.example/d.nzb",
+            "download_url": "http://prowlarr.local/1/download?apikey=p-key&link=Zm9v&file=d.nzb",
             "title": "Der Vorleser",
         },
     )
