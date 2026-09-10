@@ -1,0 +1,36 @@
+{% extends "base.html" %}
+
+{% block content %}
+  <h1>{{ t.library_title }}</h1>
+  <p class="muted">{{ t.library_subtitle }}</p>
+
+  <h2>{{ t.library_books_heading }}</h2>
+  <div id="library-books" class="card">
+    <p class="muted">{{ t.library_books_loading }}</p>
+  </div>
+
+  <div class="card-grid">
+    <div class="card">
+      <h2>{{ t.library_root_folders_heading }}</h2>
+      <div id="root-folders-list">
+        <p class="muted">{{ t.library_root_folders_loading }}</p>
+      </div>
+      <form id="root-folder-form" class="stack-form">
+        <input type="text" id="rf-path" name="path" placeholder="{{ t.library_root_folder_path }}" required>
+        <input type="text" id="rf-label" name="label" placeholder="{{ t.library_root_folder_label }}">
+        <button type="submit">{{ t.library_root_folder_add }}</button>
+      </form>
+      <p id="root-folder-msg" class="muted"></p>
+    </div>
+
+    <div class="card">
+      <h2>{{ t.library_import_heading }}</h2>
+      <button id="dry-run-btn" type="button">{{ t.library_import_run }}</button>
+      <div id="import-summary"></div>
+    </div>
+  </div>
+{% endblock %}
+
+{% block scripts %}
+  <script src="/static/js/library.js"></script>
+{% endblock %}

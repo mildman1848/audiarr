@@ -1,0 +1,29 @@
+<!DOCTYPE html>
+<html lang="{{ lang }}">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{{ t.app_name }}</title>
+  <link rel="stylesheet" href="/static/css/style.css">
+</head>
+<body>
+  <div class="layout">
+    <aside class="sidebar">
+      <div class="brand">{{ t.app_name }}</div>
+      <nav>
+        <a href="/" class="{{ 'active' if active_page == 'dashboard' else '' }}">{{ t.nav_dashboard }}</a>
+        <a href="/library" class="{{ 'active' if active_page == 'library' else '' }}">{{ t.nav_library }}</a>
+        <a href="/metadata" class="{{ 'active' if active_page == 'metadata' else '' }}">{{ t.nav_metadata }}</a>
+        <a href="#connections">{{ t.nav_connections }}</a>
+        <a href="#settings">{{ t.nav_settings }}</a>
+      </nav>
+    </aside>
+    <main class="main">
+      {% block content %}{% endblock %}
+      <footer>{{ t.footer_note }} — Audiarr v{{ version }}</footer>
+    </main>
+  </div>
+  <script>window.AUDIARR_I18N = {{ t|tojson }};</script>
+  {% block scripts %}{% endblock %}
+</body>
+</html>

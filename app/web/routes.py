@@ -23,16 +23,25 @@ TEMPLATES_DIR = Path(__file__).parent / "templates"
 templates = Jinja2Templates(directory=str(TEMPLATES_DIR))
 
 
+def _base_context(active_page: str) -> dict:
+    """Shared template context: i18n strings, language, version, active nav item."""
+    settings = load_settings()
+    lang = settings.ui.language or get_default_ui_language()
+    return {
+        "t": load_strings(lang),
+        "lang": lang,
+        "version": __version__,
+        "active_page": active_page,
+    }
+
+
 @router.get("/", response_class=HTMLResponse)
 async def dashboard(request: Request) -> HTMLResponse:
     settings = load_settings()
-    lang = settings.ui.language or get_default_ui_language()
-    strings = load_strings(lang)
+    strings = load_strings(settings.ui.language or get_default_ui_language())
 
     context = {
-        "t": strings,
-        "lang": lang,
-        "version": __version__,
+        **_base_context("dashboard"),
         "root_folder_count": len(settings.root_folders),
         "quality_profile_count": len(settings.quality_profiles),
         "primary_metadata_provider": (
@@ -52,3 +61,13 @@ async def dashboard(request: Request) -> HTMLResponse:
         ),
     }
     return templates.TemplateResponse(request, "index.html", context)
+
+
+@router.get("/library", response_class=HTMLResponse)
+async def library_page(request: Request) -> HTMLResponse:
+    return templates.TemplateResponse(request, "library.html", _base_context("library"))
+
+
+@router.get("/metadata", response_class=HTMLResponse)
+async def metadata_page(request: Request) -> HTMLResponse:
+    return templates.TemplateResponse(request, "metadata.html", _base_context("metadata"))
