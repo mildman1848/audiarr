@@ -27,6 +27,7 @@ from app.api import (
     routes_metadata,
     routes_settings,
     routes_system,
+    routes_webhooks,
 )
 from app.config import get_db_path, load_settings
 from app.db import init_db
@@ -75,6 +76,7 @@ def create_app() -> FastAPI:
     app.include_router(routes_library.router)
     app.include_router(routes_import.router)
     app.include_router(routes_conversion.router)
+    app.include_router(routes_webhooks.router)
     app.include_router(web_routes.router)
 
     return app

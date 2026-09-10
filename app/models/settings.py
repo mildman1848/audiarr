@@ -129,6 +129,13 @@ class ConversionSettings(BaseModel):
     api_key: str = ""
     command_template: str = ""
     delete_originals: bool = False
+    # Shared secret the m4b-convertarr POST_CONVERT hook sends as X-Api-Key
+    # when calling back Audiarr. Empty = webhook accepts unauthenticated
+    # requests (e.g. isolated docker networks).
+    webhook_api_key: str = ""
+    # A running job whose backend never called back gets failed after this
+    # many hours (webhook lost / converter crashed).
+    job_timeout_hours: int = 6
 
 
 class UiSettings(BaseModel):

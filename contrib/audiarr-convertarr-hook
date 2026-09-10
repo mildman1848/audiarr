@@ -1,0 +1,83 @@
+#!/usr/bin/env python3
+"""m4b-convertarr POST_CONVERT hook: notify Audiarr of finished books.
+
+Install into your m4b-convertarr container and set:
+
+  POST_CONVERT_SCRIPT=/usr/local/bin/audiarr-convertarr-hook
+  AUDIARR_URL=http://audiarr:8787
+  AUDIARR_WEBHOOK_KEY=<shared secret>        # optional
+  AUDIARR_JOB_ID                             # optional, set by Audiarr? no —
+                                             # Audiarr cannot inject env into
+                                             # the converter; title matching
+                                             # is the default join path.
+
+Env provided by m4b-convertarr's wrapper (run_import_hooks):
+  AUTO_M4B_CONVERTED_PATH  absolute .m4b path (converter's mount ns)
+  AUTO_M4B_CONVERTED_DIR   containing directory
+  AUTO_M4B_TITLE           file stem / detected title
+  AUTO_M4B_AUTHOR          may be empty
+
+The hook POSTs JSON to Audiarr's webhook endpoint and exits 0 even when
+Audiarr is unreachable — a failed notify must not break the converter's
+post-run pipeline (it would fail the whole drain run otherwise).
+"""
+
+from __future__ import annotations
+
+import json
+import os
+import sys
+import urllib.error
+import urllib.request
+
+LOG_TAG = "audiarr-convertarr-hook"
+
+
+def log(message: str) -> None:
+    print(f"[{LOG_TAG}] {message}", file=sys.stderr)
+
+
+def main() -> int:
+    converted_path = os.environ.get("AUTO_M4B_CONVERTED_PATH", "").strip()
+    title = os.environ.get("AUTO_M4B_TITLE", "").strip()
+    author = os.environ.get("AUTO_M4B_AUTHOR", "").strip()
+    base_url = os.environ.get("AUDIARR_URL", "http://audiarr:8787").strip().rstrip("/")
+    api_key = os.environ.get("AUDIARR_WEBHOOK_KEY", "").strip()
+
+    if not converted_path:
+        log("AUTO_M4B_CONVERTED_PATH not set; nothing to report")
+        return 0
+
+    payload = {
+        "converted_path": converted_path,
+        "title": title,
+        "author": author,
+        "status": "completed",
+    }
+    body = json.dumps(payload).encode("utf-8")
+    req = urllib.request.Request(
+        f"{base_url}/api/v1/webhooks/m4b-convertarr",
+        data=body,
+        headers={
+            "Content-Type": "application/json",
+            **({"X-Api-Key": api_key} if api_key else {}),
+        },
+        method="POST",
+    )
+
+    try:
+        with urllib.request.urlopen(req, timeout=30) as resp:
+            resp_body = resp.read().decode("utf-8", "replace")[:300]
+            log(f"audiarr accepted ({resp.status}): {resp_body}")
+    except urllib.error.HTTPError as exc:
+        # Non-2xx from Audiarr: log loudly but do not fail the converter.
+        detail = exc.read().decode("utf-8", "replace")[:300]
+        log(f"audiarr rejected callback: HTTP {exc.code}: {detail}")
+    except (urllib.error.URLError, OSError, TimeoutError) as exc:
+        log(f"audiarr unreachable: {exc}")
+
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())

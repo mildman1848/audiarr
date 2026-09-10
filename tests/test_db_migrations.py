@@ -11,7 +11,7 @@ from app.db import SCHEMA_VERSION, migrate
 def test_fresh_db_reaches_latest_schema(tmp_path: Path) -> None:
     db = tmp_path / "fresh.db"
     version = migrate(db)
-    assert version == SCHEMA_VERSION == 3
+    assert version == SCHEMA_VERSION == 4
 
     conn = sqlite3.connect(db)
     tables = {
@@ -36,7 +36,7 @@ def test_migration_is_idempotent(tmp_path: Path) -> None:
     conn = sqlite3.connect(db)
     rows = conn.execute("SELECT version FROM schema_version ORDER BY version").fetchall()
     conn.close()
-    assert [r[0] for r in rows] == [1, 2, 3]
+    assert [r[0] for r in rows] == [1, 2, 3, 4]
 
 
 def test_v1_db_upgrades_to_latest(tmp_path: Path) -> None:
@@ -62,26 +62,25 @@ def test_v1_db_upgrades_to_latest(tmp_path: Path) -> None:
     assert "conversion_jobs" in tables
 
 
-def test_v2_db_upgrades_to_v3(tmp_path: Path) -> None:
-    """Simulate a v2 database: full v1+v2 migrations already applied."""
-    db = tmp_path / "v2.db"
-    migrate(db)  # reaches v3 on a fresh file; reset to v2 state instead:
+def test_v3_db_upgrades_to_v4(tmp_path: Path) -> None:
+    """Simulate a v3 database: conversion_jobs without webhook columns."""
+    db = tmp_path / "v3.db"
+    migrate(db)
     conn = sqlite3.connect(db)
-    conn.execute("DROP TABLE conversion_jobs")
-    conn.execute("DELETE FROM schema_version WHERE version = 3")
+    conn.execute("ALTER TABLE conversion_jobs DROP COLUMN completed_path")
+    conn.execute("ALTER TABLE conversion_jobs DROP COLUMN originals_deleted")
+    conn.execute("DELETE FROM schema_version WHERE version = 4")
     conn.commit()
     conn.close()
 
     version = migrate(db)
-    assert version == 3
+    assert version == 4
 
     conn = sqlite3.connect(db)
-    tables = {
-        r[0]
-        for r in conn.execute("SELECT name FROM sqlite_master WHERE type='table'")
-    }
+    cols = {r[1] for r in conn.execute("PRAGMA table_info(conversion_jobs)")}
     conn.close()
-    assert "conversion_jobs" in tables
+    assert "completed_path" in cols
+    assert "originals_deleted" in cols
 
 
 def test_version_history_is_preserved(tmp_path: Path) -> None:
@@ -90,4 +89,4 @@ def test_version_history_is_preserved(tmp_path: Path) -> None:
     conn = sqlite3.connect(db)
     rows = conn.execute("SELECT version FROM schema_version ORDER BY version").fetchall()
     conn.close()
-    assert [r[0] for r in rows] == [1, 2, 3]
+    assert [r[0] for r in rows] == [1, 2, 3, 4]
