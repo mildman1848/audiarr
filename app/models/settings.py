@@ -185,6 +185,9 @@ class AudiobookshelfConnection(BaseModel):
 
     url: str = ""
     api_key: str = ""
+    # The Audiobookshelf library to rescan after imports/conversions.
+    # Find its id in Audiobookshelf under Settings -> Libraries.
+    library_id: str = ""
     enabled: bool = False
 
 

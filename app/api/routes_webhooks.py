@@ -122,6 +122,12 @@ async def convertarr_webhook(
         del_ok, removed, del_msg = delete_originals_for_job(job_id)
         detail += f"; originals: {del_msg}"
 
+        # Ask Audiobookshelf to rescan so the converted file shows up in
+        # its library. Best-effort — never raises (see the helper).
+        from app.connections.audiobookshelf import notify_library_changed
+
+        await notify_library_changed()
+
         log.info("webhook completed job %d (book %d): %s", job_id, book_id, detail)
         return WebhookResponse(
             accepted=True, job_id=job_id, book_id=book_id, detail=detail

@@ -172,6 +172,11 @@ async def run_import(
 
     if not dry_run:
         _persist_import_jobs(conn, summary)
+        # Ask Audiobookshelf to rescan so it picks up the new files. This
+        # is best-effort and never raises (see notify_library_changed).
+        from app.connections.audiobookshelf import notify_library_changed
+
+        await notify_library_changed()
 
     log.info(summary.message)
     return summary

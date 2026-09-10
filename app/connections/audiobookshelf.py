@@ -61,3 +61,39 @@ class AudiobookshelfClient:
         finally:
             if owns_client:
                 await client.aclose()
+
+
+async def notify_library_changed() -> bool:
+    """Ask the configured Audiobookshelf server to rescan its library.
+
+    Called after a successful import run and after a conversion webhook
+    completes so Audiobookshelf picks up new/changed files without the
+    user hitting "Scan" manually.
+
+    Best-effort by design: returns early when the connection is disabled
+    or no ``library_id`` is configured, and swallows every error (logging
+    it). An auto-refresh failure must NEVER break the import pipeline or a
+    webhook completion. Returns True only when a scan was accepted.
+    """
+    from app.config import load_settings
+
+    conn = load_settings().connections.audiobookshelf
+    if not conn.enabled:
+        log.debug("Audiobookshelf auto-refresh skipped: connection disabled")
+        return False
+    if not conn.library_id:
+        log.debug("Audiobookshelf auto-refresh skipped: no library_id configured")
+        return False
+
+    try:
+        client = AudiobookshelfClient(base_url=conn.url, api_key=conn.api_key or None)
+        ok = await client.scan_library(conn.library_id)
+        log.info(
+            "Audiobookshelf auto-refresh: scan of library %s -> %s",
+            conn.library_id,
+            "accepted" if ok else "rejected",
+        )
+        return ok
+    except Exception:  # noqa: BLE001 — auto-refresh must never break the caller
+        log.warning("Audiobookshelf auto-refresh failed", exc_info=True)
+        return False

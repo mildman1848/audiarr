@@ -4,9 +4,10 @@ from __future__ import annotations
 
 import logging
 
-from fastapi import APIRouter
+from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
 
+from app.config import load_settings
 from app.connections.audiobookshelf import AudiobookshelfClient
 from app.connections.m4b_convertarr import M4BConvertarrClient
 
@@ -33,6 +34,33 @@ async def test_audiobookshelf(request: ConnectionTestRequest) -> ConnectionTestR
     return ConnectionTestResponse(
         ok=ok,
         message="Audiobookshelf reachable" if ok else "Could not reach Audiobookshelf",
+    )
+
+
+@router.post("/api/v1/connections/audiobookshelf/scan", response_model=ConnectionTestResponse)
+async def scan_audiobookshelf() -> ConnectionTestResponse:
+    """Trigger a rescan of the configured Audiobookshelf library.
+
+    Uses the persisted connection settings (url, api_key, library_id).
+    The scan call is fire-and-confirm: a 200/202 from Audiobookshelf
+    counts as success.
+    """
+    conn = load_settings().connections.audiobookshelf
+    if not conn.enabled:
+        raise HTTPException(400, "Audiobookshelf connection is disabled")
+    if not conn.library_id:
+        raise HTTPException(400, "No Audiobookshelf library_id configured")
+
+    client = AudiobookshelfClient(base_url=conn.url, api_key=conn.api_key or None)
+    ok = await client.scan_library(conn.library_id)
+    log.info("Audiobookshelf scan trigger for library %s -> %s", conn.library_id, ok)
+    return ConnectionTestResponse(
+        ok=ok,
+        message=(
+            "Audiobookshelf library scan triggered"
+            if ok
+            else "Audiobookshelf did not accept the scan request"
+        ),
     )
 
 
