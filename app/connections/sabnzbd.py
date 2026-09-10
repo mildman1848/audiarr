@@ -42,6 +42,142 @@ class SABnzbdClient:
             return self._client, False
         return httpx.AsyncClient(base_url=self.base_url, timeout=10.0), True
 
+    def _base_params(self, mode: str) -> dict[str, str]:
+        params = {"mode": mode, "output": "json"}
+        if self.api_key:
+            params["apikey"] = self.api_key
+        return params
+
+    @staticmethod
+    def _to_float(value: object) -> float:
+        """Best-effort numeric coercion for SABnzbd's string-typed fields."""
+        try:
+            return float(value)  # type: ignore[arg-type]
+        except (TypeError, ValueError):
+            return 0.0
+
+    async def add_nzb(self, content: bytes, name: str, category: str) -> str | None:
+        """Push an NZB file to SABnzbd, returning the assigned nzo_id.
+
+        Uses ``mode=addfile`` with a multipart ``nzbfile`` field. Returns
+        None on any failure (transport error, non-200, ``status`` not true,
+        or no ``nzo_ids`` in the response).
+        """
+        client, owns_client = await self._get_client()
+        try:
+            params = self._base_params("addfile")
+            if category:
+                params["cat"] = category
+            filename = name if name.endswith(".nzb") else f"{name}.nzb"
+            files = {"nzbfile": (filename, content, "application/x-nzb")}
+            response = await client.post("/api", params=params, files=files)
+            if response.status_code != 200:
+                log.warning("SABnzbd addfile: HTTP %s", response.status_code)
+                return None
+            try:
+                data = response.json()
+            except ValueError:
+                log.warning("SABnzbd addfile: response was not JSON")
+                return None
+            if not isinstance(data, dict) or not data.get("status"):
+                log.warning("SABnzbd addfile: status not true in response")
+                return None
+            nzo_ids = data.get("nzo_ids") or []
+            if not nzo_ids:
+                log.warning("SABnzbd addfile: no nzo_ids returned")
+                return None
+            nzo_id = str(nzo_ids[0])
+            log.debug("SABnzbd addfile %r (cat=%s) -> %s", filename, category, nzo_id)
+            return nzo_id
+        except httpx.HTTPError as exc:
+            log.warning("SABnzbd addfile failed: %s", exc)
+            return None
+        finally:
+            if owns_client:
+                await client.aclose()
+
+    async def queue(self) -> list[dict]:
+        """Return the live download queue as normalized slot dicts.
+
+        Never raises: failures are logged and yield an empty list.
+        """
+        client, owns_client = await self._get_client()
+        try:
+            response = await client.get("/api", params=self._base_params("queue"))
+            if response.status_code != 200:
+                log.warning("SABnzbd queue: HTTP %s", response.status_code)
+                return []
+            try:
+                data = response.json()
+            except ValueError:
+                log.warning("SABnzbd queue: response was not JSON")
+                return []
+            queue = data.get("queue") if isinstance(data, dict) else None
+            slots = queue.get("slots") if isinstance(queue, dict) else None
+            if not isinstance(slots, list):
+                return []
+            return [
+                {
+                    "nzo_id": s.get("nzo_id"),
+                    "filename": s.get("filename"),
+                    "status": s.get("status"),
+                    "size": s.get("size"),
+                    "size_left": s.get("sizeleft"),
+                    "time_left": s.get("timeleft"),
+                    "progress_percent": self._to_float(s.get("percentage")),
+                    "category": s.get("category"),
+                }
+                for s in slots
+                if isinstance(s, dict)
+            ]
+        except httpx.HTTPError as exc:
+            log.warning("SABnzbd queue failed: %s", exc)
+            return []
+        finally:
+            if owns_client:
+                await client.aclose()
+
+    async def history(self, limit: int = 50) -> list[dict]:
+        """Return recent download history as normalized slot dicts.
+
+        Never raises: failures are logged and yield an empty list.
+        """
+        client, owns_client = await self._get_client()
+        try:
+            params = self._base_params("history")
+            params["limit"] = str(limit)
+            response = await client.get("/api", params=params)
+            if response.status_code != 200:
+                log.warning("SABnzbd history: HTTP %s", response.status_code)
+                return []
+            try:
+                data = response.json()
+            except ValueError:
+                log.warning("SABnzbd history: response was not JSON")
+                return []
+            history = data.get("history") if isinstance(data, dict) else None
+            slots = history.get("slots") if isinstance(history, dict) else None
+            if not isinstance(slots, list):
+                return []
+            return [
+                {
+                    "nzo_id": s.get("nzo_id"),
+                    "name": s.get("name"),
+                    "status": s.get("status"),
+                    "size": s.get("size"),
+                    "category": s.get("category"),
+                    "completed_at": s.get("completed"),
+                }
+                for s in slots
+                if isinstance(s, dict)
+            ]
+        except httpx.HTTPError as exc:
+            log.warning("SABnzbd history failed: %s", exc)
+            return []
+        finally:
+            if owns_client:
+                await client.aclose()
+
     async def version(self) -> str | None:
         """Return the SABnzbd version string, or None if it can't be read.
 
