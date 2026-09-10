@@ -1,7 +1,8 @@
-"""Render tests for the server-rendered Library and Metadata Search pages.
+"""Render tests for the server-rendered UI pages.
 
-Each page must return 200 and contain a translated marker string for both
-the English and German UI language settings.
+Covers the Library, Metadata Search, Connections, and Settings pages. Each
+page must return 200 and contain a translated marker string for both the
+English and German UI language settings, and mark its own nav entry active.
 """
 
 from __future__ import annotations
@@ -36,6 +37,27 @@ def test_library_and_metadata_pages_render(
     assert metadata_marker in metadata.text
 
 
+@pytest.mark.parametrize(
+    ("language", "connections_marker", "settings_marker"),
+    [
+        ("en", "Scan now", "Conversion backend"),
+        ("de", "Jetzt scannen", "Konvertierungs-Backend"),
+    ],
+)
+def test_connections_and_settings_pages_render(
+    app_client, language, connections_marker, settings_marker
+):
+    _set_ui_language(app_client, language)
+
+    connections = app_client.get("/connections")
+    assert connections.status_code == 200
+    assert connections_marker in connections.text
+
+    settings = app_client.get("/settings")
+    assert settings.status_code == 200
+    assert settings_marker in settings.text
+
+
 def test_navigation_marks_active_route(app_client):
     _set_ui_language(app_client, "en")
 
@@ -44,3 +66,9 @@ def test_navigation_marks_active_route(app_client):
 
     metadata = app_client.get("/metadata")
     assert '<a href="/metadata" class="active">' in metadata.text
+
+    connections = app_client.get("/connections")
+    assert '<a href="/connections" class="active">' in connections.text
+
+    settings = app_client.get("/settings")
+    assert '<a href="/settings" class="active">' in settings.text

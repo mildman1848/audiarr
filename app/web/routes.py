@@ -71,3 +71,15 @@ async def library_page(request: Request) -> HTMLResponse:
 @router.get("/metadata", response_class=HTMLResponse)
 async def metadata_page(request: Request) -> HTMLResponse:
     return templates.TemplateResponse(request, "metadata.html", _base_context("metadata"))
+
+
+@router.get("/connections", response_class=HTMLResponse)
+async def connections_page(request: Request) -> HTMLResponse:
+    return templates.TemplateResponse(
+        request, "connections.html", _base_context("connections")
+    )
+
+
+@router.get("/settings", response_class=HTMLResponse)
+async def settings_page(request: Request) -> HTMLResponse:
+    return templates.TemplateResponse(request, "settings.html", _base_context("settings"))

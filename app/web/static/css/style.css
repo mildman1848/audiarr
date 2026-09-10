@@ -202,3 +202,73 @@ button:disabled {
   opacity: 0.6;
   cursor: default;
 }
+
+/* Settings / Connections forms. */
+.card-grid.wide {
+  grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+}
+
+.settings-form label {
+  display: block;
+  margin: 0 0 0.7rem;
+  font-size: 0.85rem;
+  color: var(--text-muted);
+}
+
+.settings-form label > input,
+.settings-form label > select {
+  display: block;
+  width: 100%;
+  max-width: 24rem;
+  margin-top: 0.25rem;
+}
+
+.settings-form label.inline-check {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+}
+
+.settings-form label.inline-check > input {
+  width: auto;
+  max-width: none;
+  margin-top: 0;
+}
+
+.muted.small {
+  font-size: 0.8rem;
+}
+
+.button-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem;
+  margin-top: 0.75rem;
+}
+
+/* In-page section navigation on the Settings page. */
+.section-tabs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  margin: 1rem 0;
+}
+
+.section-tabs a {
+  padding: 0.3rem 0.7rem;
+  background: var(--bg-panel);
+  border: 1px solid var(--border-color);
+  border-radius: 4px;
+  color: var(--text-main);
+  text-decoration: none;
+  font-size: 0.85rem;
+}
+
+.section-tabs a:hover {
+  border-color: var(--audiarr-accent);
+}
+
+#settings-form .card {
+  margin-bottom: 1rem;
+}

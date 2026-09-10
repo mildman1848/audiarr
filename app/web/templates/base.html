@@ -14,8 +14,8 @@
         <a href="/" class="{{ 'active' if active_page == 'dashboard' else '' }}">{{ t.nav_dashboard }}</a>
         <a href="/library" class="{{ 'active' if active_page == 'library' else '' }}">{{ t.nav_library }}</a>
         <a href="/metadata" class="{{ 'active' if active_page == 'metadata' else '' }}">{{ t.nav_metadata }}</a>
-        <a href="#connections">{{ t.nav_connections }}</a>
-        <a href="#settings">{{ t.nav_settings }}</a>
+        <a href="/connections" class="{{ 'active' if active_page == 'connections' else '' }}">{{ t.nav_connections }}</a>
+        <a href="/settings" class="{{ 'active' if active_page == 'settings' else '' }}">{{ t.nav_settings }}</a>
       </nav>
     </aside>
     <main class="main">

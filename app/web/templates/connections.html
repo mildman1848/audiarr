@@ -1,0 +1,61 @@
+{% extends "base.html" %}
+
+{% block content %}
+  <h1>{{ t.connections_title }}</h1>
+  <p class="muted">{{ t.connections_subtitle }}</p>
+
+  <div class="card-grid wide">
+    <div class="card">
+      <h2>{{ t.connections_abs_heading }}</h2>
+      <form id="abs-form" class="settings-form">
+        <label>{{ t.connections_url_label }}
+          <input type="text" id="abs-url" name="url" autocomplete="off">
+        </label>
+        <label>{{ t.connections_api_key_label }}
+          <input type="password" id="abs-api-key" name="api_key" autocomplete="new-password">
+        </label>
+        <label>{{ t.connections_abs_library_id_label }}
+          <input type="text" id="abs-library-id" name="library_id" autocomplete="off">
+        </label>
+        <p class="muted small">{{ t.connections_abs_library_id_hint }}</p>
+        <label class="inline-check">
+          <input type="checkbox" id="abs-enabled" name="enabled">
+          {{ t.connections_enabled_label }}
+        </label>
+        <p class="muted small">{{ t.connections_api_key_hint }}</p>
+        <div class="button-row">
+          <button type="submit">{{ t.connections_save }}</button>
+          <button type="button" id="abs-test-btn">{{ t.connections_test }}</button>
+          <button type="button" id="abs-scan-btn">{{ t.connections_scan }}</button>
+        </div>
+      </form>
+      <p id="abs-msg" class="muted"></p>
+    </div>
+
+    <div class="card">
+      <h2>{{ t.connections_m4b_heading }}</h2>
+      <form id="m4b-form" class="settings-form">
+        <label>{{ t.connections_url_label }}
+          <input type="text" id="m4b-url" name="url" autocomplete="off">
+        </label>
+        <label>{{ t.connections_api_key_label }}
+          <input type="password" id="m4b-api-key" name="api_key" autocomplete="new-password">
+        </label>
+        <label class="inline-check">
+          <input type="checkbox" id="m4b-enabled" name="enabled">
+          {{ t.connections_enabled_label }}
+        </label>
+        <p class="muted small">{{ t.connections_api_key_hint }}</p>
+        <div class="button-row">
+          <button type="submit">{{ t.connections_save }}</button>
+          <button type="button" id="m4b-test-btn">{{ t.connections_test }}</button>
+        </div>
+      </form>
+      <p id="m4b-msg" class="muted"></p>
+    </div>
+  </div>
+{% endblock %}
+
+{% block scripts %}
+  <script src="/static/js/connections.js"></script>
+{% endblock %}
