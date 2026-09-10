@@ -16,6 +16,8 @@
     <a href="#ui">{{ t.settings_section_ui }}</a>
     <a href="#metadata">{{ t.settings_section_metadata }}</a>
     <a href="#media">{{ t.settings_section_media }}</a>
+    <a href="#downloadclients">{{ t.settings_section_downloadclients }}</a>
+    <a href="#indexers">{{ t.settings_section_indexers }}</a>
     <a href="#conversion">{{ t.settings_section_conversion }}</a>
     <a href="#advanced">{{ t.settings_section_advanced }}</a>
   </nav>
@@ -67,6 +69,61 @@
       </div>
       <p class="muted">{{ t.settings_media_root_folders }}: <span id="root-folder-count">—</span></p>
       <a href="/library">{{ t.settings_media_manage_link }}</a>
+    </section>
+
+    <section id="downloadclients" class="card settings-form">
+      <div class="section-head">
+        <span class="eyebrow">{{ t.settings_eyebrow }}</span>
+        <h2>{{ t.settings_section_downloadclients }}</h2>
+      </div>
+      <h3>{{ t.settings_dc_sab_heading }}</h3>
+      <label class="inline-check">
+        <input type="checkbox" id="sab-enabled">
+        {{ t.settings_enabled_label }}
+      </label>
+      <label>{{ t.settings_field_name }}
+        <input type="text" id="sab-name" autocomplete="off">
+      </label>
+      <label>{{ t.settings_base_url_label }}
+        <input type="text" id="sab-url" autocomplete="off" placeholder="http://sabnzbd:8080">
+      </label>
+      <label>{{ t.settings_api_key_label }}
+        <input type="password" id="sab-api-key" autocomplete="new-password">
+      </label>
+      <label>{{ t.settings_dc_category_label }}
+        <input type="text" id="sab-category" autocomplete="off">
+      </label>
+      <p class="muted small">{{ t.settings_api_key_hint }}</p>
+      <div class="button-row">
+        <button type="button" id="sab-test-btn" class="btn btn-secondary">{{ t.settings_test }}</button>
+        <span id="sab-msg" class="muted" role="status"></span>
+      </div>
+    </section>
+
+    <section id="indexers" class="card settings-form">
+      <div class="section-head">
+        <span class="eyebrow">{{ t.settings_eyebrow }}</span>
+        <h2>{{ t.settings_section_indexers }}</h2>
+      </div>
+      <h3>{{ t.settings_idx_prowlarr_heading }}</h3>
+      <label class="inline-check">
+        <input type="checkbox" id="prowlarr-enabled">
+        {{ t.settings_enabled_label }}
+      </label>
+      <label>{{ t.settings_field_name }}
+        <input type="text" id="prowlarr-name" autocomplete="off">
+      </label>
+      <label>{{ t.settings_base_url_label }}
+        <input type="text" id="prowlarr-url" autocomplete="off" placeholder="http://prowlarr:9696">
+      </label>
+      <label>{{ t.settings_api_key_label }}
+        <input type="password" id="prowlarr-api-key" autocomplete="new-password">
+      </label>
+      <p class="muted small">{{ t.settings_api_key_hint }}</p>
+      <div class="button-row">
+        <button type="button" id="prowlarr-test-btn" class="btn btn-secondary">{{ t.settings_test }}</button>
+        <span id="prowlarr-msg" class="muted" role="status"></span>
+      </div>
     </section>
 
     <section id="conversion" class="card settings-form">

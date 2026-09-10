@@ -71,20 +71,53 @@ class RootFolder(BaseModel):
 
 
 class DownloadClient(BaseModel):
-    """Stub download-client entry (e.g. SABnzbd/qBittorrent in the future)."""
+    """Download-client entry, mirrors Radarr/Sonarr's "Download Clients" tab.
+
+    The MVP implements SABnzbd (``type="sabnzbd"``): configure ``url`` (a
+    base URL such as ``http://sab:8080``) or the legacy ``host``/``port``
+    pair, plus ``api_key`` and the ``category`` new downloads are filed
+    under. ``type="generic"`` remains a no-op placeholder for other
+    clients. The connection test lives at
+    ``/api/v1/connections/sabnzbd/test``.
+    """
 
     name: str
     type: str = "generic"
+    # Preferred: a full base URL. host/port are still accepted for
+    # backwards compatibility and older settings.json files.
+    url: str = ""
     host: str = ""
     port: int = 0
+    api_key: str = ""
+    category: str = "audiobooks"
     enabled: bool = False
+
+    def base_url(self) -> str:
+        """Resolve a base URL from ``url`` or the ``host``/``port`` pair."""
+        if self.url:
+            return self.url.rstrip("/")
+        if not self.host:
+            return ""
+        host = self.host.rstrip("/")
+        if "://" not in host:
+            host = f"http://{host}"
+        if self.port:
+            host = f"{host}:{self.port}"
+        return host
 
 
 class Indexer(BaseModel):
-    """Stub indexer entry, mirrors Radarr/Sonarr's "Indexers" tab."""
+    """Indexer entry, mirrors Radarr/Sonarr's "Indexers" tab.
+
+    The MVP implements Prowlarr (``type="prowlarr"``) as an indexer
+    manager: configure ``url`` and ``api_key``. The connection test lives
+    at ``/api/v1/connections/prowlarr/test``.
+    """
 
     name: str
+    type: str = "generic"
     url: str = ""
+    api_key: str = ""
     enabled: bool = False
 
 

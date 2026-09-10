@@ -58,6 +58,31 @@ def test_connections_and_settings_pages_render(
     assert settings_marker in settings.text
 
 
+@pytest.mark.parametrize(
+    ("language", "downloadclients_marker", "indexers_marker"),
+    [
+        ("en", "Download Clients", "Indexers"),
+        ("de", "Download-Clients", "Indexer"),
+    ],
+)
+def test_settings_page_has_sabnzbd_and_prowlarr_sections(
+    app_client, language, downloadclients_marker, indexers_marker
+):
+    _set_ui_language(app_client, language)
+
+    settings = app_client.get("/settings")
+    assert settings.status_code == 200
+    # Section headings are translated...
+    assert downloadclients_marker in settings.text
+    assert indexers_marker in settings.text
+    # ...but the concrete client/indexer names are brand names.
+    assert "SABnzbd" in settings.text
+    assert "Prowlarr" in settings.text
+    # Test buttons and their status spans are wired up.
+    assert 'id="sab-test-btn"' in settings.text
+    assert 'id="prowlarr-test-btn"' in settings.text
+
+
 def test_navigation_marks_active_route(app_client):
     _set_ui_language(app_client, "en")
 

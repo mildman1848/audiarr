@@ -10,6 +10,8 @@ from pydantic import BaseModel
 from app.config import load_settings
 from app.connections.audiobookshelf import AudiobookshelfClient
 from app.connections.m4b_convertarr import M4BConvertarrClient
+from app.connections.prowlarr import ProwlarrClient
+from app.connections.sabnzbd import SABnzbdClient
 
 log = logging.getLogger("audiarr.api.connections")
 
@@ -72,4 +74,64 @@ async def test_m4b_convertarr(request: ConnectionTestRequest) -> ConnectionTestR
     return ConnectionTestResponse(
         ok=ok,
         message="m4b-convertarr reachable" if ok else "Could not reach m4b-convertarr",
+    )
+
+
+def _stored_sabnzbd_values(url: str, api_key: str | None) -> tuple[str, str | None]:
+    """Fill missing SABnzbd test values from persisted settings.
+
+    The browser intentionally does not render saved API keys back into the
+    password field. Without this fallback, a saved connection would fail its
+    next Test click unless the user pasted the key again.
+    """
+    if url and api_key:
+        return url, api_key
+
+    clients = [c for c in load_settings().download_clients if c.type == "sabnzbd"]
+    match = next((c for c in clients if c.base_url() == url), None) or (clients[0] if clients else None)
+    if match is None:
+        return url, api_key
+    return url or match.base_url(), api_key or match.api_key or None
+
+
+def _stored_prowlarr_values(url: str, api_key: str | None) -> tuple[str, str | None]:
+    """Fill missing Prowlarr test values from persisted settings."""
+    if url and api_key:
+        return url, api_key
+
+    indexers = [i for i in load_settings().indexers if i.type == "prowlarr"]
+    match = next((i for i in indexers if i.url.rstrip("/") == url.rstrip("/")), None) or (
+        indexers[0] if indexers else None
+    )
+    if match is None:
+        return url, api_key
+    return url or match.url.rstrip("/"), api_key or match.api_key or None
+
+
+@router.post("/api/v1/connections/sabnzbd/test", response_model=ConnectionTestResponse)
+async def test_sabnzbd(request: ConnectionTestRequest) -> ConnectionTestResponse:
+    """Probe a SABnzbd download client via its ``mode=version`` API call."""
+    url, api_key = _stored_sabnzbd_values(request.url, request.api_key)
+    client = SABnzbdClient(base_url=url, api_key=api_key)
+    version = await client.version()
+    ok = version is not None
+    log.info("SABnzbd connection test to %s -> %s", url, ok)
+    return ConnectionTestResponse(
+        ok=ok,
+        message=f"SABnzbd {version}" if ok else "Could not reach SABnzbd",
+    )
+
+
+@router.post("/api/v1/connections/prowlarr/test", response_model=ConnectionTestResponse)
+async def test_prowlarr(request: ConnectionTestRequest) -> ConnectionTestResponse:
+    """Probe a Prowlarr indexer manager via ``/api/v1/system/status``."""
+    url, api_key = _stored_prowlarr_values(request.url, request.api_key)
+    client = ProwlarrClient(base_url=url, api_key=api_key)
+    status = await client.status()
+    ok = status is not None
+    version = (status or {}).get("version")
+    log.info("Prowlarr connection test to %s -> %s", url, ok)
+    return ConnectionTestResponse(
+        ok=ok,
+        message=(f"Prowlarr {version}".strip() if ok else "Could not reach Prowlarr"),
     )

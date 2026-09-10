@@ -2,8 +2,9 @@
 // document. Save flow is GET the full document, merge the edited fields, then
 // PUT the whole document back (the settings API replaces, it does not patch).
 //
-// The webhook API key is never rendered back into the page: a stored key only
-// shows as a masked placeholder, and an empty submit keeps the current value.
+// Secrets (webhook / SABnzbd / Prowlarr API keys) are never rendered back into
+// the page: a stored key only shows as a masked placeholder, and an empty
+// submit keeps the current value.
 
 const T = window.AUDIARR_I18N || {};
 const MASK = "•••••";
@@ -24,6 +25,55 @@ async function putSettings(doc) {
   return resp.json();
 }
 
+// Return the first SABnzbd download client, or a fresh default (not yet
+// attached to the document).
+function readSab(s) {
+  return (
+    (s.download_clients || []).find((c) => c.type === "sabnzbd") || {
+      name: "SABnzbd",
+      type: "sabnzbd",
+      url: "",
+      api_key: "",
+      category: "audiobooks",
+      enabled: false,
+    }
+  );
+}
+
+// Return the first Prowlarr indexer, or a fresh default.
+function readProwlarr(s) {
+  return (
+    (s.indexers || []).find((i) => i.type === "prowlarr") || {
+      name: "Prowlarr",
+      type: "prowlarr",
+      url: "",
+      api_key: "",
+      enabled: false,
+    }
+  );
+}
+
+// Find-or-create the SABnzbd entry inside the document being saved.
+function mergeSab(doc) {
+  doc.download_clients = doc.download_clients || [];
+  let sab = doc.download_clients.find((c) => c.type === "sabnzbd");
+  if (!sab) {
+    sab = { name: "SABnzbd", type: "sabnzbd", category: "audiobooks", enabled: false };
+    doc.download_clients.push(sab);
+  }
+  return sab;
+}
+
+function mergeProwlarr(doc) {
+  doc.indexers = doc.indexers || [];
+  let idx = doc.indexers.find((i) => i.type === "prowlarr");
+  if (!idx) {
+    idx = { name: "Prowlarr", type: "prowlarr", enabled: false };
+    doc.indexers.push(idx);
+  }
+  return idx;
+}
+
 function populate(s) {
   document.getElementById("host-port").textContent = s.host.port ?? "—";
   document.getElementById("ui-language").value = s.ui.language || "en";
@@ -40,6 +90,19 @@ function populate(s) {
     s.conversion.job_timeout_hours ?? 6;
   document.getElementById("conversion-webhook-key").placeholder =
     s.conversion.webhook_api_key ? MASK : "";
+
+  const sab = readSab(s);
+  document.getElementById("sab-enabled").checked = Boolean(sab.enabled);
+  document.getElementById("sab-name").value = sab.name || "SABnzbd";
+  document.getElementById("sab-url").value = sab.url || "";
+  document.getElementById("sab-category").value = sab.category || "audiobooks";
+  document.getElementById("sab-api-key").placeholder = sab.api_key ? MASK : "";
+
+  const prowlarr = readProwlarr(s);
+  document.getElementById("prowlarr-enabled").checked = Boolean(prowlarr.enabled);
+  document.getElementById("prowlarr-name").value = prowlarr.name || "Prowlarr";
+  document.getElementById("prowlarr-url").value = prowlarr.url || "";
+  document.getElementById("prowlarr-api-key").placeholder = prowlarr.api_key ? MASK : "";
 }
 
 async function loadSettings() {
@@ -69,8 +132,32 @@ async function saveSettings(event) {
     }
     const key = document.getElementById("conversion-webhook-key").value;
     if (key) doc.conversion.webhook_api_key = key; // empty means keep stored value
+
+    const sab = mergeSab(doc);
+    sab.enabled = document.getElementById("sab-enabled").checked;
+    sab.name = document.getElementById("sab-name").value.trim() || "SABnzbd";
+    sab.url = document.getElementById("sab-url").value.trim();
+    sab.category =
+      document.getElementById("sab-category").value.trim() || "audiobooks";
+    const sabKey = document.getElementById("sab-api-key").value;
+    if (sabKey) sab.api_key = sabKey; // empty means keep stored key
+
+    const prowlarr = mergeProwlarr(doc);
+    prowlarr.enabled = document.getElementById("prowlarr-enabled").checked;
+    prowlarr.name =
+      document.getElementById("prowlarr-name").value.trim() || "Prowlarr";
+    prowlarr.url = document.getElementById("prowlarr-url").value.trim();
+    const prowlarrKey = document.getElementById("prowlarr-api-key").value;
+    if (prowlarrKey) prowlarr.api_key = prowlarrKey;
+
     await putSettings(doc);
-    document.getElementById("conversion-webhook-key").value = "";
+    for (const id of [
+      "conversion-webhook-key",
+      "sab-api-key",
+      "prowlarr-api-key",
+    ]) {
+      document.getElementById(id).value = "";
+    }
     populate(await getSettings());
     msg.textContent = "";
     if (window.AudiarrToast) window.AudiarrToast.success(T.settings_save_success);
@@ -81,7 +168,48 @@ async function saveSettings(event) {
   }
 }
 
+// Fire a connection test against one of the /api/v1/connections/.../test
+// endpoints using the current (unsaved) form values.
+async function testConnection(endpoint, urlId, keyId, msgId) {
+  const msg = document.getElementById(msgId);
+  msg.textContent = T.settings_testing;
+  try {
+    const body = { url: document.getElementById(urlId).value.trim() };
+    const key = document.getElementById(keyId).value;
+    if (key) body.api_key = key;
+    const resp = await fetch(endpoint, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(body),
+    });
+    const data = await resp.json().catch(() => ({}));
+    if (!resp.ok) {
+      msg.textContent = `${T.settings_test_error} (${data.detail || `HTTP ${resp.status}`})`;
+      return;
+    }
+    msg.textContent = `${data.ok ? "✓" : "✗"} ${data.message || ""}`.trim();
+  } catch (err) {
+    msg.textContent = `${T.settings_test_error} (${err.message})`;
+  }
+}
+
 document.addEventListener("DOMContentLoaded", () => {
   loadSettings();
   document.getElementById("settings-form").addEventListener("submit", saveSettings);
+  document.getElementById("sab-test-btn").addEventListener("click", () =>
+    testConnection(
+      "/api/v1/connections/sabnzbd/test",
+      "sab-url",
+      "sab-api-key",
+      "sab-msg"
+    )
+  );
+  document.getElementById("prowlarr-test-btn").addEventListener("click", () =>
+    testConnection(
+      "/api/v1/connections/prowlarr/test",
+      "prowlarr-url",
+      "prowlarr-api-key",
+      "prowlarr-msg"
+    )
+  );
 });
