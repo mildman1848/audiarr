@@ -65,9 +65,12 @@ async function saveAudiobookshelf(event) {
     await putSettings(doc);
     document.getElementById("abs-api-key").value = "";
     populate(await getSettings());
-    msg.textContent = T.connections_save_success;
+    msg.textContent = "";
+    if (window.AudiarrToast) window.AudiarrToast.success(T.connections_save_success);
   } catch (err) {
-    msg.textContent = `${T.connections_save_error} (${err.message})`;
+    const text = `${T.connections_save_error} (${err.message})`;
+    msg.textContent = text;
+    if (window.AudiarrToast) window.AudiarrToast.error(text);
   }
 }
 
@@ -85,9 +88,12 @@ async function saveM4bConvertarr(event) {
     await putSettings(doc);
     document.getElementById("m4b-api-key").value = "";
     populate(await getSettings());
-    msg.textContent = T.connections_save_success;
+    msg.textContent = "";
+    if (window.AudiarrToast) window.AudiarrToast.success(T.connections_save_success);
   } catch (err) {
-    msg.textContent = `${T.connections_save_error} (${err.message})`;
+    const text = `${T.connections_save_error} (${err.message})`;
+    msg.textContent = text;
+    if (window.AudiarrToast) window.AudiarrToast.error(text);
   }
 }
 

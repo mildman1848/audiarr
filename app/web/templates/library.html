@@ -1,36 +1,56 @@
 {% extends "base.html" %}
 
+{% block page_title %}{{ t.library_title }}{% endblock %}
+{% block page_eyebrow %}{{ t.library_eyebrow }}{% endblock %}
+{% block page_heading %}{{ t.library_title }}{% endblock %}
+
+{% block topbar_actions %}
+  <button type="button" id="dry-run-btn" class="btn btn-secondary">{{ t.library_import_run }}</button>
+{% endblock %}
+
 {% block content %}
-  <h1>{{ t.library_title }}</h1>
-  <p class="muted">{{ t.library_subtitle }}</p>
+  <p class="section-hint">{{ t.library_subtitle }}</p>
 
-  <h2>{{ t.library_books_heading }}</h2>
-  <div id="library-books" class="card">
-    <p class="muted">{{ t.library_books_loading }}</p>
-  </div>
+  <section class="panel">
+    <div class="section-head">
+      <span class="eyebrow">{{ t.library_eyebrow }}</span>
+      <h2>{{ t.library_books_heading }}</h2>
+    </div>
+    <div id="library-books" class="card">
+      <p class="muted">{{ t.library_books_loading }}</p>
+    </div>
+  </section>
 
-  <div class="card-grid">
+  <div class="card-grid wide">
     <div class="card">
-      <h2>{{ t.library_root_folders_heading }}</h2>
+      <div class="section-head">
+        <span class="eyebrow">{{ t.library_eyebrow }}</span>
+        <h2>{{ t.library_root_folders_heading }}</h2>
+      </div>
       <div id="root-folders-list">
         <p class="muted">{{ t.library_root_folders_loading }}</p>
       </div>
       <form id="root-folder-form" class="stack-form">
         <input type="text" id="rf-path" name="path" placeholder="{{ t.library_root_folder_path }}" required>
         <input type="text" id="rf-label" name="label" placeholder="{{ t.library_root_folder_label }}">
-        <button type="submit">{{ t.library_root_folder_add }}</button>
+        <button type="submit" class="btn btn-primary">{{ t.library_root_folder_add }}</button>
       </form>
-      <p id="root-folder-msg" class="muted"></p>
+      <p id="root-folder-msg" class="muted" role="status"></p>
     </div>
 
     <div class="card">
-      <h2>{{ t.library_import_heading }}</h2>
-      <button id="dry-run-btn" type="button">{{ t.library_import_run }}</button>
+      <div class="section-head">
+        <span class="eyebrow">{{ t.library_eyebrow }}</span>
+        <h2>{{ t.library_import_heading }}</h2>
+      </div>
+      <div class="toolbar">
+        <button id="dry-run-btn-panel" type="button" class="btn btn-secondary">{{ t.library_import_run }}</button>
+      </div>
       <div id="import-summary"></div>
     </div>
   </div>
 {% endblock %}
 
 {% block scripts %}
-  <script src="/static/js/library.js"></script>
+  <script src="/static/js/library.js?v={{ version }}"></script>
 {% endblock %}

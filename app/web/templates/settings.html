@@ -1,8 +1,15 @@
 {% extends "base.html" %}
 
+{% block page_title %}{{ t.settings_title }}{% endblock %}
+{% block page_eyebrow %}{{ t.settings_eyebrow }}{% endblock %}
+{% block page_heading %}{{ t.settings_title }}{% endblock %}
+
+{% block topbar_actions %}
+  <button type="submit" form="settings-form" class="btn btn-primary">{{ t.settings_save }}</button>
+{% endblock %}
+
 {% block content %}
-  <h1>{{ t.settings_title }}</h1>
-  <p class="muted">{{ t.settings_subtitle }}</p>
+  <p class="section-hint">{{ t.settings_subtitle }}</p>
 
   <nav class="section-tabs">
     <a href="#host">{{ t.settings_section_host }}</a>
@@ -15,7 +22,10 @@
 
   <form id="settings-form">
     <section id="host" class="card settings-form">
-      <h2>{{ t.settings_section_host }}</h2>
+      <div class="section-head">
+        <span class="eyebrow">{{ t.settings_eyebrow }}</span>
+        <h2>{{ t.settings_section_host }}</h2>
+      </div>
       <label>{{ t.settings_host_app_name }}
         <input type="text" value="{{ t.app_name }}" readonly>
       </label>
@@ -23,17 +33,24 @@
     </section>
 
     <section id="ui" class="card settings-form">
-      <h2>{{ t.settings_section_ui }}</h2>
+      <div class="section-head">
+        <span class="eyebrow">{{ t.settings_eyebrow }}</span>
+        <h2>{{ t.settings_section_ui }}</h2>
+      </div>
       <label>{{ t.settings_ui_language }}
         <select id="ui-language">
           <option value="en">English</option>
           <option value="de">Deutsch</option>
         </select>
       </label>
+      <p class="muted small">{{ t.settings_ui_language_hint }}</p>
     </section>
 
     <section id="metadata" class="card settings-form">
-      <h2>{{ t.settings_section_metadata }}</h2>
+      <div class="section-head">
+        <span class="eyebrow">{{ t.settings_eyebrow }}</span>
+        <h2>{{ t.settings_section_metadata }}</h2>
+      </div>
       <label>{{ t.settings_metadata_locale }}
         <select id="metadata-locale">
           <option value="us">us</option>
@@ -44,13 +61,19 @@
     </section>
 
     <section id="media" class="card settings-form">
-      <h2>{{ t.settings_section_media }}</h2>
+      <div class="section-head">
+        <span class="eyebrow">{{ t.settings_eyebrow }}</span>
+        <h2>{{ t.settings_section_media }}</h2>
+      </div>
       <p class="muted">{{ t.settings_media_root_folders }}: <span id="root-folder-count">—</span></p>
       <a href="/library">{{ t.settings_media_manage_link }}</a>
     </section>
 
     <section id="conversion" class="card settings-form">
-      <h2>{{ t.settings_section_conversion }}</h2>
+      <div class="section-head">
+        <span class="eyebrow">{{ t.settings_eyebrow }}</span>
+        <h2>{{ t.settings_section_conversion }}</h2>
+      </div>
       <label>{{ t.settings_conversion_backend }}
         <select id="conversion-backend">
           <option value="disabled">disabled</option>
@@ -72,26 +95,32 @@
     </section>
 
     <section id="advanced" class="card settings-form">
-      <h2>{{ t.settings_section_advanced }}</h2>
+      <div class="section-head">
+        <span class="eyebrow">{{ t.settings_eyebrow }}</span>
+        <h2>{{ t.settings_section_advanced }}</h2>
+      </div>
       <details>
         <summary>{{ t.settings_advanced_summary }}</summary>
         <p class="muted">{{ t.settings_advanced_note }}</p>
       </details>
     </section>
 
-    <section id="danger" class="card settings-form">
-      <h2>{{ t.settings_danger_zone }}</h2>
+    <section id="danger" class="card settings-form danger-card">
+      <div class="section-head">
+        <span class="eyebrow">{{ t.settings_eyebrow }}</span>
+        <h2>{{ t.settings_danger_zone }}</h2>
+      </div>
       <p class="muted">{{ t.settings_danger_note }}</p>
       <a href="/library">{{ t.settings_danger_dry_run_link }}</a>
     </section>
 
     <div class="button-row">
-      <button type="submit">{{ t.settings_save }}</button>
-      <span id="settings-msg" class="muted"></span>
+      <button type="submit" class="btn btn-primary">{{ t.settings_save }}</button>
+      <span id="settings-msg" class="muted" role="status"></span>
     </div>
   </form>
 {% endblock %}
 
 {% block scripts %}
-  <script src="/static/js/settings.js"></script>
+  <script src="/static/js/settings.js?v={{ version }}"></script>
 {% endblock %}

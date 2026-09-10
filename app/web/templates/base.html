@@ -3,27 +3,50 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>{{ t.app_name }}</title>
+  <title>{% block page_title %}{{ t.app_name }}{% endblock %} — {{ t.app_name }}</title>
   <link rel="stylesheet" href="/static/css/style.css">
 </head>
 <body>
   <div class="layout">
     <aside class="sidebar">
-      <div class="brand">{{ t.app_name }}</div>
+      <div class="brand">
+        <span class="brand-mark">{{ t.app_name }}</span>
+        <span class="brand-sub">{{ t.brand_subtitle }}</span>
+      </div>
       <nav>
-        <a href="/" class="{{ 'active' if active_page == 'dashboard' else '' }}">{{ t.nav_dashboard }}</a>
-        <a href="/library" class="{{ 'active' if active_page == 'library' else '' }}">{{ t.nav_library }}</a>
-        <a href="/metadata" class="{{ 'active' if active_page == 'metadata' else '' }}">{{ t.nav_metadata }}</a>
-        <a href="/connections" class="{{ 'active' if active_page == 'connections' else '' }}">{{ t.nav_connections }}</a>
-        <a href="/settings" class="{{ 'active' if active_page == 'settings' else '' }}">{{ t.nav_settings }}</a>
+        <a href="/" class="{{ 'active' if active_page == 'dashboard' else '' }}"><span class="nav-glyph" aria-hidden="true">◧</span><span class="nav-label">{{ t.nav_dashboard }}</span></a>
+        <a href="/library" class="{{ 'active' if active_page == 'library' else '' }}"><span class="nav-glyph" aria-hidden="true">▤</span><span class="nav-label">{{ t.nav_library }}</span></a>
+        <a href="/metadata" class="{{ 'active' if active_page == 'metadata' else '' }}"><span class="nav-glyph" aria-hidden="true">⌕</span><span class="nav-label">{{ t.nav_metadata }}</span></a>
+        <a href="/connections" class="{{ 'active' if active_page == 'connections' else '' }}"><span class="nav-glyph" aria-hidden="true">⇄</span><span class="nav-label">{{ t.nav_connections }}</span></a>
+        <a href="/settings" class="{{ 'active' if active_page == 'settings' else '' }}"><span class="nav-glyph" aria-hidden="true">⚙</span><span class="nav-label">{{ t.nav_settings }}</span></a>
       </nav>
     </aside>
     <main class="main">
-      {% block content %}{% endblock %}
-      <footer>{{ t.footer_note }} — Audiarr v{{ version }}</footer>
+      <header class="topbar">
+        <div class="topbar-heading">
+          <span class="eyebrow">{% block page_eyebrow %}{{ t.app_name }}{% endblock %}</span>
+          <h1 class="page-title">{% block page_heading %}{{ t.app_name }}{% endblock %}</h1>
+        </div>
+        <div class="topbar-actions">
+          {% block topbar_actions %}{% endblock %}
+          <div class="lang-switch" role="group" aria-label="{{ t.language_switch_label }}">
+            <button type="button" class="lang-btn{{ ' active' if lang == 'en' else '' }}" data-lang="en">EN</button>
+            <button type="button" class="lang-btn{{ ' active' if lang == 'de' else '' }}" data-lang="de">DE</button>
+          </div>
+        </div>
+      </header>
+
+      <div class="page-body">
+        {% block content %}{% endblock %}
+        <footer>{{ t.footer_note }} — {{ t.app_name }} v{{ version }}</footer>
+      </div>
     </main>
   </div>
+
+  <div id="toast-container" class="toast-container" role="status" aria-live="polite" aria-atomic="false"></div>
+
   <script>window.AUDIARR_I18N = {{ t|tojson }};</script>
+  <script src="/static/js/common.js?v={{ version }}"></script>
   {% block scripts %}{% endblock %}
 </body>
 </html>

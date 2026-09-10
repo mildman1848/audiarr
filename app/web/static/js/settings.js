@@ -72,9 +72,12 @@ async function saveSettings(event) {
     await putSettings(doc);
     document.getElementById("conversion-webhook-key").value = "";
     populate(await getSettings());
-    msg.textContent = T.settings_save_success;
+    msg.textContent = "";
+    if (window.AudiarrToast) window.AudiarrToast.success(T.settings_save_success);
   } catch (err) {
-    msg.textContent = `${T.settings_save_error} (${err.message})`;
+    const text = `${T.settings_save_error} (${err.message})`;
+    msg.textContent = text;
+    if (window.AudiarrToast) window.AudiarrToast.error(text);
   }
 }
 

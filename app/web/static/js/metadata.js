@@ -113,13 +113,16 @@ async function addToLibrary(index, btn) {
     });
     if (resp.status === 409) {
       btn.textContent = T.metadata_add_exists;
+      if (window.AudiarrToast) window.AudiarrToast.info(`${T.metadata_add_exists}: ${row.title}`);
       return;
     }
     if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
     btn.textContent = T.metadata_add_success;
+    if (window.AudiarrToast) window.AudiarrToast.success(`${T.metadata_add_success}: ${row.title}`);
   } catch (err) {
     btn.disabled = false;
     btn.textContent = `${T.metadata_add_error} (${err.message})`;
+    if (window.AudiarrToast) window.AudiarrToast.error(`${T.metadata_add_error} (${err.message})`);
   }
 }
 

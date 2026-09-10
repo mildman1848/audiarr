@@ -108,8 +108,11 @@ async function addRootFolder(event) {
     msg.textContent = "";
     document.getElementById("root-folder-form").reset();
     await loadRootFolders();
+    if (window.AudiarrToast) window.AudiarrToast.success(T.library_root_folder_added);
   } catch (err) {
-    msg.textContent = `${T.library_root_folder_add_error} (${err.message})`;
+    const text = `${T.library_root_folder_add_error} (${err.message})`;
+    msg.textContent = text;
+    if (window.AudiarrToast) window.AudiarrToast.error(text);
   }
 }
 
@@ -149,5 +152,9 @@ document.addEventListener("DOMContentLoaded", () => {
   loadBooks();
   loadRootFolders();
   document.getElementById("root-folder-form").addEventListener("submit", addRootFolder);
-  document.getElementById("dry-run-btn").addEventListener("click", runDryImport);
+  // The dry-run import can be triggered from the top-bar quick action or the
+  // in-panel button; wire whichever buttons are present.
+  document
+    .querySelectorAll("#dry-run-btn, #dry-run-btn-panel")
+    .forEach((btn) => btn.addEventListener("click", runDryImport));
 });

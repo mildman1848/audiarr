@@ -61,6 +61,9 @@ def test_connections_and_settings_pages_render(
 def test_navigation_marks_active_route(app_client):
     _set_ui_language(app_client, "en")
 
+    dashboard = app_client.get("/")
+    assert '<a href="/" class="active">' in dashboard.text
+
     library = app_client.get("/library")
     assert '<a href="/library" class="active">' in library.text
 
@@ -72,3 +75,56 @@ def test_navigation_marks_active_route(app_client):
 
     settings = app_client.get("/settings")
     assert '<a href="/settings" class="active">' in settings.text
+
+
+@pytest.mark.parametrize(
+    ("language", "welcome_marker"),
+    [
+        ("en", "Welcome to Audiarr"),
+        ("de", "Willkommen bei Audiarr"),
+    ],
+)
+def test_dashboard_page_renders(app_client, language, welcome_marker):
+    _set_ui_language(app_client, language)
+
+    dashboard = app_client.get("/")
+    assert dashboard.status_code == 200
+    assert welcome_marker in dashboard.text
+
+
+ALL_PAGES = ("/", "/library", "/metadata", "/connections", "/settings")
+
+
+@pytest.mark.parametrize("path", ALL_PAGES)
+def test_app_shell_markers_present(app_client, path):
+    """Every page renders the Arr-style shell: brand subtitle, top bar,
+    eyebrow, the language quick-switch, and the toast container."""
+    _set_ui_language(app_client, "en")
+
+    page = app_client.get(path)
+    assert page.status_code == 200
+    assert 'class="brand-sub"' in page.text
+    assert 'class="topbar"' in page.text
+    assert 'class="eyebrow"' in page.text
+    assert 'class="lang-switch"' in page.text
+    assert 'data-lang="en"' in page.text
+    assert 'data-lang="de"' in page.text
+    assert 'id="toast-container"' in page.text
+    assert "/static/js/common.js" in page.text
+
+
+@pytest.mark.parametrize(
+    ("language", "active_lang", "inactive_lang"),
+    [
+        ("en", 'data-lang="en"', 'data-lang="de"'),
+        ("de", 'data-lang="de"', 'data-lang="en"'),
+    ],
+)
+def test_language_switch_marks_current_language(
+    app_client, language, active_lang, inactive_lang
+):
+    _set_ui_language(app_client, language)
+
+    page = app_client.get("/library")
+    assert f'<button type="button" class="lang-btn active" {active_lang}>' in page.text
+    assert f'<button type="button" class="lang-btn" {inactive_lang}>' in page.text
