@@ -1,0 +1,66 @@
+{% extends "base.html" %}
+
+{% block page_title %}{{ t.import_title }}{% endblock %}
+{% block page_eyebrow %}{{ t.import_eyebrow }}{% endblock %}
+{% block page_heading %}{{ t.import_title }}{% endblock %}
+
+{% block topbar_actions %}
+  <button type="button" id="import-refresh-top" class="btn btn-secondary">{{ t.library_refresh }}</button>
+{% endblock %}
+
+{% block content %}
+  <p class="section-hint">{{ t.import_subtitle }}</p>
+
+  <section class="panel">
+    <div class="section-head">
+      <span class="eyebrow">{{ t.import_eyebrow }}</span>
+      <h2>{{ t.import_unmatched_heading }}</h2>
+    </div>
+    <div class="card">
+      <div id="import-unmatched">
+        <p class="muted">{{ t.import_loading }}</p>
+      </div>
+    </div>
+  </section>
+
+  <section class="panel">
+    <details id="import-ignored-details">
+      <summary>{{ t.import_ignored_heading }}</summary>
+      <div class="card">
+        <div id="import-ignored">
+          <p class="muted">{{ t.import_loading }}</p>
+        </div>
+      </div>
+    </details>
+  </section>
+
+  <div id="import-match-overlay" class="import-overlay" hidden style="position:fixed;inset:0;background:rgba(0,0,0,0.6);display:flex;align-items:center;justify-content:center;z-index:100;">
+    <div class="card" style="width:min(640px, 92vw);max-height:85vh;overflow-y:auto;">
+      <div class="section-head">
+        <span class="eyebrow">{{ t.import_eyebrow }}</span>
+        <h2>{{ t.import_match_modal_title }}</h2>
+      </div>
+      <p class="muted small" id="import-match-folder"></p>
+      <form id="import-match-form" class="inline-form toolbar">
+        <label>{{ t.metadata_query_label }}
+          <input type="text" id="import-match-query" placeholder="{{ t.import_match_search_placeholder }}" required>
+        </label>
+        <label>{{ t.metadata_locale_label }}
+          <select id="import-match-locale">
+            <option value="us" selected>en</option>
+            <option value="de">de</option>
+          </select>
+        </label>
+        <button type="submit" class="btn btn-primary">{{ t.metadata_search_button }}</button>
+      </form>
+      <div id="import-match-results"></div>
+      <div class="button-row">
+        <button type="button" id="import-match-close" class="btn btn-secondary">{{ t.import_match_close }}</button>
+      </div>
+    </div>
+  </div>
+{% endblock %}
+
+{% block scripts %}
+  <script src="/static/js/import.js?v={{ version }}"></script>
+{% endblock %}

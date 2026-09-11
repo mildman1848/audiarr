@@ -111,6 +111,9 @@ def test_navigation_marks_active_route(app_client):
     library = app_client.get("/library")
     assert '<a href="/library" class="active">' in library.text
 
+    import_page = app_client.get("/import")
+    assert '<a href="/import" class="active">' in import_page.text
+
     metadata = app_client.get("/metadata")
     assert '<a href="/metadata" class="active">' in metadata.text
 
@@ -159,6 +162,33 @@ def test_search_and_activity_pages_render(
     assert "/static/js/activity.js" in activity.text
 
 
+@pytest.mark.parametrize(
+    ("language", "marker"),
+    [
+        ("en", "Unmatched Folders"),
+        ("de", "Nicht zugeordnete Ordner"),
+    ],
+)
+def test_import_page_renders(app_client, language, marker):
+    _set_ui_language(app_client, language)
+
+    page = app_client.get("/import")
+    assert page.status_code == 200
+    assert marker in page.text
+    assert "/static/js/import.js" in page.text
+
+
+def test_import_page_marks_nav_active_and_nav_link_present_everywhere(app_client):
+    _set_ui_language(app_client, "en")
+
+    import_page = app_client.get("/import")
+    assert '<a href="/import" class="active">' in import_page.text
+
+    for path in ALL_PAGES:
+        page = app_client.get(path)
+        assert 'href="/import"' in page.text
+
+
 def test_search_and_activity_mark_nav_active(app_client):
     _set_ui_language(app_client, "en")
 
@@ -172,6 +202,7 @@ def test_search_and_activity_mark_nav_active(app_client):
 ALL_PAGES = (
     "/",
     "/library",
+    "/import",
     "/metadata",
     "/search",
     "/activity",

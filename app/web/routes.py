@@ -76,6 +76,11 @@ async def book_detail_page(request: Request, book_id: int) -> HTMLResponse:
     return templates.TemplateResponse(request, "book_detail.html", context)
 
 
+@router.get("/import", response_class=HTMLResponse)
+async def import_page(request: Request) -> HTMLResponse:
+    return templates.TemplateResponse(request, "import.html", _base_context("import"))
+
+
 @router.get("/metadata", response_class=HTMLResponse)
 async def metadata_page(request: Request) -> HTMLResponse:
     return templates.TemplateResponse(request, "metadata.html", _base_context("metadata"))
