@@ -661,3 +661,20 @@ footer {
     gap: 0.6rem;
   }
 }
+
+/* Import page: modal overlay for manual matching. The [hidden] attribute
+   must win over the flex layout — inline styles would override the UA
+   stylesheet's display:none, so the presentation lives here instead. */
+.import-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.6);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 100;
+}
+
+.import-overlay[hidden] {
+  display: none;
+}
