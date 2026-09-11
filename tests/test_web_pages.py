@@ -7,6 +7,8 @@ English and German UI language settings, and mark its own nav entry active.
 
 from __future__ import annotations
 
+from pathlib import Path
+
 import pytest
 
 
@@ -221,6 +223,15 @@ def test_search_and_activity_mark_nav_active(app_client):
 
     activity = app_client.get("/activity")
     assert '<a href="/activity" class="active">' in activity.text
+
+
+def test_settings_js_logs_in_after_enabling_forms_auth():
+    script = (Path(__file__).parents[1] / "app/web/static/js/settings.js").read_text()
+
+    assert "async function loginAfterAuthChange" in script
+    assert 'fetch("/api/v1/auth/login"' in script
+    assert 'if (doc.auth.method === "forms" && password)' in script
+    assert "await loginAfterAuthChange(doc.auth.username, password)" in script
 
 
 ALL_PAGES = (

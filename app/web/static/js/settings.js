@@ -28,6 +28,16 @@ async function putSettings(doc) {
   return resp.json();
 }
 
+async function loginAfterAuthChange(username, password) {
+  if (!username || !password) return;
+  const resp = await fetch("/api/v1/auth/login", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ username, password }),
+  });
+  if (!resp.ok) throw new Error(`login HTTP ${resp.status}`);
+}
+
 // Return the first SABnzbd download client, or a fresh default (not yet
 // attached to the document).
 function readSab(s) {
@@ -163,6 +173,9 @@ async function saveSettings(event) {
     if (prowlarrKey) prowlarr.api_key = prowlarrKey;
 
     await putSettings(doc);
+    if (doc.auth.method === "forms" && password) {
+      await loginAfterAuthChange(doc.auth.username, password);
+    }
     for (const id of [
       "conversion-webhook-key",
       "sab-api-key",
