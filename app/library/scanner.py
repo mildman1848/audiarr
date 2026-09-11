@@ -25,6 +25,48 @@ METADATA_EXTENSIONS = {".json", ".nfo", ".xml", ".txt"}
 ASIN_PATTERN = re.compile(r"\b(B0[A-Z0-9]{8})\b", re.IGNORECASE)
 ISBN_PATTERN = re.compile(r"\b(97[89][- ]?\d{1,5}[- ]?\d{1,7}[- ]?\d{1,7}[- ]?\d)\b")
 
+# --- Release-name normalization helpers ------------------------------------
+#
+# Usenet/scene release folders rarely use the clean "Author - Title"
+# convention. They dot- or underscore-join words, glue tags onto the end
+# with tight hyphens, and sometimes append a bare ".1"/".2" when the same
+# release was grabbed more than once. The helpers below turn those into
+# something close to "Author - Title" before ``_guess_title_author`` runs
+# its (unchanged) pattern matching.
+
+# "[B0XXXXXXXX]" or " B0XXXXXXXX" ASIN suffix, kept from the original parser.
+_ASIN_SUFFIX_RE = re.compile(r"\s*\[?[Bb]0[A-Za-z0-9]{8}\]?\s*$")
+
+# sabnzbd-style duplicate-download suffix, e.g. "...Title.1", "...Title.10".
+_TRAILING_INDEX_RE = re.compile(r"\.(\d{1,3})$")
+
+# Sample-rate tags like "44.1KHZ"/"48KHZ" contain a dot that must not be
+# mistaken for a word separator, so strip them whole before dot -> space.
+_SAMPLE_RATE_RE = re.compile(r"[\s.\-_]*\d{1,3}[.,]?\d{0,2}\s*khz\b", re.IGNORECASE)
+
+# Parenthetical "unabridged"/"abridged" edition noise, several spellings.
+_EDITION_NOISE_RE = re.compile(
+    r"\(\s*(?:un)?gek(?:ü|ue|u)rzte?(?:\s+lesung)?\s*\)",
+    re.IGNORECASE,
+)
+
+# Format/language/source tags and known scene-group suffixes stripped from
+# the tail of a release name. Best-effort, not exhaustive.
+_RELEASE_TAGS = {
+    "german", "deutsch", "de", "en", "english",
+    "web", "webrip", "retail",
+    "mp3", "flac", "m4b", "aac",
+    "audiobook", "audiobooks", "hörbuch", "hoerbuch",
+    "16bit", "24bit", "32bit",
+    # scene-group suffixes seen in the wild, e.g. "-WALKMAN", "-TSiNT"
+    "walkman", "tsint",
+}
+_YEAR_RE = re.compile(r"^(19|20)\d{2}$")
+
+# A word that plausibly starts a personal name: capitalized, letters only.
+_NAME_WORD_RE = re.compile(r"^[A-ZÄÖÜ][a-zäöüß'’-]+$")
+_NON_NAME_LEAD_WORDS = {"the", "a", "an", "der", "die", "das", "ein", "eine", "los", "les", "la", "le"}
+
 
 @dataclass
 class ScannedFile:
@@ -70,16 +112,77 @@ def _extract_isbn_hints(candidate_names: list[str]) -> list[str]:
     return hints
 
 
+def _normalize_release_name(folder_name: str) -> str:
+    """Turn a release-style folder name into something close to a human title.
+
+    Handles the dotted/underscored scene-release conventions on top of the
+    plain "Author - Title" naming that ``_guess_title_author`` already
+    understood: duplicate-download suffixes, dot/underscore word joins,
+    tight-hyphen joins, sample-rate/format/language tags, and parenthetical
+    edition noise ("(Ungekuerzte Lesung)").
+    """
+    cleaned = _ASIN_SUFFIX_RE.sub("", folder_name).strip()
+    cleaned = _TRAILING_INDEX_RE.sub("", cleaned)
+    cleaned = _SAMPLE_RATE_RE.sub(" ", cleaned)
+
+    # Dots/underscores between words stand in for spaces in release names.
+    cleaned = re.sub(r"[._]+", " ", cleaned)
+
+    # Normalize every hyphen (tight or already spaced) to " - " so
+    # "Author-Title" and "Author - Title" release styles converge; this
+    # also turns scene-style ".-." joins into a proper separator.
+    cleaned = re.sub(r"\s*-\s*", " - ", cleaned)
+
+    cleaned = _EDITION_NOISE_RE.sub(" ", cleaned)
+    cleaned = re.sub(r"\s+", " ", cleaned).strip(" -").strip()
+
+    # Strip trailing format/language/year/scene-group tags, one token at a
+    # time, treating a lone "-" as just another token boundary.
+    tokens = cleaned.split(" ")
+    while tokens:
+        last = tokens[-1]
+        if last == "-":
+            tokens.pop()
+            continue
+        bare = last.strip(".,").lower()
+        if _YEAR_RE.match(bare) or bare in _RELEASE_TAGS:
+            tokens.pop()
+            continue
+        break
+
+    return " ".join(tokens).strip(" -").strip()
+
+
+def _split_no_separator(cleaned: str) -> tuple[str, str]:
+    """Fallback for release names with no dash/parenthesis left after cleanup.
+
+    Some releases join "Firstname Lastname Title..." with plain spaces only
+    (e.g. dot-joined names where the dots became spaces). If the first two
+    words look like a personal name and there is enough left over to be a
+    title, guess them as the author; otherwise stay conservative and return
+    the cleaned name as the title with no author.
+    """
+    words = cleaned.split(" ")
+    if (
+        len(words) >= 4
+        and words[0].lower() not in _NON_NAME_LEAD_WORDS
+        and _NAME_WORD_RE.match(words[0])
+        and _NAME_WORD_RE.match(words[1])
+    ):
+        return " ".join(words[2:]), " ".join(words[:2])
+    return cleaned, ""
+
+
 def _guess_title_author(folder_name: str) -> tuple[str, str]:
     """Best-effort parse of common folder naming schemes.
 
     Supported patterns (checked in order):
-      "Author - Title"       -> (title, author)
-      "Title (Author)"       -> (title, author)
-      anything else          -> (folder_name, "")
+      "Author - Title"           -> (title, author)
+      "Title (Author)"           -> (title, author)
+      "Firstname Lastname Title" -> (title, author), see _split_no_separator
+      anything else               -> (cleaned folder name, "")
     """
-    # Strip trailing ASIN/bracket noise like "[B0XXXXXXXX]" first.
-    cleaned = re.sub(r"\s*\[?[Bb]0[A-Za-z0-9]{8}\]?\s*$", "", folder_name).strip()
+    cleaned = _normalize_release_name(folder_name)
 
     if " - " in cleaned:
         left, _, right = cleaned.partition(" - ")
@@ -90,7 +193,7 @@ def _guess_title_author(folder_name: str) -> tuple[str, str]:
     if paren:
         return paren.group(1).strip(), paren.group(2).strip()
 
-    return cleaned, ""
+    return _split_no_separator(cleaned)
 
 
 def scan_folder(root: Path) -> list[BookCandidate]:
