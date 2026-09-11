@@ -71,4 +71,7 @@ document.addEventListener("DOMContentLoaded", () => {
   console.info("Audiarr UI loaded");
   loadConversionJobs();
   setInterval(loadConversionJobs, 10000);
+
+  const refreshBtn = document.getElementById("dashboard-refresh-top");
+  if (refreshBtn) refreshBtn.addEventListener("click", loadConversionJobs);
 });

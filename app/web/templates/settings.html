@@ -8,9 +8,7 @@
   <button type="submit" form="settings-form" class="btn btn-primary">{{ t.settings_save }}</button>
 {% endblock %}
 
-{% block content %}
-  <p class="section-hint">{{ t.settings_subtitle }}</p>
-
+{% block page_toolbar %}
   <nav class="section-tabs">
     <a href="#media">{{ t.settings_section_media }}</a>
     <a href="#profiles">{{ t.settings_section_profiles }}</a>
@@ -24,6 +22,10 @@
     <a href="#ui">{{ t.settings_section_ui }}</a>
     <a href="#conversion">{{ t.settings_section_conversion }}</a>
   </nav>
+{% endblock %}
+
+{% block content %}
+  <p class="section-hint">{{ t.settings_subtitle }}</p>
 
   <form id="settings-form">
     <section id="media" class="card settings-form">

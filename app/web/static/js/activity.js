@@ -186,6 +186,21 @@ async function refreshHistory() {
   }
 }
 
+// Segmented control: switches which card is visible. Pure show/hide, no
+// extra fetch — both sections already poll independently.
+function setActivityTab(tab) {
+  const isQueue = tab === "queue";
+  document.getElementById("activity-queue-section").hidden = !isQueue;
+  document.getElementById("activity-history-section").hidden = isQueue;
+
+  const queueTabBtn = document.getElementById("activity-tab-queue");
+  const historyTabBtn = document.getElementById("activity-tab-history");
+  queueTabBtn.classList.toggle("active", isQueue);
+  queueTabBtn.setAttribute("aria-selected", String(isQueue));
+  historyTabBtn.classList.toggle("active", !isQueue);
+  historyTabBtn.setAttribute("aria-selected", String(!isQueue));
+}
+
 // Only poll the queue while the tab is visible; resume immediately when it
 // becomes visible again.
 function tickQueue() {
@@ -213,9 +228,13 @@ document.addEventListener("DOMContentLoaded", () => {
   }, HISTORY_INTERVAL_MS);
 
   document.addEventListener("visibilitychange", handleVisibilityChange);
-  document
-    .getElementById("history-refresh-btn")
-    .addEventListener("click", refreshHistory);
+  document.getElementById("activity-refresh-top").addEventListener("click", () => {
+    refreshQueue();
+    refreshHistory();
+  });
+
+  document.getElementById("activity-tab-queue").addEventListener("click", () => setActivityTab("queue"));
+  document.getElementById("activity-tab-history").addEventListener("click", () => setActivityTab("history"));
 });
 
 // Clean up timers if the page is torn down (e.g. bfcache navigation).

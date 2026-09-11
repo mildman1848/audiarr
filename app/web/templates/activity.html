@@ -4,11 +4,21 @@
 {% block page_eyebrow %}{{ t.activity_eyebrow }}{% endblock %}
 {% block page_heading %}{{ t.activity_title }}{% endblock %}
 
+{% block page_toolbar %}
+  <div class="toolbar-group toolbar-left">
+    <button type="button" id="activity-refresh-top" class="toolbar-btn">{{ t.toolbar_refresh }}</button>
+  </div>
+  <div class="toolbar-group toolbar-right" role="tablist" aria-label="{{ t.activity_eyebrow }}">
+    <button type="button" id="activity-tab-queue" class="toolbar-btn activity-tab active" data-activity-tab="queue" role="tab" aria-selected="true">{{ t.activity_tab_queue }}</button>
+    <button type="button" id="activity-tab-history" class="toolbar-btn activity-tab" data-activity-tab="history" role="tab" aria-selected="false">{{ t.activity_tab_history }}</button>
+  </div>
+{% endblock %}
+
 {% block content %}
   <p class="section-hint">{{ t.activity_subtitle }}</p>
 
   <div class="card-grid wide">
-    <section class="card">
+    <section class="card" id="activity-queue-section">
       <div class="section-head">
         <span class="eyebrow">{{ t.activity_eyebrow }}</span>
         <h2>{{ t.activity_queue_heading }}</h2>
@@ -18,13 +28,10 @@
       </div>
     </section>
 
-    <section class="card">
+    <section class="card" id="activity-history-section" hidden>
       <div class="section-head">
         <span class="eyebrow">{{ t.activity_eyebrow }}</span>
         <h2>{{ t.activity_history_heading }}</h2>
-      </div>
-      <div class="toolbar">
-        <button type="button" id="history-refresh-btn" class="btn btn-secondary">{{ t.activity_refresh }}</button>
       </div>
       <div id="activity-history">
         <p class="muted">{{ t.activity_loading }}</p>

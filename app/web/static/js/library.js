@@ -9,6 +9,7 @@ const T = window.AUDIARR_I18N || {};
 let allBooks = [];
 let rootFolders = [];
 let currentView = "grid";
+let currentSort = "title";
 
 function esc(value) {
   return String(value ?? "").replace(/[&<>"']/g, (c) => ({
@@ -73,7 +74,7 @@ async function loadStats() {
 // -- books ------------------------------------------------------------------------
 
 function filteredBooks() {
-  const query = (document.getElementById("library-search").value || "").trim().toLowerCase();
+  const query = (document.getElementById("library-filter").value || "").trim().toLowerCase();
   if (!query) return allBooks;
   return allBooks.filter((b) => {
     const haystack = [b.title, b.subtitle, ...(b.authors || []), ...(b.narrators || []), b.series]
@@ -81,6 +82,18 @@ function filteredBooks() {
       .toLowerCase();
     return haystack.includes(query);
   });
+}
+
+// Client-side only: sorts a copy of the already-filtered list, leaving
+// allBooks untouched.
+function sortedBooks(books) {
+  const sorted = [...books];
+  if (currentSort === "author") {
+    sorted.sort((a, b) => (a.authors?.[0] || "").localeCompare(b.authors?.[0] || ""));
+  } else {
+    sorted.sort((a, b) => (a.title || "").localeCompare(b.title || ""));
+  }
+  return sorted;
 }
 
 function renderBooks() {
@@ -91,7 +104,7 @@ function renderBooks() {
     return;
   }
 
-  const books = filteredBooks();
+  const books = sortedBooks(filteredBooks());
   if (!books.length) {
     container.innerHTML = `<p class="muted">${esc(T.library_search_no_results)}</p>`;
     return;
@@ -202,10 +215,8 @@ async function deleteBook(bookId, title) {
 function highlightViewButtons() {
   const gridBtn = document.getElementById("view-grid-btn");
   const tableBtn = document.getElementById("view-table-btn");
-  gridBtn.classList.toggle("btn-primary", currentView === "grid");
-  gridBtn.classList.toggle("btn-secondary", currentView !== "grid");
-  tableBtn.classList.toggle("btn-primary", currentView === "table");
-  tableBtn.classList.toggle("btn-secondary", currentView !== "table");
+  gridBtn.classList.toggle("active", currentView === "grid");
+  tableBtn.classList.toggle("active", currentView === "table");
 }
 
 function setView(view) {
@@ -385,12 +396,14 @@ document.addEventListener("DOMContentLoaded", () => {
   refreshAll();
 
   document.getElementById("root-folder-form").addEventListener("submit", addRootFolder);
-  document.getElementById("library-search").addEventListener("input", renderBooks);
+  document.getElementById("library-filter").addEventListener("input", renderBooks);
+  document.getElementById("library-sort").addEventListener("change", (event) => {
+    currentSort = event.target.value;
+    renderBooks();
+  });
   document.getElementById("view-grid-btn").addEventListener("click", () => setView("grid"));
   document.getElementById("view-table-btn").addEventListener("click", () => setView("table"));
-  document
-    .querySelectorAll("#library-refresh, #library-refresh-top")
-    .forEach((btn) => btn.addEventListener("click", refreshAll));
+  document.getElementById("library-refresh-top").addEventListener("click", refreshAll);
   document.getElementById("import-dry-run-btn").addEventListener("click", () => runImport(true));
   document.getElementById("import-run-btn").addEventListener("click", () => runImport(false));
 });

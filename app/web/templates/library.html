@@ -4,8 +4,19 @@
 {% block page_eyebrow %}{{ t.library_eyebrow }}{% endblock %}
 {% block page_heading %}{{ t.library_title }}{% endblock %}
 
-{% block topbar_actions %}
-  <button type="button" id="library-refresh-top" class="btn btn-secondary">{{ t.library_refresh }}</button>
+{% block page_toolbar %}
+  <div class="toolbar-group toolbar-left">
+    <button type="button" id="library-refresh-top" class="toolbar-btn">{{ t.toolbar_refresh }}</button>
+    <button type="button" id="view-grid-btn" class="toolbar-btn" data-view="grid">{{ t.library_view_grid }}</button>
+    <button type="button" id="view-table-btn" class="toolbar-btn" data-view="table">{{ t.library_view_table }}</button>
+  </div>
+  <div class="toolbar-group toolbar-right">
+    <input type="search" id="library-filter" class="toolbar-input" placeholder="{{ t.toolbar_filter }}" aria-label="{{ t.toolbar_filter }}">
+    <select id="library-sort" class="toolbar-select" aria-label="{{ t.toolbar_sort }}">
+      <option value="title">{{ t.toolbar_sort_title }}</option>
+      <option value="author">{{ t.toolbar_sort_author }}</option>
+    </select>
+  </div>
 {% endblock %}
 
 {% block content %}
@@ -36,16 +47,6 @@
       <h2>{{ t.library_books_heading }}</h2>
     </div>
     <div class="card">
-      <div class="toolbar">
-        <label>{{ t.library_toolbar_search_placeholder }}
-          <input type="search" id="library-search" placeholder="{{ t.library_toolbar_search_placeholder }}">
-        </label>
-        <div class="button-row">
-          <button type="button" id="view-grid-btn" class="btn btn-secondary" data-view="grid">{{ t.library_view_grid }}</button>
-          <button type="button" id="view-table-btn" class="btn btn-secondary" data-view="table">{{ t.library_view_table }}</button>
-          <button type="button" id="library-refresh" class="btn btn-secondary">{{ t.library_refresh }}</button>
-        </div>
-      </div>
       <div id="library-books">
         <p class="muted">{{ t.library_books_loading }}</p>
       </div>

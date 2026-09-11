@@ -393,3 +393,67 @@ def test_language_switch_marks_current_language(
     page = app_client.get("/library")
     assert f'<button type="button" class="lang-btn active" {active_lang}>' in page.text
     assert f'<button type="button" class="lang-btn" {inactive_lang}>' in page.text
+
+
+@pytest.mark.parametrize("path", ALL_PAGES)
+def test_page_toolbar_and_global_search_markup_present(app_client, path):
+    """Every page renders the Arr-style page-toolbar region (between the
+    topbar and the content) and the global search trigger + overlay markup
+    that opens it."""
+    _set_ui_language(app_client, "en")
+
+    page = app_client.get(path)
+    assert page.status_code == 200
+    assert 'class="page-toolbar"' in page.text
+    assert 'class="toolbar-btn icon-only global-search-btn"' in page.text
+    assert 'id="global-search-overlay"' in page.text
+    assert 'class="search-overlay' in page.text
+    assert 'id="global-search-input"' in page.text
+    assert 'id="global-search-results"' in page.text
+
+
+@pytest.mark.parametrize(
+    ("language", "queue_label", "history_label"),
+    [
+        ("en", "Queue", "History"),
+        ("de", "Warteschlange", "Verlauf"),
+    ],
+)
+def test_activity_page_has_tab_segmented_control(
+    app_client, language, queue_label, history_label
+):
+    _set_ui_language(app_client, language)
+
+    page = app_client.get("/activity")
+    assert page.status_code == 200
+    assert 'data-activity-tab="queue"' in page.text
+    assert 'data-activity-tab="history"' in page.text
+    assert 'id="activity-queue-section"' in page.text
+    assert 'id="activity-history-section"' in page.text
+    assert queue_label in page.text
+    assert history_label in page.text
+
+
+def test_library_page_has_filter_and_sort_controls(app_client):
+    _set_ui_language(app_client, "en")
+
+    page = app_client.get("/library")
+    assert page.status_code == 200
+    assert 'id="library-filter"' in page.text
+    assert 'id="library-sort"' in page.text
+    assert 'id="library-refresh-top"' in page.text
+    assert 'id="view-grid-btn"' in page.text
+    assert 'id="view-table-btn"' in page.text
+
+
+def test_common_js_has_global_search_overlay_logic():
+    """The global search overlay lives in common.js so every page gets it
+    for free: debounced fetch, Escape-to-close, and backdrop-click-to-close."""
+    script = (Path(__file__).parents[1] / "app/web/static/js/common.js").read_text()
+
+    assert "function setupGlobalSearch" in script
+    assert "GLOBAL_SEARCH_DEBOUNCE_MS" in script
+    assert "setTimeout(() => runSearch(query), GLOBAL_SEARCH_DEBOUNCE_MS)" in script
+    assert 'event.key === "Escape" && !overlay.hidden' in script
+    assert "event.target === overlay" in script
+    assert "function escapeHtmlLocal" in script

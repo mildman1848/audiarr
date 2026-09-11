@@ -464,6 +464,152 @@ body {
   border-bottom: none;
 }
 
+/* ----------------------------------------------------------- Page toolbar */
+
+/* Arr-style toolbar row under the topbar: page-specific actions on the
+   left, view/filter/sort controls on the right. Present on every page via
+   base.html; pages that have nothing to put here just render an empty bar. */
+.page-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.6rem;
+  padding: 0.5rem 2rem;
+  background: var(--bg-panel);
+  border-bottom: 1px solid var(--border-color);
+}
+
+.toolbar-group {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  flex-wrap: wrap;
+}
+
+.toolbar-group.toolbar-right {
+  margin-left: auto;
+}
+
+.page-toolbar .section-tabs {
+  margin: 0;
+}
+
+.toolbar-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  height: 32px;
+  padding: 0 0.65rem;
+  background: transparent;
+  color: var(--text-main);
+  border: 1px solid transparent;
+  border-radius: var(--radius);
+  font: inherit;
+  font-size: 0.82rem;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.toolbar-btn:hover {
+  background: var(--bg-panel-alt);
+}
+
+.toolbar-btn:focus-visible {
+  outline: 2px solid var(--audiarr-accent);
+  outline-offset: 1px;
+}
+
+.toolbar-btn.active {
+  background: var(--audiarr-accent-soft);
+  color: var(--audiarr-accent);
+}
+
+.toolbar-btn.icon-only {
+  width: 32px;
+  padding: 0;
+  justify-content: center;
+}
+
+.toolbar-input,
+.toolbar-select {
+  height: 32px;
+  padding: 0 0.55rem;
+}
+
+/* ------------------------------------------------------- Global search */
+
+.search-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.6);
+  display: flex;
+  align-items: flex-start;
+  justify-content: center;
+  padding-top: 10vh;
+  z-index: 200;
+}
+
+.search-overlay[hidden] {
+  display: none;
+}
+
+.search-overlay-panel {
+  width: min(560px, 92vw);
+  max-height: 70vh;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  background: var(--bg-panel);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius);
+  box-shadow: 0 12px 40px rgba(0, 0, 0, 0.5);
+}
+
+.search-overlay-input {
+  border: none;
+  border-bottom: 1px solid var(--border-color);
+  border-radius: 0;
+  padding: 0.9rem 1rem;
+  font-size: 1rem;
+  background: var(--bg-panel);
+}
+
+.search-overlay-input:focus {
+  box-shadow: none;
+}
+
+.search-overlay-results {
+  overflow-y: auto;
+  padding: 0.4rem;
+}
+
+.search-overlay-result {
+  display: block;
+  padding: 0.55rem 0.7rem;
+  border-radius: var(--radius);
+  color: var(--text-main);
+}
+
+.search-overlay-result:hover,
+.search-overlay-result:focus-visible {
+  background: var(--bg-panel-alt);
+}
+
+.search-overlay-result-title {
+  font-weight: 600;
+}
+
+.search-overlay-result-meta {
+  color: var(--text-muted);
+  font-size: 0.8rem;
+}
+
+.search-overlay-empty {
+  padding: 1rem;
+  color: var(--text-muted);
+  text-align: center;
+}
+
 /* --------------------------------------------------------------- Toolbars */
 
 .toolbar {
@@ -844,6 +990,22 @@ footer {
   .page-body {
     padding-left: 1rem;
     padding-right: 1rem;
+  }
+
+  /* Single scrollable icon row instead of wrapping to multiple rows — keeps
+     the toolbar height compact on narrow viewports (Sonarr's mobile
+     pattern). */
+  .page-toolbar {
+    flex-wrap: nowrap;
+    overflow-x: auto;
+    padding-left: 1rem;
+    padding-right: 1rem;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  .toolbar-group {
+    flex-wrap: nowrap;
+    flex-shrink: 0;
   }
 }
 

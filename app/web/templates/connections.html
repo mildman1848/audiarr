@@ -4,6 +4,12 @@
 {% block page_eyebrow %}{{ t.connections_eyebrow }}{% endblock %}
 {% block page_heading %}{{ t.connections_title }}{% endblock %}
 
+{% block page_toolbar %}
+  <div class="toolbar-group toolbar-left">
+    <button type="button" id="connections-refresh-top" class="toolbar-btn">{{ t.toolbar_refresh }}</button>
+  </div>
+{% endblock %}
+
 {% block content %}
   <p class="section-hint">{{ t.connections_subtitle }}</p>
 

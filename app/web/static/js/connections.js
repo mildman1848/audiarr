@@ -141,6 +141,7 @@ async function scanAudiobookshelf() {
 
 document.addEventListener("DOMContentLoaded", () => {
   loadConnections();
+  document.getElementById("connections-refresh-top").addEventListener("click", loadConnections);
   document.getElementById("abs-form").addEventListener("submit", saveAudiobookshelf);
   document.getElementById("m4b-form").addEventListener("submit", saveM4bConvertarr);
   document.getElementById("abs-test-btn").addEventListener("click", () =>

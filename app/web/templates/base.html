@@ -4,7 +4,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>{% block page_title %}{{ t.app_name }}{% endblock %} — {{ t.app_name }}</title>
-  <link rel="stylesheet" href="/static/css/style.css?v={{ version }}-sidebar">
+  <link rel="stylesheet" href="/static/css/style.css?v={{ version }}-toolbar">
   <noscript>
     <style>
       /* Without JS the drawer can never be toggled, so keep the sidebar
@@ -47,12 +47,19 @@
         </div>
         <div class="topbar-actions">
           {% block topbar_actions %}{% endblock %}
+          <button type="button" class="toolbar-btn icon-only global-search-btn" data-global-search-open aria-label="{{ t.toolbar_search }}" title="{{ t.toolbar_search }}">
+            <span aria-hidden="true">⌕</span>
+          </button>
           <div class="lang-switch" role="group" aria-label="{{ t.language_switch_label }}">
             <button type="button" class="lang-btn{{ ' active' if lang == 'en' else '' }}" data-lang="en">EN</button>
             <button type="button" class="lang-btn{{ ' active' if lang == 'de' else '' }}" data-lang="de">DE</button>
           </div>
         </div>
       </header>
+
+      <div class="page-toolbar">
+        {% block page_toolbar %}{% endblock %}
+      </div>
 
       <div class="page-body">
         {% block content %}{% endblock %}
@@ -65,8 +72,15 @@
 
   <div id="toast-container" class="toast-container" role="status" aria-live="polite" aria-atomic="false"></div>
 
+  <div class="search-overlay" id="global-search-overlay" hidden>
+    <div class="search-overlay-panel">
+      <input type="search" id="global-search-input" class="search-overlay-input" placeholder="{{ t.toolbar_search_placeholder }}" aria-label="{{ t.toolbar_search }}">
+      <div id="global-search-results" class="search-overlay-results"></div>
+    </div>
+  </div>
+
   <script>window.AUDIARR_I18N = {{ t|tojson }};</script>
-  <script src="/static/js/common.js?v={{ version }}-sidebar"></script>
+  <script src="/static/js/common.js?v={{ version }}-toolbar"></script>
   {% block scripts %}{% endblock %}
 </body>
 </html>
