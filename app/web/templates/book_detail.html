@@ -1,0 +1,19 @@
+{% extends "base.html" %}
+
+{% block page_title %}{{ t.book_detail_page_title }}{% endblock %}
+{% block page_eyebrow %}{{ t.book_detail_eyebrow }}{% endblock %}
+{% block page_heading %}{{ t.book_detail_page_title }}{% endblock %}
+
+{% block topbar_actions %}
+  <a href="/library" class="btn btn-secondary">{{ t.book_detail_back }}</a>
+{% endblock %}
+
+{% block content %}
+  <div id="book-detail" data-book-id="{{ book_id }}">
+    <p class="muted">{{ t.book_detail_loading }}</p>
+  </div>
+{% endblock %}
+
+{% block scripts %}
+  <script src="/static/js/book_detail.js?v={{ version }}"></script>
+{% endblock %}

@@ -68,6 +68,14 @@ async def library_page(request: Request) -> HTMLResponse:
     return templates.TemplateResponse(request, "library.html", _base_context("library"))
 
 
+@router.get("/library/books/{book_id}", response_class=HTMLResponse)
+async def book_detail_page(request: Request, book_id: int) -> HTMLResponse:
+    # Server-rendered shell only; the JS client fetches book data by id and
+    # handles the 404/error state inline, so no book lookup happens here.
+    context = {**_base_context("library"), "book_id": book_id}
+    return templates.TemplateResponse(request, "book_detail.html", context)
+
+
 @router.get("/metadata", response_class=HTMLResponse)
 async def metadata_page(request: Request) -> HTMLResponse:
     return templates.TemplateResponse(request, "metadata.html", _base_context("metadata"))

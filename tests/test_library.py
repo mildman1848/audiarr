@@ -184,3 +184,101 @@ def test_api_book_lifecycle_with_provider_attribution(app_client):
     gone = app_client.delete(f"/api/v1/library/books/{book['id']}")
     assert gone.status_code == 204
     assert app_client.get("/api/v1/library/books").json() == []
+
+
+def test_book_endpoints_include_file_stats(app_client):
+    payload = {
+        "title": "Der Vorleser",
+        "authors": ["Bernhard Schlink"],
+        "narrators": ["Hans Korte"],
+        "language": "de",
+        "duration_seconds": 298 * 60,
+        "provider": "audible",
+        "provider_id": "B004UWRY6M",
+        "locale": "de",
+    }
+    resp = app_client.post("/api/v1/library/books", json=payload)
+    assert resp.status_code == 201
+    book = resp.json()
+
+    # No editions/files yet -> zeroed-out stats.
+    assert book["file_count"] == 0
+    assert book["size_bytes"] == 0
+    assert book["formats"] == []
+    assert book["added_at"] is None
+
+    # Attach an edition + two files directly, mirroring what the importer writes.
+    with get_conn() as conn:
+        cur = conn.execute(
+            "INSERT INTO editions (book_id, format, locale) VALUES (?, 'm4b', 'de')",
+            (book["id"],),
+        )
+        edition_id = cur.lastrowid
+        conn.execute(
+            "INSERT INTO library_files (edition_id, path, size_bytes, format) "
+            "VALUES (?, ?, ?, 'm4b')",
+            (edition_id, "/data/book/part1.m4b", 1000),
+        )
+        conn.execute(
+            "INSERT INTO library_files (edition_id, path, size_bytes, format) "
+            "VALUES (?, ?, ?, 'm4b')",
+            (edition_id, "/data/book/part2.m4b", 2000),
+        )
+
+    single = app_client.get(f"/api/v1/library/books/{book['id']}")
+    assert single.status_code == 200
+    data = single.json()
+    assert data["file_count"] == 2
+    assert data["size_bytes"] == 3000
+    assert data["formats"] == ["m4b"]
+    assert data["added_at"] is not None
+
+    listing = app_client.get("/api/v1/library/books").json()
+    assert listing[0]["file_count"] == 2
+    assert listing[0]["size_bytes"] == 3000
+
+    files_resp = app_client.get(f"/api/v1/library/books/{book['id']}/files")
+    assert files_resp.status_code == 200
+    files = files_resp.json()
+    assert len(files) == 2
+    assert {f["format"] for f in files} == {"m4b"}
+    assert all(f["edition_id"] == edition_id for f in files)
+
+    missing = app_client.get("/api/v1/library/books/9999/files")
+    assert missing.status_code == 404
+
+
+def test_api_library_stats(app_client):
+    empty = app_client.get("/api/v1/library/stats")
+    assert empty.status_code == 200
+    assert empty.json() == {
+        "book_count": 0,
+        "author_count": 0,
+        "narrator_count": 0,
+        "series_count": 0,
+        "file_count": 0,
+        "total_size_bytes": 0,
+        "root_folder_count": 0,
+    }
+
+    app_client.post("/api/v1/library/root-folders", json={"path": "/data/audiobooks"})
+    app_client.post(
+        "/api/v1/library/books",
+        json={
+            "title": "Der Vorleser",
+            "authors": ["Bernhard Schlink"],
+            "narrators": ["Hans Korte"],
+            "series": "Nachkriegsromane",
+            "language": "de",
+            "provider": "audible",
+            "provider_id": "B004UWRY6M",
+            "locale": "de",
+        },
+    )
+
+    stats = app_client.get("/api/v1/library/stats").json()
+    assert stats["book_count"] == 1
+    assert stats["author_count"] == 1
+    assert stats["narrator_count"] == 1
+    assert stats["series_count"] == 1
+    assert stats["root_folder_count"] == 1

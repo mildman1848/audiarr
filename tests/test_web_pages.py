@@ -83,6 +83,25 @@ def test_settings_page_has_sabnzbd_and_prowlarr_sections(
     assert 'id="prowlarr-test-btn"' in settings.text
 
 
+@pytest.mark.parametrize(
+    ("language", "marker"),
+    [
+        ("en", "Back to Library"),
+        ("de", "Zurück zur Bibliothek"),
+    ],
+)
+def test_book_detail_page_renders(app_client, language, marker):
+    _set_ui_language(app_client, language)
+
+    # The route is server-rendered and does not require an existing book;
+    # the JS client fetches book data by id and handles a 404 inline.
+    page = app_client.get("/library/books/1")
+    assert page.status_code == 200
+    assert marker in page.text
+    assert "/static/js/book_detail.js" in page.text
+    assert 'data-book-id="1"' in page.text
+
+
 def test_navigation_marks_active_route(app_client):
     _set_ui_language(app_client, "en")
 

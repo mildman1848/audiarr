@@ -5,19 +5,50 @@
 {% block page_heading %}{{ t.library_title }}{% endblock %}
 
 {% block topbar_actions %}
-  <button type="button" id="dry-run-btn" class="btn btn-secondary">{{ t.library_import_run }}</button>
+  <button type="button" id="library-refresh-top" class="btn btn-secondary">{{ t.library_refresh }}</button>
 {% endblock %}
 
 {% block content %}
   <p class="section-hint">{{ t.library_subtitle }}</p>
+
+  <div class="card-grid">
+    <div class="card stat-card">
+      <h2>{{ t.library_stat_books }}</h2>
+      <div class="value" id="stat-books">—</div>
+    </div>
+    <div class="card stat-card">
+      <h2>{{ t.library_stat_files }}</h2>
+      <div class="value" id="stat-files">—</div>
+    </div>
+    <div class="card stat-card">
+      <h2>{{ t.library_stat_size }}</h2>
+      <div class="value" id="stat-size">—</div>
+    </div>
+    <div class="card stat-card">
+      <h2>{{ t.library_stat_root_folders }}</h2>
+      <div class="value" id="stat-root-folders">—</div>
+    </div>
+  </div>
 
   <section class="panel">
     <div class="section-head">
       <span class="eyebrow">{{ t.library_eyebrow }}</span>
       <h2>{{ t.library_books_heading }}</h2>
     </div>
-    <div id="library-books" class="card">
-      <p class="muted">{{ t.library_books_loading }}</p>
+    <div class="card">
+      <div class="toolbar">
+        <label>{{ t.library_toolbar_search_placeholder }}
+          <input type="search" id="library-search" placeholder="{{ t.library_toolbar_search_placeholder }}">
+        </label>
+        <div class="button-row">
+          <button type="button" id="view-grid-btn" class="btn btn-secondary" data-view="grid">{{ t.library_view_grid }}</button>
+          <button type="button" id="view-table-btn" class="btn btn-secondary" data-view="table">{{ t.library_view_table }}</button>
+          <button type="button" id="library-refresh" class="btn btn-secondary">{{ t.library_refresh }}</button>
+        </div>
+      </div>
+      <div id="library-books">
+        <p class="muted">{{ t.library_books_loading }}</p>
+      </div>
     </div>
   </section>
 
@@ -43,10 +74,25 @@
         <span class="eyebrow">{{ t.library_eyebrow }}</span>
         <h2>{{ t.library_import_heading }}</h2>
       </div>
-      <div class="toolbar">
-        <button id="dry-run-btn-panel" type="button" class="btn btn-secondary">{{ t.library_import_run }}</button>
+      <p class="section-hint">{{ t.library_import_hint }}</p>
+      <div class="inline-form toolbar">
+        <label>{{ t.library_import_root_folder_label }}
+          <select id="import-root-folder"></select>
+        </label>
+        <label>{{ t.library_import_locale_label }}
+          <select id="import-locale">
+            <option value="de">de</option>
+            <option value="us" selected>us</option>
+            <option value="uk">uk</option>
+          </select>
+        </label>
+        <div class="button-row">
+          <button type="button" id="import-dry-run-btn" class="btn btn-secondary">{{ t.library_import_dry_run_button }}</button>
+          <button type="button" id="import-run-btn" class="btn btn-danger">{{ t.library_import_run_button }}</button>
+        </div>
       </div>
       <div id="import-summary"></div>
+      <div id="import-results"></div>
     </div>
   </div>
 {% endblock %}

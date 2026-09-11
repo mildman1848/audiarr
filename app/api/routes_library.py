@@ -8,7 +8,7 @@ from typing import Any
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel, Field
 
-from app.db import get_conn
+from app.db import get_conn, migrate
 from app.library import (
     BookCreate,
     RootFolderCreate,
@@ -97,13 +97,48 @@ class BookOut(BaseModel):
     authors: list[str]
     narrators: list[str]
     provider_ids: list[ProviderIdOut]
+    file_count: int
+    size_bytes: int
+    formats: list[str]
+    added_at: str | None
+
+
+class LibraryFileOut(BaseModel):
+    id: int
+    edition_id: int
+    path: str
+    size_bytes: int
+    mtime: str | None
+    format: str
+    added_at: str
+
+
+class LibraryStatsOut(BaseModel):
+    book_count: int
+    author_count: int
+    narrator_count: int
+    series_count: int
+    file_count: int
+    total_size_bytes: int
+    root_folder_count: int
 
 
 # -- root folders ---------------------------------------------------------------
 
 
+def _ensure_schema() -> None:
+    """Ensure library tables exist for direct/TestClient API calls.
+
+    The ASGI lifespan migrates the DB in normal server startup, but some tests
+    and local smoke probes call route handlers without a full lifespan cycle.
+    Other stateful routers do the same defensive migration.
+    """
+    migrate()
+
+
 @router.get("/api/v1/library/root-folders", response_model=list[RootFolderOut])
 async def get_root_folders() -> list[RootFolderOut]:
+    _ensure_schema()
     with get_conn() as conn:
         rows = list_root_folders(conn)
     return [RootFolderOut(**dict(r)) for r in rows]
@@ -111,6 +146,7 @@ async def get_root_folders() -> list[RootFolderOut]:
 
 @router.post("/api/v1/library/root-folders", response_model=RootFolderOut, status_code=201)
 async def post_root_folder(data: RootFolderIn) -> RootFolderOut:
+    _ensure_schema()
     with get_conn() as conn:
         try:
             folder_id = create_root_folder(conn, RootFolderCreate(**data.model_dump()))
@@ -125,6 +161,7 @@ async def post_root_folder(data: RootFolderIn) -> RootFolderOut:
 
 @router.delete("/api/v1/library/root-folders/{folder_id}", status_code=204)
 async def remove_root_folder(folder_id: int) -> None:
+    _ensure_schema()
     with get_conn() as conn:
         if not delete_root_folder(conn, folder_id):
             raise HTTPException(404, "Root folder not found")
@@ -137,10 +174,35 @@ def _split_names(value: Any) -> list[str]:
     return value.split(", ") if value else []
 
 
+def _book_file_stats(conn: Any, book_id: int) -> dict[str, Any]:
+    """Aggregate file_count/size_bytes/formats/added_at across a book's editions.
+
+    Per-book helper SQL, kept simple on purpose (see task notes).
+    """
+    row = conn.execute(
+        """SELECT COUNT(lf.id) AS file_count,
+                  COALESCE(SUM(lf.size_bytes), 0) AS size_bytes,
+                  GROUP_CONCAT(DISTINCT lf.format) AS formats,
+                  MIN(lf.added_at) AS added_at
+             FROM editions e
+             LEFT JOIN library_files lf ON lf.edition_id = e.id
+            WHERE e.book_id = ?""",
+        (book_id,),
+    ).fetchone()
+    formats = [f for f in (row["formats"] or "").split(",") if f]
+    return {
+        "file_count": row["file_count"] or 0,
+        "size_bytes": row["size_bytes"] or 0,
+        "formats": formats,
+        "added_at": row["added_at"],
+    }
+
+
 def _book_out(conn: Any, book_id: int) -> BookOut:
     book = get_book(conn, book_id)
     assert book is not None
     pids = get_provider_ids(conn, "book", book_id)
+    stats = _book_file_stats(conn, book_id)
     return BookOut(
         id=book["id"],
         title=book["title"],
@@ -156,16 +218,19 @@ def _book_out(conn: Any, book_id: int) -> BookOut:
         authors=_split_names(book["authors"]),
         narrators=_split_names(book["narrators"]),
         provider_ids=[ProviderIdOut(**p) for p in pids],
+        **stats,
     )
 
 
 @router.get("/api/v1/library/books", response_model=list[BookOut])
 async def get_books(limit: int = 50, offset: int = 0) -> list[BookOut]:
+    _ensure_schema()
     with get_conn() as conn:
         books = list_books(conn, limit=limit, offset=offset)
         result = []
         for b in books:
             pids = get_provider_ids(conn, "book", b["id"])
+            stats = _book_file_stats(conn, b["id"])
             result.append(
                 BookOut(
                     id=b["id"],
@@ -182,13 +247,39 @@ async def get_books(limit: int = 50, offset: int = 0) -> list[BookOut]:
                     authors=_split_names(b["authors"]),
                     narrators=_split_names(b["narrators"]),
                     provider_ids=[ProviderIdOut(**p) for p in pids],
+                    **stats,
                 )
             )
     return result
 
 
+@router.get("/api/v1/library/stats", response_model=LibraryStatsOut)
+async def get_library_stats() -> LibraryStatsOut:
+    _ensure_schema()
+    with get_conn() as conn:
+        book_count = conn.execute("SELECT COUNT(*) FROM books").fetchone()[0]
+        author_count = conn.execute("SELECT COUNT(*) FROM authors").fetchone()[0]
+        narrator_count = conn.execute("SELECT COUNT(*) FROM narrators").fetchone()[0]
+        series_count = conn.execute("SELECT COUNT(*) FROM series").fetchone()[0]
+        file_count = conn.execute("SELECT COUNT(*) FROM library_files").fetchone()[0]
+        total_size_bytes = conn.execute(
+            "SELECT COALESCE(SUM(size_bytes), 0) FROM library_files"
+        ).fetchone()[0]
+        root_folder_count = conn.execute("SELECT COUNT(*) FROM root_folders").fetchone()[0]
+    return LibraryStatsOut(
+        book_count=book_count,
+        author_count=author_count,
+        narrator_count=narrator_count,
+        series_count=series_count,
+        file_count=file_count,
+        total_size_bytes=total_size_bytes,
+        root_folder_count=root_folder_count,
+    )
+
+
 @router.post("/api/v1/library/books", response_model=BookOut, status_code=201)
 async def post_book(data: BookIn) -> BookOut:
+    _ensure_schema()
     with get_conn() as conn:
         if data.provider and data.provider_id:
             existing = find_book_by_provider_id(
@@ -206,6 +297,7 @@ async def post_book(data: BookIn) -> BookOut:
 
 @router.get("/api/v1/library/books/{book_id}", response_model=BookOut)
 async def get_book_endpoint(book_id: int) -> BookOut:
+    _ensure_schema()
     with get_conn() as conn:
         if get_book(conn, book_id) is None:
             raise HTTPException(404, "Book not found")
@@ -213,8 +305,27 @@ async def get_book_endpoint(book_id: int) -> BookOut:
     return result
 
 
+@router.get("/api/v1/library/books/{book_id}/files", response_model=list[LibraryFileOut])
+async def get_book_files(book_id: int) -> list[LibraryFileOut]:
+    _ensure_schema()
+    with get_conn() as conn:
+        if get_book(conn, book_id) is None:
+            raise HTTPException(404, "Book not found")
+        rows = conn.execute(
+            """SELECT lf.id, lf.edition_id, lf.path, lf.size_bytes, lf.mtime,
+                      lf.format, lf.added_at
+                 FROM library_files lf
+                 JOIN editions e ON e.id = lf.edition_id
+                WHERE e.book_id = ?
+                ORDER BY lf.path""",
+            (book_id,),
+        ).fetchall()
+    return [LibraryFileOut(**dict(r)) for r in rows]
+
+
 @router.patch("/api/v1/library/books/{book_id}", response_model=BookOut)
 async def patch_book(book_id: int, patch: BookPatch) -> BookOut:
+    _ensure_schema()
     updates = patch.model_dump(exclude_unset=True)
     with get_conn() as conn:
         if get_book(conn, book_id) is None:
@@ -227,6 +338,7 @@ async def patch_book(book_id: int, patch: BookPatch) -> BookOut:
 
 @router.delete("/api/v1/library/books/{book_id}", status_code=204)
 async def remove_book(book_id: int) -> None:
+    _ensure_schema()
     with get_conn() as conn:
         if not delete_book(conn, book_id):
             raise HTTPException(404, "Book not found")
