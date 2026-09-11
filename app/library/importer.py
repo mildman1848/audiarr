@@ -31,12 +31,16 @@ from app.providers.chain import ProviderChain
 log = logging.getLogger("audiarr.library.importer")
 
 
+class ImportMatchError(RuntimeError):
+    """Raised by import_single_folder when no provider resolves the ASIN."""
+
+
 @dataclass
 class ImportCandidateResult:
     """Outcome of one candidate in an import run."""
 
     folder_path: str
-    status: str  # "matched" | "unmatched" | "error" | "skipped-duplicate"
+    status: str  # "matched" | "unmatched" | "error" | "skipped-duplicate" | "ignored"
     matched_book_id: int | None = None
     matched_asin: str | None = None
     score: float | None = None
@@ -53,6 +57,7 @@ class ImportSummary:
     matched: int = 0
     unmatched: int = 0
     errors: int = 0
+    ignored: int = 0
     file_count: int = 0
     total_size_bytes: int = 0
     results: list[ImportCandidateResult] = field(default_factory=list)
@@ -160,7 +165,20 @@ async def run_import(
         summary.total_size_bytes / (1024**3),
     )
 
+    # Folders explicitly ignored via the Import Problems workflow are
+    # skipped entirely (no provider calls) and never count as unmatched.
+    ignored_paths = {
+        row[0] for row in conn.execute("SELECT path FROM import_ignores").fetchall()
+    }
+
     for candidate in candidates:
+        if candidate.folder_path in ignored_paths:
+            summary.results.append(
+                ImportCandidateResult(folder_path=candidate.folder_path, status="ignored")
+            )
+            summary.ignored += 1
+            continue
+
         result = await _import_one(conn, chain, candidate, dry_run, locale)
         summary.results.append(result)
         if result.status == "matched":
@@ -248,6 +266,101 @@ async def _import_one(
     return base
 
 
+async def import_single_folder(
+    conn: Any,
+    chain: ProviderChain,
+    folder_path: str,
+    asin: str,
+    locale: str,
+) -> ImportCandidateResult:
+    """Manually match one folder to a provider ASIN (Import Problems workflow).
+
+    Re-derives the BookCandidate by rescanning the folder's parent directory
+    (reusing the scanner's normalization/ASIN-hint/file-listing logic instead
+    of trusting client-supplied metadata), resolves ``asin`` via the provider
+    chain, and persists exactly like a normal import match.
+
+    Unlike the batch ``run_import`` path, provider errors are NOT swallowed
+    here: this is a single, interactive, user-triggered action, so callers
+    (the API route) surface failures immediately instead of recording a
+    silent "unmatched" result.
+    """
+    folder = Path(folder_path)
+    candidates = scan_folder(folder.parent)
+    candidate = next((c for c in candidates if c.folder_path == str(folder)), None)
+    if candidate is None:
+        raise ValueError(f"folder no longer exists or has no audio files: {folder_path}")
+
+    # Providers must be built for the requested locale FIRST — a DE ASIN
+    # returns an empty-title detail from the US endpoint (see
+    # _search_candidates); an empty title is treated as a miss below.
+    chain.config.audible_locale = locale
+
+    detail = None
+    for name in chain.config.provider_order:
+        provider = chain._resolve_provider(name)
+        if provider is None:
+            continue
+        detail = await provider.get_detail(asin)
+        if detail is not None and detail.title:
+            break
+        detail = None  # empty title = miss for this provider; try next
+
+    if detail is None:
+        raise ImportMatchError(f"no provider resolved ASIN {asin!r} for locale {locale!r}")
+
+    hit = BookQuickInfo(
+        provider_uid=detail.provider_uid,
+        provider_name=detail.provider_name,
+        title=detail.title,
+        subtitle=detail.subtitle,
+        authors=detail.authors,
+        narrators=detail.narrators,
+        series=detail.series,
+        series_position=detail.series_position,
+        cover_url=detail.cover_url,
+        asin=detail.asin or asin,
+        isbn=detail.isbn,
+        locale=locale,
+    )
+
+    result = ImportCandidateResult(
+        folder_path=candidate.folder_path,
+        status="unmatched",
+        matched_asin=hit.asin,
+        method="asin",
+    )
+
+    # Duplicate check: same provider id already imported?
+    provider_name = hit.provider_name.lower()
+    existing = conn.execute(
+        """SELECT entity_id FROM provider_ids
+           WHERE entity_type = 'book' AND provider = ? AND provider_id = ?""",
+        (provider_name, hit.asin),
+    ).fetchone()
+    if existing:
+        result.status = "skipped-duplicate"
+        result.matched_book_id = existing[0]
+        _record_import_job(conn, result)
+        return result
+
+    book_id = _persist_book(conn, hit, locale)
+    _persist_files(conn, book_id, candidate, locale)
+
+    if candidate.dominant_format in ("mp3", "m4a"):
+        try:
+            from app.conversion.worker import enqueue_for_book
+
+            await enqueue_for_book(conn, book_id, candidate.folder_path, output_path="")
+        except Exception:  # noqa: BLE001 — conversion must never break imports
+            log.warning("auto-enqueue conversion failed for book %d", book_id, exc_info=True)
+
+    result.status = "matched"
+    result.matched_book_id = book_id
+    _record_import_job(conn, result)
+    return result
+
+
 def _persist_book(conn: Any, hit: BookQuickInfo, locale: str) -> int:
     """Create book + attribution via the library store (joins handled there)."""
     data = BookCreate(
@@ -281,18 +394,34 @@ def _persist_files(conn: Any, book_id: int, candidate: BookCandidate, locale: st
         )
 
 
+def _job_outcome(result: ImportCandidateResult) -> tuple[str, str | None]:
+    """Map a candidate result to the (status, error) pair stored on import_jobs."""
+    status = "completed" if result.status == "matched" else "failed"
+    if result.status == "skipped-duplicate":
+        status = "completed"
+    error = None if result.status == "matched" else result.status
+    return status, error
+
+
+def _record_import_job(conn: Any, result: ImportCandidateResult) -> None:
+    """Insert one import_jobs row for a single manually-processed result."""
+    status, error = _job_outcome(result)
+    conn.execute(
+        """INSERT INTO import_jobs (source_path, status, error) VALUES (?, ?, ?)""",
+        (result.folder_path, status, error),
+    )
+
+
 def _persist_import_jobs(conn: Any, summary: ImportSummary) -> None:
     """Record per-candidate outcomes as import_jobs rows for auditability."""
     for result in summary.results:
-        status = "completed" if result.status == "matched" else "failed"
-        if result.status == "skipped-duplicate":
-            status = "completed"
+        status, error = _job_outcome(result)
         conn.execute(
             """INSERT INTO import_jobs (source_path, status, error)
                VALUES (?, ?, ?)""",
             (
                 result.folder_path,
                 status,
-                None if result.status == "matched" else result.status,
+                error,
             ),
         )

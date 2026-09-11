@@ -4,15 +4,17 @@ from __future__ import annotations
 
 import logging
 import sqlite3
+from pathlib import Path
 from typing import Any
 
-from fastapi import APIRouter
+from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
 
 from app.api.routes_metadata import build_provider_chain
 from app.config import get_db_path
 from app.db import migrate
-from app.library.importer import run_import
+from app.library.importer import ImportMatchError, import_single_folder, run_import
+from app.library.scanner import _guess_title_author
 from app.providers.chain import ProviderChain
 
 router = APIRouter(prefix="/api/v1/import", tags=["import"])
@@ -56,6 +58,43 @@ class ImportJobOut(BaseModel):
     status: str
     error: str | None
     created_at: str
+
+
+class UnmatchedFolderOut(BaseModel):
+    folder_path: str
+    guessed_title: str
+    guessed_author: str
+    last_tried_at: str
+    exists: bool
+
+
+class IgnoreEntryOut(BaseModel):
+    id: int
+    path: str
+    note: str
+    created_at: str
+
+
+class IgnoreRequest(BaseModel):
+    path: str
+    note: str = ""
+
+
+class UnignoreRequest(BaseModel):
+    path: str
+
+
+class MatchRequest(BaseModel):
+    folder_path: str
+    asin: str
+    locale: str = "us"
+
+
+class MatchResponse(BaseModel):
+    status: str
+    book_id: int | None
+    asin: str | None
+    title: str
 
 
 def _chain() -> ProviderChain:
@@ -134,4 +173,130 @@ async def list_jobs_endpoint() -> Any:
             for row in rows
         ]
     finally:
+        conn.close()
+
+
+@router.get("/unmatched", response_model=list[UnmatchedFolderOut])
+async def list_unmatched_endpoint() -> Any:
+    """List folders that stayed unmatched after past import runs.
+
+    Sourced from import_jobs, deduped by source_path with the LATEST row
+    per path deciding the outcome (a later successful re-import removes a
+    path from this list even though an older failed row still exists).
+    Folders explicitly ignored are excluded.
+    """
+    conn = _open_db()
+    try:
+        rows = conn.execute(
+            """SELECT source_path, status, error, created_at
+               FROM import_jobs ORDER BY id"""
+        ).fetchall()
+        latest: dict[str, sqlite3.Row] = {}
+        for row in rows:
+            latest[row["source_path"]] = row  # ascending id -> last write wins
+
+        ignored = {
+            row[0] for row in conn.execute("SELECT path FROM import_ignores").fetchall()
+        }
+
+        out: list[UnmatchedFolderOut] = []
+        for path, row in latest.items():
+            if row["status"] != "failed" or row["error"] != "unmatched":
+                continue
+            if path in ignored:
+                continue
+            title, author = _guess_title_author(Path(path).name)
+            out.append(
+                UnmatchedFolderOut(
+                    folder_path=path,
+                    guessed_title=title,
+                    guessed_author=author,
+                    last_tried_at=str(row["created_at"]),
+                    exists=Path(path).exists(),
+                )
+            )
+        out.sort(key=lambda u: u.folder_path)
+        return out
+    finally:
+        conn.close()
+
+
+@router.get("/ignores", response_model=list[IgnoreEntryOut])
+async def list_ignores_endpoint() -> Any:
+    """List folders excluded from future import runs."""
+    conn = _open_db()
+    try:
+        rows = conn.execute(
+            """SELECT id, path, note, created_at
+               FROM import_ignores ORDER BY path"""
+        ).fetchall()
+        return [
+            IgnoreEntryOut(id=row[0], path=row[1], note=row[2], created_at=str(row[3]))
+            for row in rows
+        ]
+    finally:
+        conn.close()
+
+
+@router.post("/ignore", status_code=204)
+async def ignore_folder_endpoint(request: IgnoreRequest) -> None:
+    """Mark a folder as ignored; idempotent, accepts a nonexistent path."""
+    conn = _open_db()
+    try:
+        conn.execute(
+            "INSERT OR IGNORE INTO import_ignores (path, note) VALUES (?, ?)",
+            (request.path, request.note),
+        )
+    finally:
+        conn.commit()
+        conn.close()
+
+
+@router.post("/unignore", status_code=204)
+async def unignore_folder_endpoint(request: UnignoreRequest) -> None:
+    """Remove a folder from the ignore list."""
+    conn = _open_db()
+    try:
+        conn.execute("DELETE FROM import_ignores WHERE path = ?", (request.path,))
+    finally:
+        conn.commit()
+        conn.close()
+
+
+@router.post("/match", response_model=MatchResponse)
+async def match_folder_endpoint(request: MatchRequest) -> Any:
+    """Manually match one unmatched folder to a provider ASIN.
+
+    Persists the book and files (like a normal import match) and records
+    an import_jobs row. 404 when the folder is gone; 502 when no configured
+    provider can resolve the given ASIN.
+    """
+    conn = _open_db()
+    try:
+        try:
+            result = await import_single_folder(
+                conn, _chain(), request.folder_path, request.asin, request.locale
+            )
+        except ValueError as exc:
+            raise HTTPException(status_code=404, detail=str(exc)) from exc
+        except ImportMatchError as exc:
+            raise HTTPException(status_code=502, detail=str(exc)) from exc
+        except Exception as exc:  # noqa: BLE001 — surface provider failures, don't crash the API
+            raise HTTPException(status_code=502, detail=f"provider lookup failed: {exc}") from exc
+
+        title = ""
+        if result.matched_book_id is not None:
+            row = conn.execute(
+                "SELECT title FROM books WHERE id = ?", (result.matched_book_id,)
+            ).fetchone()
+            title = row["title"] if row else ""
+
+        return MatchResponse(
+            status=result.status,
+            book_id=result.matched_book_id,
+            asin=result.matched_asin,
+            title=title,
+        )
+    finally:
+        conn.commit()
         conn.close()
