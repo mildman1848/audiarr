@@ -87,6 +87,41 @@ function mergeProwlarr(doc) {
   return idx;
 }
 
+function escapeHtml(value) {
+  return String(value)
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;");
+}
+
+// Read-only summary table of the modeled quality profiles (Profiles
+// section). Editing is a later slice; this just shows what is stored.
+function renderProfileSummary(profiles) {
+  const el = document.getElementById("profile-summary");
+  if (!profiles || !profiles.length) {
+    el.innerHTML = `<p class="muted">${T.settings_profiles_empty}</p>`;
+    return;
+  }
+  const rows = profiles
+    .map(
+      (p) => `<tr>
+        <td>${escapeHtml(p.name)}</td>
+        <td>${escapeHtml((p.allowed_formats || []).join(", "))}</td>
+        <td>${escapeHtml(p.cutoff_format || "")}</td>
+      </tr>`
+    )
+    .join("");
+  el.innerHTML = `<table class="table summary-table">
+    <thead><tr>
+      <th>${T.settings_profiles_col_name}</th>
+      <th>${T.settings_profiles_col_formats}</th>
+      <th>${T.settings_profiles_col_cutoff}</th>
+    </tr></thead>
+    <tbody>${rows}</tbody>
+  </table>`;
+}
+
 function populate(s) {
   document.getElementById("host-port").textContent = s.host.port ?? "—";
   document.getElementById("security-method").value = s.auth.method || "none";
@@ -98,6 +133,20 @@ function populate(s) {
     (s.metadata.provider_order || []).join(" → ") || "—";
   document.getElementById("root-folder-count").textContent =
     (s.root_folders || []).length;
+  document.getElementById("media-rename-files").checked = Boolean(
+    s.media_management.rename_files
+  );
+  document.getElementById("media-file-name-pattern").value =
+    s.media_management.file_name_pattern || "";
+  document.getElementById("media-delete-empty-folders").checked = Boolean(
+    s.media_management.delete_empty_folders
+  );
+  renderProfileSummary(s.quality_profiles);
+  document.getElementById("connect-summary").textContent =
+    (s.connect || []).length;
+  document.getElementById("ui-theme-summary").textContent = s.ui.theme || "—";
+  document.getElementById("ui-date-format-summary").textContent =
+    s.ui.date_format || "—";
   document.getElementById("conversion-backend").value =
     s.conversion.backend || "disabled";
   document.getElementById("conversion-delete-originals").checked =
@@ -143,6 +192,15 @@ async function saveSettings(event) {
     const password = document.getElementById("security-password").value;
     doc.auth.password = password || ""; // empty means keep the stored password
     doc.ui.language = document.getElementById("ui-language").value;
+    doc.media_management.rename_files = document.getElementById(
+      "media-rename-files"
+    ).checked;
+    doc.media_management.file_name_pattern = document
+      .getElementById("media-file-name-pattern")
+      .value.trim();
+    doc.media_management.delete_empty_folders = document.getElementById(
+      "media-delete-empty-folders"
+    ).checked;
     doc.metadata.audible_locale = document.getElementById("metadata-locale").value;
     doc.conversion.backend = document.getElementById("conversion-backend").value;
     doc.conversion.delete_originals = document.getElementById(

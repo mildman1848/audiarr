@@ -225,6 +225,84 @@ def test_search_and_activity_mark_nav_active(app_client):
     assert '<a href="/activity" class="active">' in activity.text
 
 
+@pytest.mark.parametrize(
+    ("language", "labels"),
+    [
+        (
+            "en",
+            [
+                "Media Management",
+                "Profiles",
+                "Quality",
+                "Indexers",
+                "Download Clients",
+                "Connect",
+                "Metadata",
+                "Tags",
+                "General",
+                "UI",
+                "Conversion",
+            ],
+        ),
+        (
+            "de",
+            [
+                "Medienverwaltung",
+                "Profile",
+                "Qualität",
+                "Indexer",
+                "Download-Clients",
+                "Verbinden",
+                "Metadaten",
+                "Tags",
+                "Allgemein",
+                "Oberfläche",
+                "Konvertierung",
+            ],
+        ),
+    ],
+)
+def test_settings_page_has_arr_style_section_anchors(app_client, language, labels):
+    """The settings hub subnav exposes all Arr-style target groups with
+    stable anchors, in both UI languages."""
+    _set_ui_language(app_client, language)
+
+    settings = app_client.get("/settings")
+    assert settings.status_code == 200
+    for anchor in (
+        "#media",
+        "#profiles",
+        "#quality",
+        "#indexers",
+        "#downloadclients",
+        "#connect",
+        "#metadata",
+        "#tags",
+        "#general",
+        "#ui",
+        "#conversion",
+    ):
+        assert f'href="{anchor}"' in settings.text
+    for label in labels:
+        assert label in settings.text
+
+
+@pytest.mark.parametrize("language", ["en", "de"])
+def test_settings_page_has_media_management_and_summary_fields(app_client, language):
+    """Media Management exposes the modeled rename/pattern/delete-empty-folder
+    fields, and the Profiles/Connect sections render their summary
+    containers."""
+    _set_ui_language(app_client, language)
+
+    settings = app_client.get("/settings")
+    assert settings.status_code == 200
+    assert 'id="media-rename-files"' in settings.text
+    assert 'id="media-file-name-pattern"' in settings.text
+    assert 'id="media-delete-empty-folders"' in settings.text
+    assert 'id="profile-summary"' in settings.text
+    assert 'id="connect-summary"' in settings.text
+
+
 def test_settings_js_logs_in_after_enabling_forms_auth():
     script = (Path(__file__).parents[1] / "app/web/static/js/settings.js").read_text()
 

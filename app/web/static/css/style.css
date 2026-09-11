@@ -566,8 +566,67 @@ button:disabled,
   color: var(--audiarr-accent);
 }
 
+.card a,
+.panel a {
+  color: var(--audiarr-accent);
+  text-decoration: none;
+  font-weight: 600;
+}
+
+.card a:hover,
+.panel a:hover {
+  color: var(--audiarr-accent-light);
+  text-decoration: underline;
+}
+
 #settings-form .card {
   margin-bottom: 1rem;
+}
+
+/* Sub-groups within a single settings card (e.g. Host/Security/Maintenance
+   inside General), separated by a rule instead of a whole new card. */
+.settings-subsection {
+  margin-top: 1.25rem;
+  padding-top: 1.25rem;
+  border-top: 1px solid var(--border-color);
+}
+
+.settings-subsection:first-of-type {
+  margin-top: 0;
+  padding-top: 0;
+  border-top: none;
+}
+
+.settings-subsection h3 {
+  margin: 0 0 0.6rem;
+  font-size: 0.85rem;
+  color: var(--text-main);
+}
+
+/* "Coming next" / "Modeled, not wired yet" notes on placeholder sections. */
+.callout {
+  margin-top: 0.75rem;
+  padding: 0.6rem 0.85rem;
+  border-radius: var(--radius);
+  border: 1px dashed var(--border-color);
+  background: var(--bg-panel-alt);
+  color: var(--text-muted);
+  font-size: 0.82rem;
+}
+
+/* A settings card that is placeholder-only for this slice (Quality, Tags). */
+.placeholder-card {
+  text-align: center;
+  padding-top: 2rem;
+  padding-bottom: 2rem;
+}
+
+.placeholder-card .section-head {
+  align-items: center;
+}
+
+.summary-table {
+  margin-top: 0.5rem;
 }
 
 /* --------------------------------------------------------------- Footer */
