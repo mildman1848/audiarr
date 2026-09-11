@@ -4,8 +4,13 @@
 {% block page_eyebrow %}{{ t.book_detail_eyebrow }}{% endblock %}
 {% block page_heading %}{{ t.book_detail_page_title }}{% endblock %}
 
-{% block topbar_actions %}
-  <a href="/library" class="btn btn-secondary">{{ t.book_detail_back }}</a>
+{% block page_toolbar %}
+  <div class="toolbar-group toolbar-left" id="book-detail-toolbar">
+    <a href="/library" id="book-detail-back-btn" class="toolbar-btn">{{ t.book_detail_toolbar_back }}</a>
+  </div>
+  <div class="toolbar-group toolbar-right">
+    <button type="button" id="book-detail-delete-btn" class="toolbar-btn" disabled>{{ t.book_detail_delete }}</button>
+  </div>
 {% endblock %}
 
 {% block content %}
@@ -15,5 +20,5 @@
 {% endblock %}
 
 {% block scripts %}
-  <script src="/static/js/book_detail.js?v={{ version }}"></script>
+  <script src="/static/js/book_detail.js?v={{ version }}-librarycards"></script>
 {% endblock %}

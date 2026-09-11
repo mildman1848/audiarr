@@ -4,7 +4,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>{% block page_title %}{{ t.app_name }}{% endblock %} — {{ t.app_name }}</title>
-  <link rel="stylesheet" href="/static/css/style.css?v={{ version }}-settingspages">
+  <link rel="stylesheet" href="/static/css/style.css?v={{ version }}-librarycards">
   <noscript>
     <style>
       /* Without JS the drawer can never be toggled, so keep the sidebar
@@ -80,7 +80,7 @@
   </div>
 
   <script>window.AUDIARR_I18N = {{ t|tojson }};</script>
-  <script src="/static/js/common.js?v={{ version }}-settingspages"></script>
+  <script src="/static/js/common.js?v={{ version }}-librarycards"></script>
   {% block scripts %}{% endblock %}
 </body>
 </html>

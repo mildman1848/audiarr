@@ -4,6 +4,10 @@
 
 const T = window.AUDIARR_I18N || {};
 
+// Set once loadBook() resolves; the toolbar delete button (static markup in
+// book_detail.html) reads this instead of waiting for the render pass.
+let currentBook = null;
+
 function esc(value) {
   return String(value ?? "").replace(/[&<>"']/g, (c) => ({
     "&": "&amp;",
@@ -36,19 +40,22 @@ function humanSize(bytes) {
   return `${rounded} ${units[unit]}`;
 }
 
+function coverHtml(book) {
+  if (book.cover_url) {
+    return `<img src="${esc(book.cover_url)}" alt="${esc(T.book_detail_cover_alt)}">`;
+  }
+  return `<div class="book-hero-cover-placeholder">${esc(T.library_grid_cover_placeholder)}</div>`;
+}
+
 function renderBook(book, files) {
   const container = document.getElementById("book-detail");
-
-  const coverBlock = book.cover_url
-    ? `<img src="${esc(book.cover_url)}" alt="${esc(T.book_detail_cover_alt)}" style="width:100%;height:100%;object-fit:cover;border-radius:4px;display:block;">`
-    : `<div class="muted small" style="display:flex;align-items:center;justify-content:center;height:100%;text-align:center;padding:0.5rem;">${esc(T.library_no_cover)}</div>`;
 
   const authorsChips = (book.authors || []).map((a) => `<span class="badge">${esc(a)}</span>`).join(" ") || "—";
   const narratorsChips =
     (book.narrators || []).map((n) => `<span class="badge">${esc(n)}</span>`).join(" ") || "—";
   const seriesBadge = book.series
     ? `<span class="badge">${esc(book.series_position ? `${book.series} #${book.series_position}` : book.series)}</span>`
-    : "—";
+    : "";
 
   const providerRows = (book.provider_ids || [])
     .map(
@@ -74,25 +81,20 @@ function renderBook(book, files) {
     .join("");
 
   container.innerHTML = `
-    <div class="card">
-      <div style="display:flex;gap:1.25rem;flex-wrap:wrap;">
-        <div style="flex:0 0 180px;height:180px;background:var(--bg-panel-alt);border-radius:4px;overflow:hidden;">${coverBlock}</div>
-        <div style="flex:1;min-width:260px;">
-          <h2 style="margin:0 0 0.2rem;">${esc(book.title)}</h2>
-          ${book.subtitle ? `<p class="muted" style="margin:0 0 0.6rem;">${esc(book.subtitle)}</p>` : ""}
-          <p>${esc(T.book_detail_series_label)}: ${seriesBadge}</p>
-          <p>${esc(T.book_detail_authors_label)}: ${authorsChips}</p>
-          <p>${esc(T.book_detail_narrators_label)}: ${narratorsChips}</p>
-          <ul class="plain-list">
-            <li>${esc(T.book_detail_duration_label)}: ${esc(formatDuration(book.duration_seconds))}</li>
-            <li>${esc(T.book_detail_language_label)}: ${esc(book.language || "—")}</li>
-            <li>${esc(T.book_detail_publisher_label)}: ${esc(book.publisher || "—")}</li>
-            <li>${esc(T.book_detail_release_date_label)}: ${esc(book.release_date || "—")}</li>
-          </ul>
-          <div class="button-row">
-            <a href="/library" class="btn btn-secondary">${esc(T.book_detail_back)}</a>
-            <button type="button" id="book-delete-btn" class="btn btn-danger">${esc(T.book_detail_delete)}</button>
-          </div>
+    <div class="card book-hero">
+      <div class="book-hero-cover">${coverHtml(book)}</div>
+      <div class="book-hero-body">
+        <h2 class="book-hero-title">${esc(book.title)}</h2>
+        ${book.subtitle ? `<p class="book-hero-subtitle">${esc(book.subtitle)}</p>` : ""}
+        ${seriesBadge ? `<div class="book-hero-badges">${seriesBadge}</div>` : ""}
+        <p class="book-hero-line"><span class="book-hero-line-label">${esc(T.book_detail_authors_label)}</span>${authorsChips}</p>
+        <p class="book-hero-line"><span class="book-hero-line-label">${esc(T.book_detail_narrators_label)}</span>${narratorsChips}</p>
+        <p class="book-hero-meta-heading">${esc(T.book_detail_meta_heading)}</p>
+        <div class="book-hero-stats">
+          <span class="badge" title="${esc(T.book_detail_duration_label)}">${esc(formatDuration(book.duration_seconds))}</span>
+          <span class="badge" title="${esc(T.book_detail_language_label)}">${esc(book.language || "—")}</span>
+          <span class="badge" title="${esc(T.book_detail_publisher_label)}">${esc(book.publisher || "—")}</span>
+          <span class="badge" title="${esc(T.book_detail_release_date_label)}">${esc(book.release_date || "—")}</span>
         </div>
       </div>
     </div>
@@ -105,7 +107,7 @@ function renderBook(book, files) {
       <div class="card">
         ${
           providerRows
-            ? `<table class="table">
+            ? `<div class="table-scroll"><table class="table">
                  <thead>
                    <tr>
                      <th>${esc(T.book_detail_provider_col_provider)}</th>
@@ -114,7 +116,7 @@ function renderBook(book, files) {
                    </tr>
                  </thead>
                  <tbody>${providerRows}</tbody>
-               </table>`
+               </table></div>`
             : `<p class="muted">${esc(T.book_detail_provider_ids_empty)}</p>`
         }
       </div>
@@ -128,7 +130,7 @@ function renderBook(book, files) {
       <div class="card">
         ${
           fileRows
-            ? `<table class="table">
+            ? `<div class="table-scroll"><table class="table">
                  <thead>
                    <tr>
                      <th>${esc(T.book_detail_files_col_path)}</th>
@@ -138,13 +140,11 @@ function renderBook(book, files) {
                    </tr>
                  </thead>
                  <tbody>${fileRows}</tbody>
-               </table>`
+               </table></div>`
             : `<p class="muted">${esc(T.book_detail_files_empty)}</p>`
         }
       </div>
     </section>`;
-
-  document.getElementById("book-delete-btn").addEventListener("click", () => deleteBook(book.id, book.title));
 }
 
 // Deletes the Audiarr DB record only; media files on disk are never touched.
@@ -175,10 +175,21 @@ async function loadBook() {
     if (!bookResp.ok) throw new Error(`HTTP ${bookResp.status}`);
     const book = await bookResp.json();
     const files = filesResp.ok ? await filesResp.json() : [];
+    currentBook = book;
     renderBook(book, files);
+    const deleteBtn = document.getElementById("book-detail-delete-btn");
+    if (deleteBtn) deleteBtn.disabled = false;
   } catch (err) {
     container.innerHTML = `<p class="muted">${esc(T.book_detail_error)} (${esc(err.message)})</p>`;
   }
 }
 
-document.addEventListener("DOMContentLoaded", loadBook);
+document.addEventListener("DOMContentLoaded", () => {
+  loadBook();
+  const deleteBtn = document.getElementById("book-detail-delete-btn");
+  if (deleteBtn) {
+    deleteBtn.addEventListener("click", () => {
+      if (currentBook) deleteBook(currentBook.id, currentBook.title);
+    });
+  }
+});

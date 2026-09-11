@@ -610,6 +610,202 @@ body {
   text-align: center;
 }
 
+/* ----------------------------------------------------------- Library grid */
+
+/* Arr-style cover-card grid for the Library page's grid view. Cards keep a
+   book-cover aspect ratio (not a square thumbnail) and put the details/
+   delete actions in a bottom action row instead of loose buttons under the
+   text. */
+.library-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
+  gap: 1rem;
+  margin-top: 1.25rem;
+}
+
+.library-card {
+  display: flex;
+  flex-direction: column;
+  background: var(--bg-panel);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius);
+  overflow: hidden;
+  box-shadow: var(--shadow-card);
+}
+
+.library-cover {
+  width: 100%;
+  aspect-ratio: 2 / 3;
+  background: var(--bg-panel-alt);
+  overflow: hidden;
+}
+
+.library-cover img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+
+.library-cover-placeholder {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 100%;
+  padding: 0.5rem;
+  text-align: center;
+  color: var(--text-muted);
+  font-size: 0.78rem;
+}
+
+.library-card-body {
+  display: flex;
+  flex-direction: column;
+  gap: 0.3rem;
+  padding: 0.65rem 0.75rem 0.75rem;
+  flex: 1;
+}
+
+.library-card-title {
+  margin: 0;
+  font-size: 0.9rem;
+  font-weight: 600;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.library-card-author {
+  margin: 0;
+  color: var(--text-muted);
+  font-size: 0.8rem;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.library-badge-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.3rem;
+  margin-top: 0.15rem;
+}
+
+.library-badge-row .badge {
+  font-size: 0.68rem;
+}
+
+.library-card-actions {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  margin-top: auto;
+  padding-top: 0.6rem;
+  border-top: 1px solid var(--border-color);
+}
+
+.library-card-actions .btn {
+  flex: 1;
+  justify-content: center;
+  padding: 0.35rem 0.5rem;
+  font-size: 0.78rem;
+}
+
+/* Wraps any table that might overflow a narrow viewport (library table view,
+   book detail provider-ids/files tables) so it scrolls horizontally instead
+   of forcing the whole page wider. */
+.table-scroll {
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+}
+
+/* --------------------------------------------------------- Book detail hero */
+
+.book-hero {
+  display: flex;
+  gap: 1.5rem;
+  flex-wrap: wrap;
+}
+
+.book-hero-cover {
+  flex: 0 0 200px;
+  aspect-ratio: 2 / 3;
+  background: var(--bg-panel-alt);
+  border-radius: var(--radius);
+  overflow: hidden;
+}
+
+.book-hero-cover img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+
+.book-hero-cover-placeholder {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 100%;
+  padding: 0.75rem;
+  text-align: center;
+  color: var(--text-muted);
+  font-size: 0.85rem;
+}
+
+.book-hero-body {
+  flex: 1;
+  min-width: 260px;
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+}
+
+.book-hero-title {
+  margin: 0;
+  font-size: 1.4rem;
+}
+
+.book-hero-subtitle {
+  margin: 0;
+  color: var(--text-muted);
+}
+
+.book-hero-badges {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+}
+
+.book-hero-line {
+  margin: 0;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.4rem;
+}
+
+.book-hero-line-label {
+  color: var(--text-muted);
+  font-size: 0.78rem;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.book-hero-meta-heading {
+  margin: 0.4rem 0 0;
+  font-size: 0.7rem;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--text-muted);
+}
+
+.book-hero-stats {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+}
+
 /* --------------------------------------------------------------- Toolbars */
 
 .toolbar {
@@ -1108,6 +1304,25 @@ footer {
   .toolbar-group {
     flex-wrap: nowrap;
     flex-shrink: 0;
+  }
+
+  /* Smaller cards so at least two fit per row without overflowing the
+     viewport width. */
+  .library-grid {
+    grid-template-columns: repeat(auto-fill, minmax(130px, 1fr));
+    gap: 0.75rem;
+  }
+
+  /* Stack cover above metadata instead of squeezing both into one row. */
+  .book-hero {
+    flex-direction: column;
+  }
+
+  .book-hero-cover {
+    flex: 0 0 auto;
+    width: 100%;
+    max-width: 220px;
+    margin: 0 auto;
   }
 }
 

@@ -147,6 +147,66 @@ def test_book_detail_page_renders(app_client, language, marker):
     assert 'data-book-id="1"' in page.text
 
 
+def test_book_detail_page_has_toolbar_and_root_marker(app_client):
+    """Book detail must have a page-toolbar (Back + Delete) above the
+    JS-populated detail root, not buttons rendered inline by the JS."""
+    _set_ui_language(app_client, "en")
+
+    page = app_client.get("/library/books/1")
+    assert page.status_code == 200
+    assert 'id="book-detail-toolbar"' in page.text
+    assert 'id="book-detail-back-btn"' in page.text
+    assert 'id="book-detail-delete-btn"' in page.text
+    # Detail root, populated client-side once the book is fetched.
+    assert 'id="book-detail"' in page.text
+
+
+def test_library_page_has_grid_container_and_view_controls(app_client):
+    """Library page ships the container the JS grid/table render into, plus
+    the grid/table toggle, filter, and sort controls (client-rendered)."""
+    _set_ui_language(app_client, "en")
+
+    page = app_client.get("/library")
+    assert page.status_code == 200
+    assert 'id="library-books"' in page.text
+    assert 'id="view-grid-btn"' in page.text
+    assert 'id="view-table-btn"' in page.text
+    assert 'data-view="grid"' in page.text
+    assert 'data-view="table"' in page.text
+    assert 'id="library-filter"' in page.text
+    assert 'id="library-sort"' in page.text
+
+
+def test_library_js_defines_card_grid_markup():
+    """The Arr-style cover-card grid classes must exist in library.js since
+    the grid itself is only rendered client-side (no server-side book data
+    in this test suite's HTML assertions)."""
+    js = Path("app/web/static/js/library.js").read_text(encoding="utf-8")
+    for class_name in (
+        "library-grid",
+        "library-card",
+        "library-cover",
+        "library-card-body",
+        "library-card-title",
+        "library-badge-row",
+        "library-card-actions",
+    ):
+        assert class_name in js
+
+
+def test_book_detail_js_defines_hero_markup():
+    js = Path("app/web/static/js/book_detail.js").read_text(encoding="utf-8")
+    for class_name in (
+        "book-hero",
+        "book-hero-cover",
+        "book-hero-body",
+        "book-hero-title",
+        "book-hero-badges",
+        "book-hero-stats",
+    ):
+        assert class_name in js
+
+
 def test_navigation_marks_active_route(app_client):
     _set_ui_language(app_client, "en")
 

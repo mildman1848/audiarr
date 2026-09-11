@@ -50,9 +50,27 @@ function seriesLabel(b) {
 
 function coverHtml(b) {
   if (b.cover_url) {
-    return `<img src="${esc(b.cover_url)}" alt="${esc(T.library_cover_alt)}" style="width:100%;height:100%;object-fit:cover;border-radius:4px;display:block;">`;
+    return `<img src="${esc(b.cover_url)}" alt="${esc(T.library_cover_alt)}">`;
   }
-  return `<div class="muted small" style="display:flex;align-items:center;justify-content:center;height:100%;text-align:center;padding:0.2rem;">${esc(T.library_no_cover)}</div>`;
+  return `<div class="library-cover-placeholder">${esc(T.library_grid_cover_placeholder)}</div>`;
+}
+
+// Badges shown on both the grid card and could be reused for the table view;
+// series is only included when present.
+function badgeRowHtml(b) {
+  const badges = [];
+  if (b.series) badges.push(`<span class="badge">${esc(seriesLabel(b))}</span>`);
+  if (b.language) badges.push(`<span class="badge">${esc(b.language)}</span>`);
+  badges.push(
+    `<span class="badge" title="${esc(T.library_badge_files)}">${b.file_count} ${esc(T.library_badge_files)}</span>`
+  );
+  badges.push(
+    `<span class="badge" title="${esc(T.library_badge_duration)}">${esc(formatDuration(b.duration_seconds))}</span>`
+  );
+  badges.push(
+    `<span class="badge" title="${esc(T.library_badge_size)}">${esc(humanSize(b.size_bytes))}</span>`
+  );
+  return `<div class="library-badge-row">${badges.join("")}</div>`;
 }
 
 // -- stats ----------------------------------------------------------------------
@@ -116,7 +134,7 @@ function renderBooks() {
 
 function bookActionsHtml(b) {
   return `
-    <div class="button-row">
+    <div class="library-card-actions">
       <a href="/library/books/${b.id}" class="btn btn-secondary">${esc(T.library_action_details)}</a>
       <button type="button" class="btn btn-danger" data-delete-book="${b.id}" data-book-title="${esc(b.title)}">${esc(T.library_action_delete)}</button>
     </div>`;
@@ -126,24 +144,18 @@ function renderGrid(books) {
   const cards = books
     .map(
       (b) => `
-      <div class="card">
-        <div style="display:flex;gap:0.75rem;">
-          <div style="flex:0 0 76px;height:76px;background:var(--bg-panel-alt);border-radius:4px;overflow:hidden;">${coverHtml(b)}</div>
-          <div style="flex:1;min-width:0;">
-            <h3 style="margin:0 0 0.2rem;font-size:0.95rem;">${esc(b.title)}</h3>
-            <p class="muted small" style="margin:0 0 0.2rem;">${esc((b.authors || []).join(", ")) || "—"}</p>
-            <p class="muted small" style="margin:0 0 0.3rem;">${esc((b.narrators || []).join(", ")) || "—"}</p>
-            ${b.series ? `<span class="badge">${esc(seriesLabel(b))}</span>` : ""}
-          </div>
+      <div class="library-card">
+        <div class="library-cover">${coverHtml(b)}</div>
+        <div class="library-card-body">
+          <h3 class="library-card-title" title="${esc(b.title)}">${esc(b.title)}</h3>
+          <p class="library-card-author" title="${esc((b.authors || []).join(", "))}">${esc((b.authors || []).join(", ")) || "—"}</p>
+          ${badgeRowHtml(b)}
+          ${bookActionsHtml(b)}
         </div>
-        <p class="muted small" style="margin:0.6rem 0 0;">
-          ${esc(formatDuration(b.duration_seconds))} · ${b.file_count} ${esc(T.library_col_files)} · ${esc(humanSize(b.size_bytes))}
-        </p>
-        ${bookActionsHtml(b)}
       </div>`
     )
     .join("");
-  return `<div class="card-grid wide">${cards}</div>`;
+  return `<div class="library-grid">${cards}</div>`;
 }
 
 function renderTable(books) {
@@ -163,21 +175,23 @@ function renderTable(books) {
     )
     .join("");
   return `
-    <table class="table">
-      <thead>
-        <tr>
-          <th>${esc(T.library_col_title)}</th>
-          <th>${esc(T.library_col_authors)}</th>
-          <th>${esc(T.library_col_narrators)}</th>
-          <th>${esc(T.library_col_series)}</th>
-          <th>${esc(T.library_col_duration)}</th>
-          <th>${esc(T.library_col_files)}</th>
-          <th>${esc(T.library_col_size)}</th>
-          <th>${esc(T.library_col_actions)}</th>
-        </tr>
-      </thead>
-      <tbody>${rows}</tbody>
-    </table>`;
+    <div class="table-scroll">
+      <table class="table">
+        <thead>
+          <tr>
+            <th>${esc(T.library_col_title)}</th>
+            <th>${esc(T.library_col_authors)}</th>
+            <th>${esc(T.library_col_narrators)}</th>
+            <th>${esc(T.library_col_series)}</th>
+            <th>${esc(T.library_col_duration)}</th>
+            <th>${esc(T.library_col_files)}</th>
+            <th>${esc(T.library_col_size)}</th>
+            <th>${esc(T.library_col_actions)}</th>
+          </tr>
+        </thead>
+        <tbody>${rows}</tbody>
+      </table>
+    </div>`;
 }
 
 function wireBookActions(container) {
