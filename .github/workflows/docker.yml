@@ -21,9 +21,6 @@ jobs:
     runs-on: ubuntu-latest
     env:
       IMAGE_NAME: audiarr
-      APP_VERSION: 0.1.0
-      IMAGE_REVISION: mldm2
-      VERSION: 0.1.0-mldm2
       DOCKERHUB_USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}
       DOCKERHUB_TOKEN: ${{ secrets.DOCKERHUB_TOKEN }}
       GITLAB_REGISTRY_IMAGE: ${{ secrets.GITLAB_REGISTRY_IMAGE }}
@@ -34,6 +31,24 @@ jobs:
       CODEBERG_REGISTRY_TOKEN: ${{ secrets.CODEBERG_REGISTRY_TOKEN }}
     steps:
       - uses: actions/checkout@v4
+      - name: Resolve version from Dockerfile
+        id: ver
+        shell: bash
+        run: |
+          # Single source of truth: the ARG defaults in the Dockerfile.
+          # Bumping the revision there is enough for CI to tag correctly.
+          VERSION="$(sed -n 's/^ARG VERSION=//p' Dockerfile | tail -1 | tr -d '"')"
+          APP_VERSION="${VERSION%%-*}"
+          IMAGE_REVISION="${VERSION#*-}"
+          if [[ -z "$VERSION" || "$VERSION" == "$APP_VERSION" || -z "$IMAGE_REVISION" ]]; then
+            echo "Could not parse VERSION=$VERSION from Dockerfile" >&2
+            exit 1
+          fi
+          {
+            echo "version=${VERSION}"
+            echo "app_version=${APP_VERSION}"
+            echo "image_revision=${IMAGE_REVISION}"
+          } >> "$GITHUB_OUTPUT"
       - uses: docker/setup-buildx-action@v3
       - name: Resolve image targets
         id: images
@@ -81,7 +96,7 @@ jobs:
         with:
           images: ${{ steps.images.outputs.images }}
           tags: |
-            type=raw,value=${{ env.VERSION }}
+            type=raw,value=${{ steps.ver.outputs.version }}
             type=sha,prefix=sha-
             type=raw,value=latest,enable={{ is_default_branch }}
       - name: Build image
@@ -94,9 +109,9 @@ jobs:
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
           build-args: |
-            VERSION=${{ env.VERSION }}
-            APP_VERSION=${{ env.APP_VERSION }}
-            IMAGE_REVISION=${{ env.IMAGE_REVISION }}
+            VERSION=${{ steps.ver.outputs.version }}
+            APP_VERSION=${{ steps.ver.outputs.app_version }}
+            IMAGE_REVISION=${{ steps.ver.outputs.image_revision }}
             VCS_REF=${{ github.sha }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
