@@ -1,8 +1,24 @@
-"""Tests for auth: forms login (session cookie), API-key auth, and the
-method=="none" no-op baseline.
+"""Tests for auth: forms login (session cookie), API-key auth, the
+method=="none" no-op baseline, and the login rate limiter.
 """
 
 from __future__ import annotations
+
+import pytest
+from starlette.testclient import TestClient
+
+from app.api.routes_auth import _login_rate_limiter
+
+
+@pytest.fixture(autouse=True)
+def _reset_login_rate_limiter():
+    # _login_rate_limiter is a module-level singleton in app.api.routes_auth.
+    # The app_client fixture reloads app.main (and app.config) per test but
+    # not app.api.routes_auth, so this same instance outlives every test in
+    # the session — clear it so tests stay independent of run order.
+    _login_rate_limiter._failures.clear()
+    yield
+    _login_rate_limiter._failures.clear()
 
 
 def _get_settings(client):
@@ -145,3 +161,82 @@ def test_logout_clears_session_cookie(app_client):
 
     redirect = app_client.get("/library", follow_redirects=False)
     assert redirect.status_code == 302
+
+
+def test_login_rate_limit_blocks_after_five_failures(app_client):
+    _enable_forms(app_client)
+
+    for _ in range(5):
+        wrong = app_client.post(
+            "/api/v1/auth/login", json={"username": "admin", "password": "nope"}
+        )
+        assert wrong.status_code == 401
+
+    # 6th attempt is blocked even with the correct password.
+    limited = app_client.post(
+        "/api/v1/auth/login", json={"username": "admin", "password": "s3cret-pw"}
+    )
+    assert limited.status_code == 429
+    assert limited.json() == {"detail": "Too many login attempts"}
+    assert int(limited.headers["Retry-After"]) > 0
+
+
+def test_login_rate_limit_is_per_ip(app_client):
+    _enable_forms(app_client)
+
+    for _ in range(5):
+        assert (
+            app_client.post(
+                "/api/v1/auth/login", json={"username": "admin", "password": "nope"}
+            ).status_code
+            == 401
+        )
+    assert (
+        app_client.post(
+            "/api/v1/auth/login", json={"username": "admin", "password": "nope"}
+        ).status_code
+        == 429
+    )
+
+    # A different client IP is unaffected by the first IP's exhausted
+    # window. TestClient's `client=` param sets the fake remote address
+    # that ends up in request.client.host, so this is a real request from
+    # a distinct IP, not a direct limiter manipulation.
+    other_client = TestClient(app_client.app, client=("203.0.113.5", 54321))
+    other = other_client.post(
+        "/api/v1/auth/login", json={"username": "admin", "password": "nope"}
+    )
+    assert other.status_code == 401
+
+
+def test_login_success_resets_rate_limit_counter(app_client):
+    _enable_forms(app_client)
+
+    for _ in range(4):
+        assert (
+            app_client.post(
+                "/api/v1/auth/login", json={"username": "admin", "password": "nope"}
+            ).status_code
+            == 401
+        )
+
+    correct = app_client.post(
+        "/api/v1/auth/login", json={"username": "admin", "password": "s3cret-pw"}
+    )
+    assert correct.status_code == 200
+
+    # If the successful login had NOT reset the window, these cumulative
+    # failures (4 + these) would trip the limiter well before the 5th one.
+    # Since it did reset, all 5 fresh failures stay under the limit.
+    for _ in range(5):
+        assert (
+            app_client.post(
+                "/api/v1/auth/login", json={"username": "admin", "password": "nope"}
+            ).status_code
+            == 401
+        )
+
+    limited = app_client.post(
+        "/api/v1/auth/login", json={"username": "admin", "password": "s3cret-pw"}
+    )
+    assert limited.status_code == 429

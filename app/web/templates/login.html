@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Sign in — Audiarr</title>
+  <title>{{ t.login_title }}</title>
   <style>
     :root {
       --bg-body: #1c1e21;
@@ -80,6 +80,13 @@
     button:hover {
       background: var(--accent-dark);
     }
+    .subtitle {
+      text-align: center;
+      font-size: 0.85rem;
+      color: var(--text-muted);
+      margin-top: -1rem;
+      margin-bottom: 1.5rem;
+    }
     #login-error {
       display: none;
       background: rgba(224, 96, 94, 0.15);
@@ -95,13 +102,14 @@
 <body>
   <div class="login-card">
     <div class="brand">Audiarr</div>
-    <div id="login-error">Invalid credentials</div>
+    <div class="subtitle">{{ t.login_subtitle }}</div>
+    <div id="login-error">{{ t.login_error }}</div>
     <form id="login-form">
-      <label for="username">Username</label>
+      <label for="username">{{ t.login_username }}</label>
       <input type="text" id="username" name="username" autocomplete="username" required autofocus>
-      <label for="password">Password</label>
+      <label for="password">{{ t.login_password }}</label>
       <input type="password" id="password" name="password" autocomplete="current-password" required>
-      <button type="submit">Sign in</button>
+      <button type="submit">{{ t.login_submit }}</button>
     </form>
   </div>
   <script>

@@ -13,8 +13,10 @@ from __future__ import annotations
 import hashlib
 import hmac
 import logging
+import math
 import secrets
 import time
+from collections import deque
 from collections.abc import Callable
 
 from starlette.types import ASGIApp, Receive, Scope, Send
@@ -26,6 +28,9 @@ log = logging.getLogger("audiarr.auth")
 PBKDF2_ITERATIONS = 390_000
 SESSION_COOKIE_NAME = "audiarr_session"
 DEFAULT_SESSION_TTL_SECONDS = 7 * 24 * 3600
+
+LOGIN_RATE_LIMIT_MAX_ATTEMPTS = 5
+LOGIN_RATE_LIMIT_WINDOW_SECONDS = 15 * 60
 
 # Paths that never require authentication, even when auth is enabled.
 # Entries ending in "/" are treated as prefixes; others must match exactly.
@@ -72,6 +77,60 @@ def verify_password(pw: str, stored: str) -> bool:
 
     candidate = hashlib.pbkdf2_hmac("sha256", pw.encode("utf-8"), salt, iterations)
     return hmac.compare_digest(candidate, expected)
+
+
+# -- login rate limiting ------------------------------------------------------
+
+
+class LoginRateLimiter:
+    """In-memory sliding-window brute-force guard for the login endpoint.
+
+    Homelab scale — stdlib only, no redis/slowapi. Tracks failed-attempt
+    timestamps per client IP in a ``dict[str, deque[float]]``; each call to
+    :meth:`check`/:meth:`record_failure` opportunistically drops timestamps
+    older than the window (and the IP's entry entirely once it is empty) so
+    memory stays bounded without a background thread. Successful logins do
+    not clear the window themselves — old failures simply age out.
+    """
+
+    def __init__(
+        self,
+        max_attempts: int = LOGIN_RATE_LIMIT_MAX_ATTEMPTS,
+        window_seconds: int = LOGIN_RATE_LIMIT_WINDOW_SECONDS,
+    ) -> None:
+        self.max_attempts = max_attempts
+        self.window_seconds = window_seconds
+        self._failures: dict[str, deque[float]] = {}
+
+    def _prune(self, client_ip: str, now: float) -> deque[float]:
+        """Drop timestamps older than the window; return the live deque."""
+        attempts = self._failures.setdefault(client_ip, deque())
+        cutoff = now - self.window_seconds
+        while attempts and attempts[0] <= cutoff:
+            attempts.popleft()
+        if not attempts:
+            del self._failures[client_ip]
+        return attempts
+
+    def check(self, client_ip: str) -> tuple[bool, int]:
+        """Return ``(allowed, retry_after_seconds)`` for ``client_ip``."""
+        now = time.time()
+        attempts = self._prune(client_ip, now)
+        if len(attempts) < self.max_attempts:
+            return True, 0
+        retry_after = max(1, math.ceil(attempts[0] + self.window_seconds - now))
+        return False, retry_after
+
+    def record_failure(self, client_ip: str) -> None:
+        """Record a failed login attempt for ``client_ip``."""
+        now = time.time()
+        attempts = self._prune(client_ip, now)
+        attempts.append(now)
+        self._failures[client_ip] = attempts
+
+    def reset(self, client_ip: str) -> None:
+        """Clear all recorded failures for ``client_ip`` (successful login)."""
+        self._failures.pop(client_ip, None)
 
 
 # -- session tokens -------------------------------------------------------------

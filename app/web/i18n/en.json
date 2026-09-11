@@ -315,5 +315,11 @@
   "import_match_running": "Matching…",
   "import_match_success": "Matched",
   "import_match_error": "Match failed",
-  "import_match_folder_gone": "Folder no longer exists."
+  "import_match_folder_gone": "Folder no longer exists.",
+  "login_title": "Sign in — Audiarr",
+  "login_subtitle": "Login",
+  "login_username": "Username",
+  "login_password": "Password",
+  "login_submit": "Sign in",
+  "login_error": "Invalid username or password"
 }

@@ -18,12 +18,14 @@ from pydantic import BaseModel
 from app.auth import (
     DEFAULT_SESSION_TTL_SECONDS,
     SESSION_COOKIE_NAME,
+    LoginRateLimiter,
     hash_password,
     make_session_token,
     verify_password,
     verify_session_token,
 )
 from app.config import load_settings
+from app.web.i18n_util import get_default_ui_language, load_strings
 
 log = logging.getLogger("audiarr.api.auth")
 
@@ -31,6 +33,10 @@ router = APIRouter()
 
 TEMPLATES_DIR = Path(__file__).parent.parent / "web" / "templates"
 templates = Jinja2Templates(directory=str(TEMPLATES_DIR))
+
+# Route-level state (kept out of app/auth.py, which stays state-free of
+# request handling): one process-wide limiter instance for the login route.
+_login_rate_limiter = LoginRateLimiter()
 
 
 class LoginRequest(BaseModel):
@@ -56,18 +62,33 @@ async def login_page(request: Request) -> Response:
     settings = load_settings()
     if settings.auth.method != "forms":
         return RedirectResponse(url="/", status_code=302)
-    return templates.TemplateResponse(request, "login.html", {"active_page": "login"})
+    # Same language resolution as app/web/routes.py::_base_context: the
+    # settings.ui.language field, falling back to the app default.
+    lang = settings.ui.language or get_default_ui_language()
+    return templates.TemplateResponse(
+        request, "login.html", {"active_page": "login", "t": load_strings(lang)}
+    )
 
 
 @router.post(
     "/api/v1/auth/login",
     responses={200: {"model": OkResponse}, 401: {"model": LoginError}},
 )
-async def login(data: LoginRequest, response: Response) -> OkResponse | LoginError:
+async def login(
+    data: LoginRequest, request: Request, response: Response
+) -> OkResponse | LoginError:
     # No response_model= here: this route intentionally returns one of two
     # different shapes (OkResponse / LoginError) by status code, and a
     # single response_model would coerce the other shape to match it,
     # silently dropping the "detail" field on the 401 path.
+    client_ip = request.client.host if request.client else "unknown"
+
+    allowed, retry_after = _login_rate_limiter.check(client_ip)
+    if not allowed:
+        response.status_code = 429
+        response.headers["Retry-After"] = str(retry_after)
+        return LoginError(detail="Too many login attempts")
+
     settings = load_settings()
     stored_hash = settings.auth.password_hash
 
@@ -81,9 +102,11 @@ async def login(data: LoginRequest, response: Response) -> OkResponse | LoginErr
     ok = bool(stored_hash) and username_ok and password_ok
 
     if not ok:
+        _login_rate_limiter.record_failure(client_ip)
         response.status_code = 401
         return LoginError(detail="Invalid credentials")
 
+    _login_rate_limiter.reset(client_ip)
     token = make_session_token(data.username, DEFAULT_SESSION_TTL_SECONDS)
     response.set_cookie(
         SESSION_COOKIE_NAME,

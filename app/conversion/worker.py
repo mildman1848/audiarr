@@ -135,7 +135,10 @@ async def process_timeouts() -> int:
                 updated = datetime.strptime(row["updated_at"], "%Y-%m-%d %H:%M:%S")
             except ValueError:
                 continue
-            age_hours = (datetime.utcnow() - updated).total_seconds() / 3600
+            # updated_at is a naive sqlite timestamp; drop tzinfo from the
+            # aware "now" so both sides of the subtraction are naive UTC.
+            now = datetime.now(UTC).replace(tzinfo=None)
+            age_hours = (now - updated).total_seconds() / 3600
             if age_hours > hours:
                 _finish_job(
                     int(row["id"]),

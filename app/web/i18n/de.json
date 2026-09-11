@@ -315,5 +315,11 @@
   "import_match_running": "Wird zugeordnet…",
   "import_match_success": "Zugeordnet",
   "import_match_error": "Zuordnung fehlgeschlagen",
-  "import_match_folder_gone": "Ordner existiert nicht mehr."
+  "import_match_folder_gone": "Ordner existiert nicht mehr.",
+  "login_title": "Anmelden — Audiarr",
+  "login_subtitle": "Anmelden",
+  "login_username": "Benutzername",
+  "login_password": "Passwort",
+  "login_submit": "Anmelden",
+  "login_error": "Benutzername oder Passwort ist falsch."
 }
