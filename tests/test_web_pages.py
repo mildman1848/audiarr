@@ -84,6 +84,30 @@ def test_settings_page_has_sabnzbd_and_prowlarr_sections(
 
 
 @pytest.mark.parametrize(
+    ("language", "security_marker", "method_marker"),
+    [
+        ("en", "Security", "Authentication method"),
+        ("de", "Sicherheit", "Authentifizierungsmethode"),
+    ],
+)
+def test_settings_page_has_security_section(
+    app_client, language, security_marker, method_marker
+):
+    _set_ui_language(app_client, language)
+
+    settings = app_client.get("/settings")
+    assert settings.status_code == 200
+    assert security_marker in settings.text
+    assert method_marker in settings.text
+    assert 'id="security-method"' in settings.text
+    assert 'id="security-username"' in settings.text
+    assert 'id="security-password"' in settings.text
+    assert 'id="security-api-key"' in settings.text
+    assert 'id="security-api-key-copy-btn"' in settings.text
+    assert 'id="security-api-key-regen-btn"' in settings.text
+
+
+@pytest.mark.parametrize(
     ("language", "marker"),
     [
         ("en", "Back to Library"),

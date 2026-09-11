@@ -2,9 +2,12 @@
 // document. Save flow is GET the full document, merge the edited fields, then
 // PUT the whole document back (the settings API replaces, it does not patch).
 //
-// Secrets (webhook / SABnzbd / Prowlarr API keys) are never rendered back into
-// the page: a stored key only shows as a masked placeholder, and an empty
-// submit keeps the current value.
+// Secrets (webhook / SABnzbd / Prowlarr API keys, the auth password) are
+// never rendered back into the page: a stored value only shows as a masked
+// placeholder (or, for the password, stays blank), and an empty submit
+// keeps the current value. The auth API key is the one exception: the
+// settings API only excludes password_hash, so GET returns it in plain
+// text and it is shown read-only for copying.
 
 const T = window.AUDIARR_I18N || {};
 const MASK = "•••••";
@@ -76,6 +79,9 @@ function mergeProwlarr(doc) {
 
 function populate(s) {
   document.getElementById("host-port").textContent = s.host.port ?? "—";
+  document.getElementById("security-method").value = s.auth.method || "none";
+  document.getElementById("security-username").value = s.auth.username || "";
+  document.getElementById("security-api-key").value = s.auth.api_key || "";
   document.getElementById("ui-language").value = s.ui.language || "en";
   document.getElementById("metadata-locale").value = s.metadata.audible_locale || "us";
   document.getElementById("provider-order").textContent =
@@ -120,6 +126,12 @@ async function saveSettings(event) {
   msg.textContent = T.settings_saving;
   try {
     const doc = await getSettings();
+    // doc.auth.api_key is already present from the GET above; pass it
+    // through unchanged unless regenerateApiKey() rewrote it in place.
+    doc.auth.method = document.getElementById("security-method").value;
+    doc.auth.username = document.getElementById("security-username").value.trim();
+    const password = document.getElementById("security-password").value;
+    doc.auth.password = password || ""; // empty means keep the stored password
     doc.ui.language = document.getElementById("ui-language").value;
     doc.metadata.audible_locale = document.getElementById("metadata-locale").value;
     doc.conversion.backend = document.getElementById("conversion-backend").value;
@@ -155,6 +167,7 @@ async function saveSettings(event) {
       "conversion-webhook-key",
       "sab-api-key",
       "prowlarr-api-key",
+      "security-password",
     ]) {
       document.getElementById(id).value = "";
     }
@@ -193,6 +206,39 @@ async function testConnection(endpoint, urlId, keyId, msgId) {
   }
 }
 
+// Copy the current API key to the clipboard.
+async function copyApiKey() {
+  const key = document.getElementById("security-api-key").value;
+  try {
+    await navigator.clipboard.writeText(key);
+    if (window.AudiarrToast) window.AudiarrToast.success(T.settings_security_api_key_copy_success);
+  } catch (err) {
+    if (window.AudiarrToast)
+      window.AudiarrToast.error(`${T.settings_save_error} (${err.message})`);
+  }
+}
+
+// Generate a fresh API key (invalidates sessions + API clients), persist it
+// immediately via the normal GET/merge/PUT save path. There is no dedicated
+// regenerate endpoint; the settings PUT path persists api_key fine.
+async function regenerateApiKey() {
+  if (!window.confirm(T.settings_security_api_key_regenerate_confirm)) return;
+  const msg = document.getElementById("settings-msg");
+  try {
+    const doc = await getSettings();
+    const newKey = crypto.randomUUID().replace(/-/g, "");
+    doc.auth.api_key = newKey;
+    await putSettings(doc);
+    document.getElementById("security-api-key").value = newKey;
+    if (window.AudiarrToast)
+      window.AudiarrToast.success(T.settings_security_api_key_regenerated);
+  } catch (err) {
+    const text = `${T.settings_save_error} (${err.message})`;
+    msg.textContent = text;
+    if (window.AudiarrToast) window.AudiarrToast.error(text);
+  }
+}
+
 document.addEventListener("DOMContentLoaded", () => {
   loadSettings();
   document.getElementById("settings-form").addEventListener("submit", saveSettings);
@@ -212,4 +258,10 @@ document.addEventListener("DOMContentLoaded", () => {
       "prowlarr-msg"
     )
   );
+  document
+    .getElementById("security-api-key-copy-btn")
+    .addEventListener("click", copyApiKey);
+  document
+    .getElementById("security-api-key-regen-btn")
+    .addEventListener("click", regenerateApiKey);
 });
