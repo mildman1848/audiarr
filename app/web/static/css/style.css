@@ -20,6 +20,12 @@
   --err: #e0605e;
   --radius: 6px;
   --shadow-card: 0 1px 2px rgba(0, 0, 0, 0.35);
+  --sidebar-width: 218px;
+  --sidebar-width-collapsed: 190px;
+  --sidebar-width-mobile: min(82vw, 280px);
+  --z-topbar: 5;
+  --z-sidebar-backdrop: 45;
+  --z-sidebar: 50;
 }
 
 * {
@@ -43,67 +49,170 @@ body {
 /* ------------------------------------------------------------------ Sidebar */
 
 .sidebar {
-  width: 232px;
+  width: var(--sidebar-width);
   background: var(--bg-panel);
   border-right: 1px solid var(--border-color);
   padding: 0 0 1rem;
   flex-shrink: 0;
+  position: sticky;
+  top: 0;
+  height: 100vh;
+  overflow-y: auto;
 }
 
 .sidebar .brand {
   display: flex;
-  flex-direction: column;
-  gap: 0.15rem;
-  padding: 1.1rem 1.15rem 0.95rem;
+  align-items: center;
+  gap: 0.65rem;
+  padding: 0.9rem 1.1rem;
   border-bottom: 1px solid var(--border-color);
   margin-bottom: 0.6rem;
 }
 
 .sidebar .brand-mark {
-  color: var(--audiarr-accent);
-  font-size: 1.4rem;
+  flex-shrink: 0;
+  width: 30px;
+  height: 30px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--audiarr-accent);
+  color: #1c1e21;
+  border-radius: 7px;
+  font-size: 0.95rem;
+  font-weight: 800;
+}
+
+.sidebar .brand-text {
+  display: flex;
+  flex-direction: column;
+  gap: 0.1rem;
+  min-width: 0;
+}
+
+.sidebar .brand-name {
+  color: var(--text-main);
+  font-size: 0.98rem;
   font-weight: 700;
   letter-spacing: 0.01em;
 }
 
 .sidebar .brand-sub {
   color: var(--text-muted);
-  font-size: 0.66rem;
+  font-size: 0.62rem;
   font-weight: 600;
   text-transform: uppercase;
-  letter-spacing: 0.18em;
+  letter-spacing: 0.16em;
 }
 
-.sidebar nav a {
+.side-nav {
+  display: flex;
+  flex-direction: column;
+}
+
+.side-nav .nav-item {
   display: flex;
   align-items: center;
   gap: 0.7rem;
-  padding: 0.55rem 1.15rem;
+  height: 40px;
+  padding: 0 1.15rem;
   color: var(--text-main);
   text-decoration: none;
   border-left: 3px solid transparent;
-  font-size: 0.92rem;
+  font-size: 0.88rem;
 }
 
-.sidebar nav a:hover {
+.side-nav .nav-item:hover,
+.side-nav .nav-item:focus-visible {
   background: var(--bg-panel-alt);
 }
 
-.sidebar nav a.active {
+.side-nav .nav-item:focus-visible {
+  outline: 2px solid var(--audiarr-accent);
+  outline-offset: -2px;
+}
+
+.side-nav .nav-item.active {
   background: var(--bg-panel-alt);
   border-left-color: var(--audiarr-accent);
   font-weight: 600;
 }
 
-.sidebar nav a .nav-glyph {
+.side-nav .nav-item .nav-glyph {
   width: 1.1rem;
+  flex-shrink: 0;
   text-align: center;
   color: var(--text-muted);
   font-size: 0.95rem;
 }
 
-.sidebar nav a.active .nav-glyph {
+.side-nav .nav-item.active .nav-glyph {
   color: var(--audiarr-accent);
+}
+
+/* ---------------------------------------------------------- Mobile toggle */
+
+.sidebar-toggle {
+  display: none;
+  flex-shrink: 0;
+  align-items: center;
+  justify-content: center;
+  width: 34px;
+  height: 34px;
+  padding: 0;
+  background: transparent;
+  color: var(--text-main);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius);
+}
+
+.sidebar-toggle:hover {
+  background: var(--bg-panel-alt);
+}
+
+.sidebar-toggle:focus-visible {
+  outline: 2px solid var(--audiarr-accent);
+  outline-offset: 1px;
+}
+
+.sidebar-toggle-bars,
+.sidebar-toggle-bars::before,
+.sidebar-toggle-bars::after {
+  display: block;
+  width: 16px;
+  height: 2px;
+  background: currentColor;
+  border-radius: 1px;
+}
+
+.sidebar-toggle-bars {
+  position: relative;
+}
+
+.sidebar-toggle-bars::before,
+.sidebar-toggle-bars::after {
+  content: "";
+  position: absolute;
+  left: 0;
+}
+
+.sidebar-toggle-bars::before {
+  top: -5px;
+}
+
+.sidebar-toggle-bars::after {
+  top: 5px;
+}
+
+.sidebar-backdrop {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.55);
+  z-index: var(--z-sidebar-backdrop);
+}
+
+.sidebar-backdrop[hidden] {
+  display: none;
 }
 
 /* --------------------------------------------------------------- Main / top */
@@ -118,20 +227,20 @@ body {
 .topbar {
   display: flex;
   align-items: center;
-  justify-content: space-between;
   gap: 1rem;
   padding: 0.85rem 2rem;
   background: var(--bg-topbar);
   border-bottom: 1px solid var(--border-color);
   position: sticky;
   top: 0;
-  z-index: 5;
+  z-index: var(--z-topbar);
 }
 
 .topbar-heading {
   display: flex;
   flex-direction: column;
   gap: 0.1rem;
+  flex: 1 1 auto;
   min-width: 0;
 }
 
@@ -139,6 +248,9 @@ body {
   margin: 0;
   font-size: 1.25rem;
   font-weight: 600;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .eyebrow {
@@ -688,7 +800,7 @@ footer {
 
 @media (max-width: 1024px) {
   .sidebar {
-    width: 190px;
+    width: var(--sidebar-width-collapsed);
   }
 
   .topbar,
@@ -698,26 +810,46 @@ footer {
   }
 }
 
-@media (max-width: 720px) {
-  .layout {
-    flex-direction: column;
+/* Below this breakpoint the sidebar becomes an off-canvas drawer (Sonarr's
+   mobile pattern) instead of squeezing/wrapping into the flow. Toggled via
+   body.sidebar-open, set by the sidebar-toggle button in common.js. */
+@media (max-width: 800px) {
+  .sidebar-toggle {
+    display: inline-flex;
   }
 
   .sidebar {
-    width: 100%;
-    border-right: none;
-    border-bottom: 1px solid var(--border-color);
+    position: fixed;
+    top: 0;
+    bottom: 0;
+    left: -280px;
+    width: var(--sidebar-width-mobile);
+    height: 100vh;
+    z-index: var(--z-sidebar);
+    transform: none;
+    translate: none;
+    transition: left 0.25s ease;
+    box-shadow: 2px 0 18px rgba(0, 0, 0, 0.45);
   }
 
-  .sidebar nav {
-    display: flex;
-    flex-wrap: wrap;
+  body.sidebar-open #app-sidebar {
+    translate: 280px 0 !important;
   }
 
-  .topbar {
-    flex-direction: column;
-    align-items: flex-start;
-    gap: 0.6rem;
+  body.sidebar-open {
+    overflow: hidden;
+  }
+
+  .topbar,
+  .page-body {
+    padding-left: 1rem;
+    padding-right: 1rem;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .sidebar {
+    transition: none;
   }
 }
 

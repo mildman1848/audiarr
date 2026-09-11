@@ -3,6 +3,7 @@
   "brand_subtitle": "Audiobook Manager",
   "language_switch_label": "Change language",
   "language_switch_error": "Could not switch language",
+  "nav_toggle_label": "Open navigation",
   "nav_dashboard": "Dashboard",
   "nav_library": "Library",
   "nav_metadata": "Metadata Search",

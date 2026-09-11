@@ -7,6 +7,7 @@ English and German UI language settings, and mark its own nav entry active.
 
 from __future__ import annotations
 
+import re
 from pathlib import Path
 
 import pytest
@@ -16,6 +17,18 @@ def _set_ui_language(app_client, language: str) -> None:
     current = app_client.get("/api/v1/settings").json()
     current["ui"]["language"] = language
     assert app_client.put("/api/v1/settings", json=current).status_code == 200
+
+
+def _nav_item_classes(html: str, href: str) -> list[str]:
+    """Return the class list of the sidebar nav `<a>` for the given href.
+
+    Robust to markup growing extra classes/attributes over time — unlike an
+    exact `<a href="..." class="active">` string match, this only cares that
+    the "nav-item" and (when active) "active" classes are present.
+    """
+    match = re.search(rf'<a href="{re.escape(href)}" class="([^"]*)"', html)
+    assert match, f"no sidebar nav link found for href={href!r}"
+    return match.group(1).split()
 
 
 @pytest.mark.parametrize(
@@ -131,23 +144,18 @@ def test_book_detail_page_renders(app_client, language, marker):
 def test_navigation_marks_active_route(app_client):
     _set_ui_language(app_client, "en")
 
-    dashboard = app_client.get("/")
-    assert '<a href="/" class="active">' in dashboard.text
-
-    library = app_client.get("/library")
-    assert '<a href="/library" class="active">' in library.text
-
-    import_page = app_client.get("/import")
-    assert '<a href="/import" class="active">' in import_page.text
-
-    metadata = app_client.get("/metadata")
-    assert '<a href="/metadata" class="active">' in metadata.text
-
-    connections = app_client.get("/connections")
-    assert '<a href="/connections" class="active">' in connections.text
-
-    settings = app_client.get("/settings")
-    assert '<a href="/settings" class="active">' in settings.text
+    routes = ("/", "/library", "/import", "/metadata", "/connections", "/settings")
+    for route in routes:
+        page = app_client.get(route)
+        classes = _nav_item_classes(page.text, route)
+        assert "nav-item" in classes
+        assert "active" in classes
+        # Every other nav link on the page must not also claim "active".
+        for other in routes:
+            if other == route:
+                continue
+            other_classes = _nav_item_classes(page.text, other)
+            assert "active" not in other_classes
 
 
 @pytest.mark.parametrize(
@@ -208,7 +216,7 @@ def test_import_page_marks_nav_active_and_nav_link_present_everywhere(app_client
     _set_ui_language(app_client, "en")
 
     import_page = app_client.get("/import")
-    assert '<a href="/import" class="active">' in import_page.text
+    assert "active" in _nav_item_classes(import_page.text, "/import")
 
     for path in ALL_PAGES:
         page = app_client.get(path)
@@ -219,10 +227,10 @@ def test_search_and_activity_mark_nav_active(app_client):
     _set_ui_language(app_client, "en")
 
     search = app_client.get("/search")
-    assert '<a href="/search" class="active">' in search.text
+    assert "active" in _nav_item_classes(search.text, "/search")
 
     activity = app_client.get("/activity")
-    assert '<a href="/activity" class="active">' in activity.text
+    assert "active" in _nav_item_classes(activity.text, "/activity")
 
 
 @pytest.mark.parametrize(
@@ -312,6 +320,25 @@ def test_settings_js_logs_in_after_enabling_forms_auth():
     assert "await loginAfterAuthChange(doc.auth.username, password)" in script
 
 
+def test_common_js_has_mobile_sidebar_drawer_logic():
+    """The off-canvas sidebar drawer (hamburger toggle, backdrop, Escape-key
+    close, and the body.sidebar-open state it all drives) lives in
+    common.js so every page gets it for free."""
+    script = (Path(__file__).parents[1] / "app/web/static/js/common.js").read_text()
+
+    assert "function openSidebar" in script
+    assert "function closeSidebar" in script
+    assert 'classList.add("sidebar-open")' in script
+    assert 'classList.remove("sidebar-open")' in script
+    assert 'sidebar.style.setProperty("translate", "280px 0px", "important")' in script
+    assert 'sidebar.style.left = mobileQuery.matches ? "-280px" : ""' in script
+    assert 'sidebar.style.translate = ""' in script
+    assert 'setAttribute("aria-expanded"' in script
+    assert 'setAttribute("aria-hidden"' in script
+    assert 'event.key === "Escape"' in script
+    assert "matchMedia" in script
+
+
 ALL_PAGES = (
     "/",
     "/library",
@@ -327,7 +354,8 @@ ALL_PAGES = (
 @pytest.mark.parametrize("path", ALL_PAGES)
 def test_app_shell_markers_present(app_client, path):
     """Every page renders the Arr-style shell: brand subtitle, top bar,
-    eyebrow, the language quick-switch, and the toast container."""
+    eyebrow, the language quick-switch, the toast container, and the
+    Sonarr-like sidebar (desktop rail / mobile off-canvas drawer) markup."""
     _set_ui_language(app_client, "en")
 
     page = app_client.get(path)
@@ -340,6 +368,14 @@ def test_app_shell_markers_present(app_client, path):
     assert 'data-lang="de"' in page.text
     assert 'id="toast-container"' in page.text
     assert "/static/js/common.js" in page.text
+    # Sidebar shell: fixed desktop rail that becomes a mobile drawer.
+    assert 'id="app-sidebar"' in page.text
+    assert 'class="side-nav"' in page.text
+    assert 'class="sidebar-toggle"' in page.text
+    assert 'aria-controls="app-sidebar"' in page.text
+    assert 'aria-expanded="false"' in page.text
+    assert 'aria-label="Open navigation"' in page.text
+    assert 'class="sidebar-backdrop"' in page.text
 
 
 @pytest.mark.parametrize(

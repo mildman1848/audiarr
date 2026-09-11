@@ -3,6 +3,7 @@
   "brand_subtitle": "Hörbuch-Verwaltung",
   "language_switch_label": "Sprache wechseln",
   "language_switch_error": "Sprache konnte nicht gewechselt werden",
+  "nav_toggle_label": "Navigation öffnen",
   "nav_dashboard": "Übersicht",
   "nav_library": "Bibliothek",
   "nav_metadata": "Metadaten-Suche",
