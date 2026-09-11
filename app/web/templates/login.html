@@ -1,0 +1,131 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Sign in — Audiarr</title>
+  <style>
+    :root {
+      --bg-body: #1c1e21;
+      --bg-panel: #26292d;
+      --bg-panel-alt: #303338;
+      --text-main: #e7e7e7;
+      --text-muted: #9a9ea3;
+      --border-color: #3a3d42;
+      --accent: #f7991c;
+      --accent-dark: #d97e0d;
+      --err: #e0605e;
+      --radius: 6px;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      min-height: 100vh;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-family: "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+      background: var(--bg-body);
+      color: var(--text-main);
+    }
+    .login-card {
+      width: 320px;
+      background: var(--bg-panel);
+      border: 1px solid var(--border-color);
+      border-radius: var(--radius);
+      padding: 2rem 1.75rem;
+      box-shadow: 0 4px 24px rgba(0, 0, 0, 0.4);
+    }
+    .brand {
+      text-align: center;
+      font-size: 1.4rem;
+      font-weight: 600;
+      letter-spacing: 0.02em;
+      color: var(--accent);
+      margin-bottom: 1.5rem;
+    }
+    label {
+      display: block;
+      font-size: 0.8rem;
+      color: var(--text-muted);
+      margin-bottom: 0.3rem;
+    }
+    input[type="text"],
+    input[type="password"] {
+      width: 100%;
+      padding: 0.55rem 0.65rem;
+      margin-bottom: 1rem;
+      background: var(--bg-panel-alt);
+      border: 1px solid var(--border-color);
+      border-radius: var(--radius);
+      color: var(--text-main);
+      font-size: 0.9rem;
+    }
+    input[type="text"]:focus,
+    input[type="password"]:focus {
+      outline: none;
+      border-color: var(--accent);
+    }
+    button {
+      width: 100%;
+      padding: 0.6rem;
+      background: var(--accent);
+      border: none;
+      border-radius: var(--radius);
+      color: #1c1e21;
+      font-weight: 600;
+      font-size: 0.9rem;
+      cursor: pointer;
+    }
+    button:hover {
+      background: var(--accent-dark);
+    }
+    #login-error {
+      display: none;
+      background: rgba(224, 96, 94, 0.15);
+      border: 1px solid var(--err);
+      color: var(--err);
+      border-radius: var(--radius);
+      padding: 0.5rem 0.65rem;
+      font-size: 0.85rem;
+      margin-bottom: 1rem;
+    }
+  </style>
+</head>
+<body>
+  <div class="login-card">
+    <div class="brand">Audiarr</div>
+    <div id="login-error">Invalid credentials</div>
+    <form id="login-form">
+      <label for="username">Username</label>
+      <input type="text" id="username" name="username" autocomplete="username" required autofocus>
+      <label for="password">Password</label>
+      <input type="password" id="password" name="password" autocomplete="current-password" required>
+      <button type="submit">Sign in</button>
+    </form>
+  </div>
+  <script>
+    document.getElementById("login-form").addEventListener("submit", async (event) => {
+      event.preventDefault();
+      const errorBox = document.getElementById("login-error");
+      errorBox.style.display = "none";
+      const username = document.getElementById("username").value;
+      const password = document.getElementById("password").value;
+      try {
+        const response = await fetch("/api/v1/auth/login", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ username, password }),
+        });
+        if (response.ok) {
+          location.href = "/";
+          return;
+        }
+        errorBox.style.display = "block";
+      } catch (err) {
+        errorBox.style.display = "block";
+      }
+    });
+  </script>
+</body>
+</html>

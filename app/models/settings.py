@@ -38,14 +38,26 @@ class HostSettings(BaseModel):
 class AuthSettings(BaseModel):
     """Authentication mode, mirrors Radarr/Sonarr's "Security" tab.
 
-    MVP note: only "none" is functionally enforced today. "forms" is
-    modeled so the UI/settings API shape is stable, but login is a TODO
-    (see docs/parity-targets.md).
+    ``password`` is a write-only field: PUT /api/v1/settings accepts a
+    plaintext password, hashes it into ``password_hash``, and clears it
+    before persisting; ``exclude=True`` means it never round-trips and is
+    never present in any serialized settings document (it only ever holds
+    a value for the instant of a single PUT request).
+
+    ``password_hash`` intentionally does NOT use ``Field(exclude=True)``:
+    that would also strip it from ``model_dump_json()`` on every disk
+    write (``app/config.py::save_settings``), silently losing the stored
+    hash on every settings save and breaking login. Instead it is a plain,
+    persisted field, and the settings API route excludes it from
+    responses via FastAPI's ``response_model_exclude`` (see
+    routes_settings.py) so GET/PUT responses still never leak it.
     """
 
     method: Literal["none", "forms"] = "none"
     username: str = ""
     api_key: str = ""
+    password: str = Field(default="", exclude=True)
+    password_hash: str = ""
 
 
 class MediaManagementSettings(BaseModel):

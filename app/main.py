@@ -12,6 +12,7 @@ from __future__ import annotations
 import asyncio
 import contextlib
 import logging
+import secrets
 from contextlib import asynccontextmanager
 from pathlib import Path
 
@@ -20,6 +21,7 @@ from fastapi.staticfiles import StaticFiles
 
 from app import __version__
 from app.api import (
+    routes_auth,
     routes_connections,
     routes_conversion,
     routes_import,
@@ -30,7 +32,8 @@ from app.api import (
     routes_system,
     routes_webhooks,
 )
-from app.config import get_db_path, load_settings
+from app.auth import AuthMiddleware
+from app.config import get_db_path, load_settings, save_settings
 from app.db import init_db
 from app.logging_conf import configure_logging
 from app.web import routes as web_routes
@@ -47,6 +50,14 @@ async def lifespan(app: FastAPI):
     configure_logging(settings.logging.level)
     init_db(get_db_path())
     log.info("Audiarr v%s starting up (language=%s)", __version__, settings.ui.language)
+
+    # First-boot API-key bootstrap, mirrors Radarr/Sonarr: API clients need
+    # a key even when auth.method == "none". Reuses the same settings-store
+    # writer as the settings PUT route (no second persistence path).
+    if not settings.auth.api_key:
+        settings.auth.api_key = secrets.token_hex(16)
+        save_settings(settings)
+        log.info("auth: generated api key (see settings)")
 
     # Conversion worker: only runs when a backend is configured.
     stop_event = asyncio.Event()
@@ -70,8 +81,15 @@ def create_app() -> FastAPI:
 
     app.mount("/static", StaticFiles(directory=str(STATIC_DIR)), name="static")
 
+    # Zero-arg callable so this module doesn't need to import app.config
+    # eagerly at class-definition time (app.auth imports app.config itself,
+    # which does not import app.main/app.auth back, so no cycle here either
+    # way — the callable indirection keeps AuthMiddleware decoupled/testable).
+    app.add_middleware(AuthMiddleware, get_auth_settings=load_settings)
+
     app.include_router(routes_system.router)
     app.include_router(routes_settings.router)
+    app.include_router(routes_auth.router)
     app.include_router(routes_metadata.router)
     app.include_router(routes_connections.router)
     app.include_router(routes_releases.router)
