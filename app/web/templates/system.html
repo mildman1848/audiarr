@@ -1,0 +1,89 @@
+{% extends "base.html" %}
+
+{% block page_title %}{{ t.system_title }}{% endblock %}
+{% block page_eyebrow %}{{ t.system_eyebrow }}{% endblock %}
+{% block page_heading %}{{ t.system_title }}{% endblock %}
+
+{% block page_toolbar %}
+  <div class="toolbar-group toolbar-left">
+    <button type="button" id="system-refresh-top" class="toolbar-btn">{{ t.system_refresh }}</button>
+  </div>
+{% endblock %}
+
+{% block content %}
+  <div id="system-status-root">
+    <p class="section-hint">{{ t.system_subtitle }}</p>
+
+    <div class="card-grid wide system-status-grid">
+      <section class="card system-health-card" id="system-health-section">
+        <div class="section-head">
+          <span class="eyebrow">{{ t.system_eyebrow }}</span>
+          <h2>{{ t.system_health }}</h2>
+        </div>
+        <p id="system-health-status" class="muted">{{ t.activity_loading }}</p>
+      </section>
+
+      <section class="card" id="system-about-section">
+        <div class="section-head">
+          <span class="eyebrow">{{ t.system_eyebrow }}</span>
+          <h2>{{ t.system_title }}</h2>
+        </div>
+        <dl class="system-info-list">
+          <dt>{{ t.system_app_name }}</dt>
+          <dd id="system-app-name">—</dd>
+          <dt>{{ t.system_version }}</dt>
+          <dd id="system-version">—</dd>
+          <dt>{{ t.system_python_version }}</dt>
+          <dd id="system-python-version">—</dd>
+          <dt>{{ t.system_os_name }}</dt>
+          <dd id="system-os-name">—</dd>
+        </dl>
+      </section>
+
+      <section class="card" id="system-updates-section">
+        <div class="section-head">
+          <span class="eyebrow">{{ t.system_eyebrow }}</span>
+          <h2>{{ t.system_updates_heading }}</h2>
+        </div>
+        <dl class="system-info-list">
+          <dt>{{ t.system_updates_branch }}</dt>
+          <dd id="system-updates-branch">—</dd>
+          <dt>{{ t.system_updates_automatic }}</dt>
+          <dd id="system-updates-automatic">—</dd>
+        </dl>
+      </section>
+
+      <section class="card" id="system-backup-section">
+        <div class="section-head">
+          <span class="eyebrow">{{ t.system_eyebrow }}</span>
+          <h2>{{ t.system_backup_heading }}</h2>
+        </div>
+        <dl class="system-info-list">
+          <dt>{{ t.system_backup_folder }}</dt>
+          <dd id="system-backup-folder">—</dd>
+          <dt>{{ t.system_backup_interval }}</dt>
+          <dd id="system-backup-interval">—</dd>
+          <dt>{{ t.system_backup_retention }}</dt>
+          <dd id="system-backup-retention">—</dd>
+        </dl>
+      </section>
+
+      <section class="card" id="system-logging-section">
+        <div class="section-head">
+          <span class="eyebrow">{{ t.system_eyebrow }}</span>
+          <h2>{{ t.system_logging_heading }}</h2>
+        </div>
+        <dl class="system-info-list">
+          <dt>{{ t.system_logging_level }}</dt>
+          <dd id="system-logging-level">—</dd>
+          <dt>{{ t.system_logging_retention }}</dt>
+          <dd id="system-logging-retention">—</dd>
+        </dl>
+      </section>
+    </div>
+  </div>
+{% endblock %}
+
+{% block scripts %}
+  <script src="/static/js/system.js?v={{ version }}-systemstatus"></script>
+{% endblock %}

@@ -4,7 +4,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>{% block page_title %}{{ t.app_name }}{% endblock %} — {{ t.app_name }}</title>
-  <link rel="stylesheet" href="/static/css/style.css?v={{ version }}-librarycards">
+  <link rel="stylesheet" href="/static/css/style.css?v={{ version }}-systemstatus">
   <noscript>
     <style>
       /* Without JS the drawer can never be toggled, so keep the sidebar
@@ -34,6 +34,7 @@
         <a href="/activity" class="nav-item{{ ' active' if active_page == 'activity' else '' }}" data-nav-link><span class="nav-glyph" aria-hidden="true">⇩</span><span class="nav-label">{{ t.nav_activity }}</span></a>
         <a href="/connections" class="nav-item{{ ' active' if active_page == 'connections' else '' }}" data-nav-link><span class="nav-glyph" aria-hidden="true">⇄</span><span class="nav-label">{{ t.nav_connections }}</span></a>
         <a href="/settings" class="nav-item{{ ' active' if active_page == 'settings' else '' }}" data-nav-link><span class="nav-glyph" aria-hidden="true">⚙</span><span class="nav-label">{{ t.nav_settings }}</span></a>
+        <a href="/system/status" class="nav-item{{ ' active' if active_page == 'system' else '' }}" data-nav-link><span class="nav-glyph" aria-hidden="true">🖥</span><span class="nav-label">{{ t.nav_system }}</span></a>
       </nav>
     </aside>
     <main class="main">
@@ -80,7 +81,7 @@
   </div>
 
   <script>window.AUDIARR_I18N = {{ t|tojson }};</script>
-  <script src="/static/js/common.js?v={{ version }}-librarycards"></script>
+  <script src="/static/js/common.js?v={{ version }}-systemstatus"></script>
   {% block scripts %}{% endblock %}
 </body>
 </html>

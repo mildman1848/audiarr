@@ -10,6 +10,16 @@ def test_system_status(app_client):
     body = response.json()
     assert body["appName"] == "Audiarr"
     assert "version" in body
+    assert "pythonVersion" in body
+    assert "osName" in body
+    # Settings-derived maintenance state for the System/Status page.
+    assert body["updates"] == {"branch": "main", "automatic": False}
+    assert body["backup"] == {
+        "folder": "/config/backups",
+        "intervalHours": 24,
+        "retentionCopies": 7,
+    }
+    assert body["logging"] == {"level": "INFO", "retentionDays": 14}
 
 
 def test_dashboard_renders(app_client):

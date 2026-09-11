@@ -300,6 +300,59 @@ def test_search_and_activity_mark_nav_active(app_client):
 
 
 @pytest.mark.parametrize(
+    ("language", "marker"),
+    [
+        ("en", "Application health, version info"),
+        ("de", "Anwendungszustand, Versionsinformationen"),
+    ],
+)
+def test_system_status_page_renders(app_client, language, marker):
+    _set_ui_language(app_client, language)
+
+    page = app_client.get("/system/status")
+    assert page.status_code == 200
+    assert marker in page.text
+    assert "/static/js/system.js" in page.text
+
+
+def test_system_status_page_has_status_markers(app_client):
+    """The page ships the root container, a refresh button, and the
+    JS-populated app-version marker (client-rendered from /api/v1/system/status)."""
+    _set_ui_language(app_client, "en")
+
+    page = app_client.get("/system/status")
+    assert page.status_code == 200
+    assert 'id="system-status-root"' in page.text
+    assert 'id="system-refresh-top"' in page.text
+    assert 'id="system-version"' in page.text
+    assert 'id="system-health-status"' in page.text
+    assert 'id="system-app-name"' in page.text
+    assert 'id="system-python-version"' in page.text
+    assert 'id="system-os-name"' in page.text
+    assert 'id="system-updates-branch"' in page.text
+    assert 'id="system-backup-folder"' in page.text
+    assert 'id="system-logging-level"' in page.text
+
+
+def test_system_status_page_marks_nav_active(app_client):
+    _set_ui_language(app_client, "en")
+
+    page = app_client.get("/system/status")
+    assert "active" in _nav_item_classes(page.text, "/system/status")
+
+    other = app_client.get("/settings")
+    assert "active" not in _nav_item_classes(other.text, "/system/status")
+
+
+def test_system_js_defines_refresh_and_status_functions():
+    js = Path("app/web/static/js/system.js").read_text(encoding="utf-8")
+    assert "async function refreshHealth" in js
+    assert "async function refreshStatus" in js
+    assert '"/api/v1/system/status"' in js
+    assert '"/health"' in js
+
+
+@pytest.mark.parametrize(
     ("language", "labels"),
     [
         (
@@ -492,6 +545,7 @@ ALL_PAGES = (
     "/activity",
     "/connections",
     "/settings",
+    "/system/status",
 )
 
 

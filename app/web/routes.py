@@ -195,3 +195,8 @@ async def search_page(request: Request) -> HTMLResponse:
 @router.get("/activity", response_class=HTMLResponse)
 async def activity_page(request: Request) -> HTMLResponse:
     return templates.TemplateResponse(request, "activity.html", _base_context("activity"))
+
+
+@router.get("/system/status", response_class=HTMLResponse)
+async def system_status_page(request: Request) -> HTMLResponse:
+    return templates.TemplateResponse(request, "system.html", _base_context("system"))
