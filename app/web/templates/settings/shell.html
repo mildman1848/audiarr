@@ -1,0 +1,37 @@
+{% extends "base.html" %}
+
+{# Shared Sonarr-style shell for every dedicated /settings/<section> page:
+   sub-nav + "Show advanced" toggle in the page toolbar, and a prominent
+   save-state bar under the form (Arr-style "No changes" / "Unsaved
+   changes" + Save). Section pages extend this and fill in
+   settings_content with just their own card(s). #}
+
+{% block page_title %}{{ t[active_section_label_key] }} — {{ t.settings_title }}{% endblock %}
+{% block page_eyebrow %}{{ t.settings_eyebrow }}{% endblock %}
+{% block page_heading %}{{ t[active_section_label_key] }}{% endblock %}
+
+{% block page_toolbar %}
+  {% include "settings/_nav.html" %}
+  <div class="toolbar-group toolbar-right">
+    <button type="button" class="toolbar-btn settings-advanced-toggle" id="settings-advanced-toggle"
+            data-settings-advanced-toggle aria-pressed="false">
+      {{ t.settings_show_advanced }}
+    </button>
+  </div>
+{% endblock %}
+
+{% block content %}
+  <form id="settings-form" class="settings-page">
+    {% block settings_content %}{% endblock %}
+  </form>
+
+  <div class="settings-save-bar" id="settings-save-bar" data-settings-save-bar>
+    <span class="settings-save-status" id="settings-save-status">{{ t.settings_no_changes }}</span>
+    <span id="settings-msg" class="muted" role="status"></span>
+    <button type="submit" form="settings-form" class="btn btn-primary" id="settings-save-btn">{{ t.settings_save }}</button>
+  </div>
+{% endblock %}
+
+{% block scripts %}
+  <script src="/static/js/settings.js?v={{ version }}-settingspages"></script>
+{% endblock %}

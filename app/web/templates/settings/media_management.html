@@ -1,0 +1,33 @@
+{% extends "settings/shell.html" %}
+
+{% block settings_content %}
+  <section class="card settings-form">
+    <div class="section-head">
+      <span class="eyebrow">{{ t.settings_eyebrow }}</span>
+      <h2>{{ t.settings_section_media }}</h2>
+    </div>
+    <p class="section-hint">{{ t.settings_media_naming_hint }}</p>
+    <p class="muted">{{ t.settings_media_root_folders }}: <span id="root-folder-count">—</span></p>
+    <a href="/library">{{ t.settings_media_manage_link }}</a>
+
+    <div class="settings-subsection">
+      <h3>{{ t.settings_media_naming_heading }}</h3>
+      <label class="inline-check">
+        <input type="checkbox" id="media-rename-files">
+        {{ t.settings_media_rename_files_label }}
+      </label>
+      <label>{{ t.settings_media_file_name_pattern_label }}
+        <input type="text" id="media-file-name-pattern" autocomplete="off">
+      </label>
+      <label class="inline-check">
+        <input type="checkbox" id="media-delete-empty-folders">
+        {{ t.settings_media_delete_empty_folders_label }}
+      </label>
+    </div>
+
+    <div class="settings-subsection settings-advanced-row">
+      <h3>{{ t.settings_advanced_heading }}</h3>
+      <p class="callout">{{ t.settings_media_advanced_note }}</p>
+    </div>
+  </section>
+{% endblock %}

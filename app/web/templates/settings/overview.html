@@ -1,0 +1,18 @@
+{% extends "base.html" %}
+
+{% block page_title %}{{ t.settings_title }}{% endblock %}
+{% block page_eyebrow %}{{ t.settings_eyebrow }}{% endblock %}
+{% block page_heading %}{{ t.settings_title }}{% endblock %}
+
+{% block content %}
+  <p class="section-hint">{{ t.settings_subtitle }}</p>
+
+  <div class="card-grid settings-overview-grid">
+    {% for section in settings_sections %}
+    <a class="card settings-overview-card" href="/settings/{{ section.slug }}">
+      <h2>{{ t[section.label_key] }}</h2>
+      <p>{{ t[section.desc_key] }}</p>
+    </a>
+    {% endfor %}
+  </div>
+{% endblock %}

@@ -1,0 +1,23 @@
+{% extends "settings/shell.html" %}
+
+{% block settings_content %}
+  <section class="card settings-form">
+    <div class="section-head">
+      <span class="eyebrow">{{ t.settings_eyebrow }}</span>
+      <h2>{{ t.settings_section_ui }}</h2>
+    </div>
+    <label>{{ t.settings_ui_language }}
+      <select id="ui-language">
+        <option value="en">English</option>
+        <option value="de">Deutsch</option>
+      </select>
+    </label>
+    <p class="muted small">{{ t.settings_ui_language_hint }}</p>
+
+    <div class="settings-subsection">
+      <p class="muted">{{ t.settings_ui_theme_label }}: <span id="ui-theme-summary">—</span></p>
+      <p class="muted">{{ t.settings_ui_date_format_label }}: <span id="ui-date-format-summary">—</span></p>
+      <p class="callout">{{ t.settings_ui_placeholder_note }}</p>
+    </div>
+  </section>
+{% endblock %}

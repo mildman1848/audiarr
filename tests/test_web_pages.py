@@ -53,14 +53,14 @@ def test_library_and_metadata_pages_render(
 
 
 @pytest.mark.parametrize(
-    ("language", "connections_marker", "settings_marker"),
+    ("language", "connections_marker", "conversion_marker"),
     [
         ("en", "Scan now", "Conversion backend"),
         ("de", "Jetzt scannen", "Konvertierungs-Backend"),
     ],
 )
 def test_connections_and_settings_pages_render(
-    app_client, language, connections_marker, settings_marker
+    app_client, language, connections_marker, conversion_marker
 ):
     _set_ui_language(app_client, language)
 
@@ -68,9 +68,12 @@ def test_connections_and_settings_pages_render(
     assert connections.status_code == 200
     assert connections_marker in connections.text
 
-    settings = app_client.get("/settings")
-    assert settings.status_code == 200
-    assert settings_marker in settings.text
+    # The Conversion field lives on its own dedicated settings page now,
+    # not on the /settings overview.
+    conversion = app_client.get("/settings/conversion")
+    assert conversion.status_code == 200
+    assert conversion_marker in conversion.text
+    assert 'id="conversion-backend"' in conversion.text
 
 
 @pytest.mark.parametrize(
@@ -85,17 +88,20 @@ def test_settings_page_has_sabnzbd_and_prowlarr_sections(
 ):
     _set_ui_language(app_client, language)
 
-    settings = app_client.get("/settings")
-    assert settings.status_code == 200
-    # Section headings are translated...
-    assert downloadclients_marker in settings.text
-    assert indexers_marker in settings.text
-    # ...but the concrete client/indexer names are brand names.
-    assert "SABnzbd" in settings.text
-    assert "Prowlarr" in settings.text
-    # Test buttons and their status spans are wired up.
-    assert 'id="sab-test-btn"' in settings.text
-    assert 'id="prowlarr-test-btn"' in settings.text
+    downloadclients = app_client.get("/settings/download-clients")
+    assert downloadclients.status_code == 200
+    assert downloadclients_marker in downloadclients.text
+    # ...but the concrete client name is a brand name.
+    assert "SABnzbd" in downloadclients.text
+    assert 'id="sab-url"' in downloadclients.text
+    assert 'id="sab-test-btn"' in downloadclients.text
+
+    indexers = app_client.get("/settings/indexers")
+    assert indexers.status_code == 200
+    assert indexers_marker in indexers.text
+    assert "Prowlarr" in indexers.text
+    assert 'id="prowlarr-url"' in indexers.text
+    assert 'id="prowlarr-test-btn"' in indexers.text
 
 
 @pytest.mark.parametrize(
@@ -110,16 +116,16 @@ def test_settings_page_has_security_section(
 ):
     _set_ui_language(app_client, language)
 
-    settings = app_client.get("/settings")
-    assert settings.status_code == 200
-    assert security_marker in settings.text
-    assert method_marker in settings.text
-    assert 'id="security-method"' in settings.text
-    assert 'id="security-username"' in settings.text
-    assert 'id="security-password"' in settings.text
-    assert 'id="security-api-key"' in settings.text
-    assert 'id="security-api-key-copy-btn"' in settings.text
-    assert 'id="security-api-key-regen-btn"' in settings.text
+    general = app_client.get("/settings/general")
+    assert general.status_code == 200
+    assert security_marker in general.text
+    assert method_marker in general.text
+    assert 'id="security-method"' in general.text
+    assert 'id="security-username"' in general.text
+    assert 'id="security-password"' in general.text
+    assert 'id="security-api-key"' in general.text
+    assert 'id="security-api-key-copy-btn"' in general.text
+    assert 'id="security-api-key-regen-btn"' in general.text
 
 
 @pytest.mark.parametrize(
@@ -270,45 +276,123 @@ def test_search_and_activity_mark_nav_active(app_client):
         ),
     ],
 )
-def test_settings_page_has_arr_style_section_anchors(app_client, language, labels):
-    """The settings hub subnav exposes all Arr-style target groups with
-    stable anchors, in both UI languages."""
+def test_settings_overview_links_to_dedicated_sections(app_client, language, labels):
+    """The settings overview page (Sonarr-style categories grid) links to
+    every dedicated /settings/<section> page, with translated card
+    labels, in both UI languages."""
     _set_ui_language(app_client, language)
 
     settings = app_client.get("/settings")
     assert settings.status_code == 200
-    for anchor in (
-        "#media",
-        "#profiles",
-        "#quality",
-        "#indexers",
-        "#downloadclients",
-        "#connect",
-        "#metadata",
-        "#tags",
-        "#general",
-        "#ui",
-        "#conversion",
+    for slug in (
+        "media-management",
+        "profiles",
+        "quality",
+        "indexers",
+        "download-clients",
+        "connect",
+        "metadata",
+        "tags",
+        "general",
+        "ui",
+        "conversion",
     ):
-        assert f'href="{anchor}"' in settings.text
+        assert f'href="/settings/{slug}"' in settings.text
     for label in labels:
         assert label in settings.text
+
+
+SETTINGS_SECTION_URLS = (
+    "/settings/media-management",
+    "/settings/profiles",
+    "/settings/quality",
+    "/settings/indexers",
+    "/settings/download-clients",
+    "/settings/connect",
+    "/settings/metadata",
+    "/settings/tags",
+    "/settings/general",
+    "/settings/ui",
+    "/settings/conversion",
+)
+
+
+@pytest.mark.parametrize(
+    "path",
+    (
+        "/settings/media-management",
+        "/settings/indexers",
+        "/settings/download-clients",
+        "/settings/general",
+        "/settings/conversion",
+    ),
+)
+def test_settings_section_pages_return_200(app_client, path):
+    _set_ui_language(app_client, "en")
+
+    page = app_client.get(path)
+    assert page.status_code == 200
+
+
+@pytest.mark.parametrize("path", SETTINGS_SECTION_URLS)
+def test_settings_section_page_marks_active_subnav_entry(app_client, path):
+    """Each dedicated settings page marks its own sub-nav link active and
+    no other section link as active."""
+    _set_ui_language(app_client, "en")
+
+    page = app_client.get(path)
+    assert page.status_code == 200
+    match = re.search(r'<nav class="section-tabs settings-subnav"[^>]*>(.*?)</nav>', page.text, re.S)
+    assert match, "settings sub-nav not found"
+    subnav_html = match.group(1)
+
+    own_href = f'href="{path}"'
+    assert f'<a {own_href} class="active"' in subnav_html
+    for other in SETTINGS_SECTION_URLS:
+        if other == path:
+            continue
+        assert f'<a href="{other}" class="active"' not in subnav_html
+
+
+@pytest.mark.parametrize(
+    ("language", "nav_label"),
+    [
+        ("en", "Download Clients"),
+        ("de", "Download-Clients"),
+    ],
+)
+def test_settings_subnav_renders_translated_text(app_client, language, nav_label):
+    """The settings sub-nav itself (not just the page heading) renders
+    translated section labels in both UI languages."""
+    _set_ui_language(app_client, language)
+
+    page = app_client.get("/settings/general")
+    assert page.status_code == 200
+    match = re.search(r'<nav class="section-tabs settings-subnav"[^>]*>(.*?)</nav>', page.text, re.S)
+    assert match, "settings sub-nav not found"
+    assert nav_label in match.group(1)
 
 
 @pytest.mark.parametrize("language", ["en", "de"])
 def test_settings_page_has_media_management_and_summary_fields(app_client, language):
     """Media Management exposes the modeled rename/pattern/delete-empty-folder
-    fields, and the Profiles/Connect sections render their summary
+    fields, and the Profiles/Connect pages render their summary
     containers."""
     _set_ui_language(app_client, language)
 
-    settings = app_client.get("/settings")
-    assert settings.status_code == 200
-    assert 'id="media-rename-files"' in settings.text
-    assert 'id="media-file-name-pattern"' in settings.text
-    assert 'id="media-delete-empty-folders"' in settings.text
-    assert 'id="profile-summary"' in settings.text
-    assert 'id="connect-summary"' in settings.text
+    media = app_client.get("/settings/media-management")
+    assert media.status_code == 200
+    assert 'id="media-rename-files"' in media.text
+    assert 'id="media-file-name-pattern"' in media.text
+    assert 'id="media-delete-empty-folders"' in media.text
+
+    profiles = app_client.get("/settings/profiles")
+    assert profiles.status_code == 200
+    assert 'id="profile-summary"' in profiles.text
+
+    connect = app_client.get("/settings/connect")
+    assert connect.status_code == 200
+    assert 'id="connect-summary"' in connect.text
 
 
 def test_settings_js_logs_in_after_enabling_forms_auth():

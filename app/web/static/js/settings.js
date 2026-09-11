@@ -1,6 +1,10 @@
-// Settings page: Servarr-style tabbed sections backed by the single settings
-// document. Save flow is GET the full document, merge the edited fields, then
-// PUT the whole document back (the settings API replaces, it does not patch).
+// Settings pages: Sonarr-style dedicated full pages backed by the single
+// settings document. Every /settings/<section> page loads this same
+// script; each page only has the DOM ids for its own fields, so every
+// lookup below is guarded and simply no-ops when an id is absent on the
+// current page. Save flow is GET the full document, merge the edited
+// fields, then PUT the whole document back (the settings API replaces,
+// it does not patch).
 //
 // Secrets (webhook / SABnzbd / Prowlarr API keys, the auth password) are
 // never rendered back into the page: a stored value only shows as a masked
@@ -11,6 +15,41 @@
 
 const T = window.AUDIARR_I18N || {};
 const MASK = "•••••";
+const ADVANCED_STORAGE_KEY = "audiarr:settings:advancedVisible";
+
+function $(id) {
+  return document.getElementById(id);
+}
+
+function setValue(id, value) {
+  const el = $(id);
+  if (el) el.value = value;
+}
+
+function setChecked(id, checked) {
+  const el = $(id);
+  if (el) el.checked = Boolean(checked);
+}
+
+function setText(id, text) {
+  const el = $(id);
+  if (el) el.textContent = text;
+}
+
+function setPlaceholder(id, text) {
+  const el = $(id);
+  if (el) el.placeholder = text;
+}
+
+function getValue(id, fallback) {
+  const el = $(id);
+  return el ? el.value : fallback ?? "";
+}
+
+function getChecked(id) {
+  const el = $(id);
+  return el ? el.checked : false;
+}
 
 async function getSettings() {
   const resp = await fetch("/api/v1/settings");
@@ -96,9 +135,10 @@ function escapeHtml(value) {
 }
 
 // Read-only summary table of the modeled quality profiles (Profiles
-// section). Editing is a later slice; this just shows what is stored.
+// page). Editing is a later slice; this just shows what is stored.
 function renderProfileSummary(profiles) {
-  const el = document.getElementById("profile-summary");
+  const el = $("profile-summary");
+  if (!el) return;
   if (!profiles || !profiles.length) {
     el.innerHTML = `<p class="muted">${T.settings_profiles_empty}</p>`;
     return;
@@ -122,113 +162,109 @@ function renderProfileSummary(profiles) {
   </table>`;
 }
 
+// Populate whichever of these fields exist on the current settings page.
 function populate(s) {
-  document.getElementById("host-port").textContent = s.host.port ?? "—";
-  document.getElementById("security-method").value = s.auth.method || "none";
-  document.getElementById("security-username").value = s.auth.username || "";
-  document.getElementById("security-api-key").value = s.auth.api_key || "";
-  document.getElementById("ui-language").value = s.ui.language || "en";
-  document.getElementById("metadata-locale").value = s.metadata.audible_locale || "us";
-  document.getElementById("provider-order").textContent =
-    (s.metadata.provider_order || []).join(" → ") || "—";
-  document.getElementById("root-folder-count").textContent =
-    (s.root_folders || []).length;
-  document.getElementById("media-rename-files").checked = Boolean(
-    s.media_management.rename_files
-  );
-  document.getElementById("media-file-name-pattern").value =
-    s.media_management.file_name_pattern || "";
-  document.getElementById("media-delete-empty-folders").checked = Boolean(
-    s.media_management.delete_empty_folders
-  );
+  setText("host-port", s.host.port ?? "—");
+  setValue("security-method", s.auth.method || "none");
+  setValue("security-username", s.auth.username || "");
+  setValue("security-api-key", s.auth.api_key || "");
+  setValue("ui-language", s.ui.language || "en");
+  setValue("metadata-locale", s.metadata.audible_locale || "us");
+  setText("provider-order", (s.metadata.provider_order || []).join(" → ") || "—");
+  setText("root-folder-count", (s.root_folders || []).length);
+  setChecked("media-rename-files", s.media_management.rename_files);
+  setValue("media-file-name-pattern", s.media_management.file_name_pattern || "");
+  setChecked("media-delete-empty-folders", s.media_management.delete_empty_folders);
   renderProfileSummary(s.quality_profiles);
-  document.getElementById("connect-summary").textContent =
-    (s.connect || []).length;
-  document.getElementById("ui-theme-summary").textContent = s.ui.theme || "—";
-  document.getElementById("ui-date-format-summary").textContent =
-    s.ui.date_format || "—";
-  document.getElementById("conversion-backend").value =
-    s.conversion.backend || "disabled";
-  document.getElementById("conversion-delete-originals").checked =
-    Boolean(s.conversion.delete_originals);
-  document.getElementById("conversion-job-timeout").value =
-    s.conversion.job_timeout_hours ?? 6;
-  document.getElementById("conversion-webhook-key").placeholder =
-    s.conversion.webhook_api_key ? MASK : "";
+  setText("connect-summary", (s.connect || []).length);
+  setText("ui-theme-summary", s.ui.theme || "—");
+  setText("ui-date-format-summary", s.ui.date_format || "—");
+  setValue("conversion-backend", s.conversion.backend || "disabled");
+  setChecked("conversion-delete-originals", s.conversion.delete_originals);
+  setValue("conversion-job-timeout", s.conversion.job_timeout_hours ?? 6);
+  setPlaceholder("conversion-webhook-key", s.conversion.webhook_api_key ? MASK : "");
 
   const sab = readSab(s);
-  document.getElementById("sab-enabled").checked = Boolean(sab.enabled);
-  document.getElementById("sab-name").value = sab.name || "SABnzbd";
-  document.getElementById("sab-url").value = sab.url || "";
-  document.getElementById("sab-category").value = sab.category || "audiobooks";
-  document.getElementById("sab-api-key").placeholder = sab.api_key ? MASK : "";
+  setChecked("sab-enabled", sab.enabled);
+  setValue("sab-name", sab.name || "SABnzbd");
+  setValue("sab-url", sab.url || "");
+  setValue("sab-category", sab.category || "audiobooks");
+  setPlaceholder("sab-api-key", sab.api_key ? MASK : "");
 
   const prowlarr = readProwlarr(s);
-  document.getElementById("prowlarr-enabled").checked = Boolean(prowlarr.enabled);
-  document.getElementById("prowlarr-name").value = prowlarr.name || "Prowlarr";
-  document.getElementById("prowlarr-url").value = prowlarr.url || "";
-  document.getElementById("prowlarr-api-key").placeholder = prowlarr.api_key ? MASK : "";
+  setChecked("prowlarr-enabled", prowlarr.enabled);
+  setValue("prowlarr-name", prowlarr.name || "Prowlarr");
+  setValue("prowlarr-url", prowlarr.url || "");
+  setPlaceholder("prowlarr-api-key", prowlarr.api_key ? MASK : "");
 }
 
 async function loadSettings() {
   try {
     populate(await getSettings());
   } catch (err) {
-    document.getElementById("settings-msg").textContent =
-      `${T.settings_load_error} (${err.message})`;
+    setText("settings-msg", `${T.settings_load_error} (${err.message})`);
   }
 }
 
 async function saveSettings(event) {
   event.preventDefault();
-  const msg = document.getElementById("settings-msg");
-  msg.textContent = T.settings_saving;
+  const msg = $("settings-msg");
+  if (msg) msg.textContent = T.settings_saving;
   try {
     const doc = await getSettings();
     // doc.auth.api_key is already present from the GET above; pass it
     // through unchanged unless regenerateApiKey() rewrote it in place.
-    doc.auth.method = document.getElementById("security-method").value;
-    doc.auth.username = document.getElementById("security-username").value.trim();
-    const password = document.getElementById("security-password").value;
-    doc.auth.password = password || ""; // empty means keep the stored password
-    doc.ui.language = document.getElementById("ui-language").value;
-    doc.media_management.rename_files = document.getElementById(
-      "media-rename-files"
-    ).checked;
-    doc.media_management.file_name_pattern = document
-      .getElementById("media-file-name-pattern")
-      .value.trim();
-    doc.media_management.delete_empty_folders = document.getElementById(
-      "media-delete-empty-folders"
-    ).checked;
-    doc.metadata.audible_locale = document.getElementById("metadata-locale").value;
-    doc.conversion.backend = document.getElementById("conversion-backend").value;
-    doc.conversion.delete_originals = document.getElementById(
-      "conversion-delete-originals"
-    ).checked;
-    const timeout = Number(document.getElementById("conversion-job-timeout").value);
-    if (Number.isFinite(timeout) && timeout > 0) {
-      doc.conversion.job_timeout_hours = timeout;
+    let password = "";
+    if ($("security-method")) doc.auth.method = getValue("security-method");
+    if ($("security-username")) doc.auth.username = getValue("security-username").trim();
+    if ($("security-password")) {
+      password = getValue("security-password");
+      doc.auth.password = password; // empty means keep the stored password
     }
-    const key = document.getElementById("conversion-webhook-key").value;
-    if (key) doc.conversion.webhook_api_key = key; // empty means keep stored value
+    if ($("ui-language")) doc.ui.language = getValue("ui-language");
+    if ($("media-rename-files")) {
+      doc.media_management.rename_files = getChecked("media-rename-files");
+    }
+    if ($("media-file-name-pattern")) {
+      doc.media_management.file_name_pattern = getValue("media-file-name-pattern").trim();
+    }
+    if ($("media-delete-empty-folders")) {
+      doc.media_management.delete_empty_folders = getChecked("media-delete-empty-folders");
+    }
+    if ($("metadata-locale")) doc.metadata.audible_locale = getValue("metadata-locale");
+    if ($("conversion-backend")) doc.conversion.backend = getValue("conversion-backend");
+    if ($("conversion-delete-originals")) {
+      doc.conversion.delete_originals = getChecked("conversion-delete-originals");
+    }
+    if ($("conversion-job-timeout")) {
+      const timeout = Number(getValue("conversion-job-timeout"));
+      if (Number.isFinite(timeout) && timeout > 0) {
+        doc.conversion.job_timeout_hours = timeout;
+      }
+    }
+    if ($("conversion-webhook-key")) {
+      const key = getValue("conversion-webhook-key");
+      if (key) doc.conversion.webhook_api_key = key; // empty means keep stored value
+    }
 
-    const sab = mergeSab(doc);
-    sab.enabled = document.getElementById("sab-enabled").checked;
-    sab.name = document.getElementById("sab-name").value.trim() || "SABnzbd";
-    sab.url = document.getElementById("sab-url").value.trim();
-    sab.category =
-      document.getElementById("sab-category").value.trim() || "audiobooks";
-    const sabKey = document.getElementById("sab-api-key").value;
-    if (sabKey) sab.api_key = sabKey; // empty means keep stored key
+    if ($("sab-url") || $("sab-enabled")) {
+      const sab = mergeSab(doc);
+      sab.enabled = getChecked("sab-enabled");
+      sab.name = getValue("sab-name").trim() || "SABnzbd";
+      sab.url = getValue("sab-url").trim();
+      sab.category = getValue("sab-category").trim() || "audiobooks";
+      const sabKey = getValue("sab-api-key");
+      if (sabKey) sab.api_key = sabKey; // empty means keep stored key
+    }
 
-    const prowlarr = mergeProwlarr(doc);
-    prowlarr.enabled = document.getElementById("prowlarr-enabled").checked;
-    prowlarr.name =
-      document.getElementById("prowlarr-name").value.trim() || "Prowlarr";
-    prowlarr.url = document.getElementById("prowlarr-url").value.trim();
-    const prowlarrKey = document.getElementById("prowlarr-api-key").value;
-    if (prowlarrKey) prowlarr.api_key = prowlarrKey;
+    if ($("prowlarr-url") || $("prowlarr-enabled")) {
+      const prowlarr = mergeProwlarr(doc);
+      prowlarr.enabled = getChecked("prowlarr-enabled");
+      prowlarr.name = getValue("prowlarr-name").trim() || "Prowlarr";
+      prowlarr.url = getValue("prowlarr-url").trim();
+      const prowlarrKey = getValue("prowlarr-api-key");
+      if (prowlarrKey) prowlarr.api_key = prowlarrKey;
+    }
 
     await putSettings(doc);
     if (doc.auth.method === "forms" && password) {
@@ -240,14 +276,16 @@ async function saveSettings(event) {
       "prowlarr-api-key",
       "security-password",
     ]) {
-      document.getElementById(id).value = "";
+      const el = $(id);
+      if (el) el.value = "";
     }
     populate(await getSettings());
-    msg.textContent = "";
+    setDirty(false);
+    if (msg) msg.textContent = "";
     if (window.AudiarrToast) window.AudiarrToast.success(T.settings_save_success);
   } catch (err) {
     const text = `${T.settings_save_error} (${err.message})`;
-    msg.textContent = text;
+    if (msg) msg.textContent = text;
     if (window.AudiarrToast) window.AudiarrToast.error(text);
   }
 }
@@ -255,11 +293,11 @@ async function saveSettings(event) {
 // Fire a connection test against one of the /api/v1/connections/.../test
 // endpoints using the current (unsaved) form values.
 async function testConnection(endpoint, urlId, keyId, msgId) {
-  const msg = document.getElementById(msgId);
-  msg.textContent = T.settings_testing;
+  const msg = $(msgId);
+  if (msg) msg.textContent = T.settings_testing;
   try {
-    const body = { url: document.getElementById(urlId).value.trim() };
-    const key = document.getElementById(keyId).value;
+    const body = { url: getValue(urlId).trim() };
+    const key = getValue(keyId);
     if (key) body.api_key = key;
     const resp = await fetch(endpoint, {
       method: "POST",
@@ -268,18 +306,18 @@ async function testConnection(endpoint, urlId, keyId, msgId) {
     });
     const data = await resp.json().catch(() => ({}));
     if (!resp.ok) {
-      msg.textContent = `${T.settings_test_error} (${data.detail || `HTTP ${resp.status}`})`;
+      if (msg) msg.textContent = `${T.settings_test_error} (${data.detail || `HTTP ${resp.status}`})`;
       return;
     }
-    msg.textContent = `${data.ok ? "✓" : "✗"} ${data.message || ""}`.trim();
+    if (msg) msg.textContent = `${data.ok ? "✓" : "✗"} ${data.message || ""}`.trim();
   } catch (err) {
-    msg.textContent = `${T.settings_test_error} (${err.message})`;
+    if (msg) msg.textContent = `${T.settings_test_error} (${err.message})`;
   }
 }
 
 // Copy the current API key to the clipboard.
 async function copyApiKey() {
-  const key = document.getElementById("security-api-key").value;
+  const key = getValue("security-api-key");
   try {
     await navigator.clipboard.writeText(key);
     if (window.AudiarrToast) window.AudiarrToast.success(T.settings_security_api_key_copy_success);
@@ -294,45 +332,92 @@ async function copyApiKey() {
 // regenerate endpoint; the settings PUT path persists api_key fine.
 async function regenerateApiKey() {
   if (!window.confirm(T.settings_security_api_key_regenerate_confirm)) return;
-  const msg = document.getElementById("settings-msg");
   try {
     const doc = await getSettings();
     const newKey = crypto.randomUUID().replace(/-/g, "");
     doc.auth.api_key = newKey;
     await putSettings(doc);
-    document.getElementById("security-api-key").value = newKey;
+    setValue("security-api-key", newKey);
     if (window.AudiarrToast)
       window.AudiarrToast.success(T.settings_security_api_key_regenerated);
   } catch (err) {
     const text = `${T.settings_save_error} (${err.message})`;
-    msg.textContent = text;
+    setText("settings-msg", text);
     if (window.AudiarrToast) window.AudiarrToast.error(text);
   }
 }
 
+// Arr-style save-state bar: "No changes" until a field is edited, then
+// "Unsaved changes" until the next successful save. Populating fields from
+// a GET does not fire input/change events, so the initial state stays
+// clean until an actual user edit happens.
+function setDirty(isDirty) {
+  const bar = $("settings-save-bar");
+  const status = $("settings-save-status");
+  if (!bar || !status) return;
+  bar.classList.toggle("is-dirty", isDirty);
+  status.textContent = isDirty ? T.settings_unsaved_changes : T.settings_no_changes;
+}
+
+function setupDirtyTracking() {
+  const form = $("settings-form");
+  if (!form) return;
+  const markDirty = () => setDirty(true);
+  form.addEventListener("input", markDirty);
+  form.addEventListener("change", markDirty);
+}
+
+// "Show advanced" toggle: state is localStorage-only (no server round
+// trip) and simply reveals/hides .settings-advanced-row placeholder rows
+// via a class on <body>, applied on load and on every settings page.
+function setupAdvancedToggle() {
+  const toggle = $("settings-advanced-toggle");
+  if (!toggle) return;
+
+  function apply(visible) {
+    document.body.classList.toggle("settings-show-advanced", visible);
+    toggle.classList.toggle("active", visible);
+    toggle.setAttribute("aria-pressed", String(visible));
+  }
+
+  apply(window.localStorage.getItem(ADVANCED_STORAGE_KEY) === "1");
+  toggle.addEventListener("click", () => {
+    const next = !document.body.classList.contains("settings-show-advanced");
+    window.localStorage.setItem(ADVANCED_STORAGE_KEY, next ? "1" : "0");
+    apply(next);
+  });
+}
+
 document.addEventListener("DOMContentLoaded", () => {
   loadSettings();
-  document.getElementById("settings-form").addEventListener("submit", saveSettings);
-  document.getElementById("sab-test-btn").addEventListener("click", () =>
-    testConnection(
-      "/api/v1/connections/sabnzbd/test",
-      "sab-url",
-      "sab-api-key",
-      "sab-msg"
-    )
-  );
-  document.getElementById("prowlarr-test-btn").addEventListener("click", () =>
-    testConnection(
-      "/api/v1/connections/prowlarr/test",
-      "prowlarr-url",
-      "prowlarr-api-key",
-      "prowlarr-msg"
-    )
-  );
-  document
-    .getElementById("security-api-key-copy-btn")
-    .addEventListener("click", copyApiKey);
-  document
-    .getElementById("security-api-key-regen-btn")
-    .addEventListener("click", regenerateApiKey);
+  setupDirtyTracking();
+  setupAdvancedToggle();
+
+  const form = $("settings-form");
+  if (form) form.addEventListener("submit", saveSettings);
+
+  const sabTestBtn = $("sab-test-btn");
+  if (sabTestBtn) {
+    sabTestBtn.addEventListener("click", () =>
+      testConnection("/api/v1/connections/sabnzbd/test", "sab-url", "sab-api-key", "sab-msg")
+    );
+  }
+
+  const prowlarrTestBtn = $("prowlarr-test-btn");
+  if (prowlarrTestBtn) {
+    prowlarrTestBtn.addEventListener("click", () =>
+      testConnection(
+        "/api/v1/connections/prowlarr/test",
+        "prowlarr-url",
+        "prowlarr-api-key",
+        "prowlarr-msg"
+      )
+    );
+  }
+
+  const copyBtn = $("security-api-key-copy-btn");
+  if (copyBtn) copyBtn.addEventListener("click", copyApiKey);
+
+  const regenBtn = $("security-api-key-regen-btn");
+  if (regenBtn) regenBtn.addEventListener("click", regenerateApiKey);
 });

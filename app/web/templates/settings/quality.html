@@ -1,0 +1,12 @@
+{% extends "settings/shell.html" %}
+
+{% block settings_content %}
+  <section class="card settings-form placeholder-card">
+    <div class="section-head">
+      <span class="eyebrow">{{ t.settings_eyebrow }}</span>
+      <h2>{{ t.settings_section_quality }}</h2>
+    </div>
+    <p class="section-hint">{{ t.settings_quality_hint }}</p>
+    <p class="callout">{{ t.settings_quality_next_note }}</p>
+  </section>
+{% endblock %}

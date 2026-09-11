@@ -1,0 +1,32 @@
+{% extends "settings/shell.html" %}
+
+{% block settings_content %}
+  <section class="card settings-form">
+    <div class="section-head">
+      <span class="eyebrow">{{ t.settings_eyebrow }}</span>
+      <h2>{{ t.settings_section_downloadclients }}</h2>
+    </div>
+    <h3>{{ t.settings_dc_sab_heading }}</h3>
+    <label class="inline-check">
+      <input type="checkbox" id="sab-enabled">
+      {{ t.settings_enabled_label }}
+    </label>
+    <label>{{ t.settings_field_name }}
+      <input type="text" id="sab-name" autocomplete="off">
+    </label>
+    <label>{{ t.settings_base_url_label }}
+      <input type="text" id="sab-url" autocomplete="off" placeholder="http://sabnzbd:8080">
+    </label>
+    <label>{{ t.settings_api_key_label }}
+      <input type="password" id="sab-api-key" autocomplete="new-password">
+    </label>
+    <label>{{ t.settings_dc_category_label }}
+      <input type="text" id="sab-category" autocomplete="off">
+    </label>
+    <p class="muted small">{{ t.settings_api_key_hint }}</p>
+    <div class="button-row">
+      <button type="button" id="sab-test-btn" class="btn btn-secondary">{{ t.settings_test }}</button>
+      <span id="sab-msg" class="muted" role="status"></span>
+    </div>
+  </section>
+{% endblock %}

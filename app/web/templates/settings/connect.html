@@ -1,0 +1,14 @@
+{% extends "settings/shell.html" %}
+
+{% block settings_content %}
+  <section class="card settings-form">
+    <div class="section-head">
+      <span class="eyebrow">{{ t.settings_eyebrow }}</span>
+      <h2>{{ t.settings_section_connect }}</h2>
+    </div>
+    <p class="section-hint">{{ t.settings_connect_hint }}</p>
+    <p class="muted">{{ t.settings_connect_count_label }}: <span id="connect-summary">—</span></p>
+    <p class="muted small">{{ t.settings_connect_next_note }}</p>
+    <a href="/connections">{{ t.settings_connect_open_link }}</a>
+  </section>
+{% endblock %}

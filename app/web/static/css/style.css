@@ -824,6 +824,13 @@ button:disabled,
   color: var(--audiarr-accent);
 }
 
+.section-tabs a.active {
+  background: var(--audiarr-accent-soft);
+  border-color: var(--audiarr-accent);
+  color: var(--audiarr-accent);
+  font-weight: 600;
+}
+
 .card a,
 .panel a {
   color: var(--audiarr-accent);
@@ -885,6 +892,82 @@ button:disabled,
 
 .summary-table {
   margin-top: 0.5rem;
+}
+
+/* Settings landing page: a grid of section cards linking to the dedicated
+   /settings/<section> pages (Sonarr-style categories grid). */
+.settings-overview-card {
+  display: block;
+  text-decoration: none;
+  color: inherit;
+}
+
+.settings-overview-card:hover,
+.settings-overview-card:focus-visible {
+  border-color: var(--audiarr-accent);
+}
+
+.settings-overview-card h2 {
+  color: var(--text-main);
+  font-size: 1rem;
+  text-transform: none;
+  letter-spacing: 0;
+}
+
+.settings-overview-card p {
+  margin: 0;
+  color: var(--text-muted);
+  font-size: 0.85rem;
+}
+
+/* "Show advanced" toggle in the settings page toolbar; reuses the toolbar
+   button look and just adds the pressed/active state. */
+.settings-advanced-toggle {
+  border: 1px solid var(--border-color);
+}
+
+/* Advanced-only placeholder rows, hidden by default and revealed once
+   body.settings-show-advanced is set (settings.js, localStorage-backed). */
+.settings-advanced-row {
+  display: none;
+}
+
+body.settings-show-advanced .settings-advanced-row {
+  display: block;
+}
+
+/* Arr-style save-state bar under the settings form: "No changes" /
+   "Unsaved changes" plus the Save button, stuck to the bottom of the
+   viewport once the page scrolls (sticky, not truly fixed, so it never
+   overlaps the sidebar). */
+.settings-save-bar {
+  position: sticky;
+  bottom: 0;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.75rem;
+  margin: 1.5rem -2rem -2rem;
+  padding: 0.85rem 2rem;
+  background: var(--bg-topbar);
+  border-top: 1px solid var(--border-color);
+}
+
+.settings-save-status {
+  font-weight: 600;
+  color: var(--text-muted);
+}
+
+.settings-save-bar.is-dirty .settings-save-status {
+  color: var(--audiarr-accent);
+}
+
+.settings-save-bar #settings-msg {
+  flex: 1;
+}
+
+.settings-save-bar #settings-save-btn {
+  margin-left: auto;
 }
 
 /* --------------------------------------------------------------- Footer */
@@ -954,6 +1037,13 @@ footer {
     padding-left: 1.25rem;
     padding-right: 1.25rem;
   }
+
+  /* Match the narrower .page-body padding at this breakpoint too, same
+     reasoning as the mobile override below. */
+  .settings-save-bar {
+    margin: 1.5rem -1.25rem -1.25rem;
+    padding: 0.85rem 1.25rem;
+  }
 }
 
 /* Below this breakpoint the sidebar becomes an off-canvas drawer (Sonarr's
@@ -990,6 +1080,18 @@ footer {
   .page-body {
     padding-left: 1rem;
     padding-right: 1rem;
+  }
+
+  /* Match the narrower .page-body padding so the save bar's edge-to-edge
+     bleed does not overflow the viewport on narrow screens. */
+  .settings-save-bar {
+    flex-wrap: wrap;
+    margin: 1.5rem -1rem -1rem;
+    padding: 0.85rem 1rem;
+  }
+
+  .settings-save-bar #settings-save-btn {
+    margin-left: 0;
   }
 
   /* Single scrollable icon row instead of wrapping to multiple rows — keeps

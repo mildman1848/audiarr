@@ -9,7 +9,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from fastapi import APIRouter, Request
+from fastapi import APIRouter, HTTPException, Request
 from fastapi.responses import HTMLResponse
 from fastapi.templating import Jinja2Templates
 
@@ -21,6 +21,80 @@ router = APIRouter()
 
 TEMPLATES_DIR = Path(__file__).parent / "templates"
 templates = Jinja2Templates(directory=str(TEMPLATES_DIR))
+
+# Sonarr-style settings sections: each gets its own full page at
+# /settings/<slug>, rendered from its own template, sharing the
+# settings/shell.html sub-nav + advanced toggle + save bar. The overview
+# page (/settings) links to all of them via label_key/desc_key.
+SETTINGS_SECTIONS: list[dict[str, str]] = [
+    {
+        "slug": "media-management",
+        "template": "settings/media_management.html",
+        "label_key": "settings_section_media",
+        "desc_key": "settings_overview_media_desc",
+    },
+    {
+        "slug": "profiles",
+        "template": "settings/profiles.html",
+        "label_key": "settings_section_profiles",
+        "desc_key": "settings_overview_profiles_desc",
+    },
+    {
+        "slug": "quality",
+        "template": "settings/quality.html",
+        "label_key": "settings_section_quality",
+        "desc_key": "settings_overview_quality_desc",
+    },
+    {
+        "slug": "indexers",
+        "template": "settings/indexers.html",
+        "label_key": "settings_section_indexers",
+        "desc_key": "settings_overview_indexers_desc",
+    },
+    {
+        "slug": "download-clients",
+        "template": "settings/download_clients.html",
+        "label_key": "settings_section_downloadclients",
+        "desc_key": "settings_overview_download_clients_desc",
+    },
+    {
+        "slug": "connect",
+        "template": "settings/connect.html",
+        "label_key": "settings_section_connect",
+        "desc_key": "settings_overview_connect_desc",
+    },
+    {
+        "slug": "metadata",
+        "template": "settings/metadata.html",
+        "label_key": "settings_section_metadata",
+        "desc_key": "settings_overview_metadata_desc",
+    },
+    {
+        "slug": "tags",
+        "template": "settings/tags.html",
+        "label_key": "settings_section_tags",
+        "desc_key": "settings_overview_tags_desc",
+    },
+    {
+        "slug": "general",
+        "template": "settings/general.html",
+        "label_key": "settings_section_general",
+        "desc_key": "settings_overview_general_desc",
+    },
+    {
+        "slug": "ui",
+        "template": "settings/ui.html",
+        "label_key": "settings_section_ui",
+        "desc_key": "settings_overview_ui_desc",
+    },
+    {
+        "slug": "conversion",
+        "template": "settings/conversion.html",
+        "label_key": "settings_section_conversion",
+        "desc_key": "settings_overview_conversion_desc",
+    },
+]
+_SETTINGS_SECTIONS_BY_SLUG = {section["slug"]: section for section in SETTINGS_SECTIONS}
 
 
 def _base_context(active_page: str) -> dict:
@@ -94,8 +168,23 @@ async def connections_page(request: Request) -> HTMLResponse:
 
 
 @router.get("/settings", response_class=HTMLResponse)
-async def settings_page(request: Request) -> HTMLResponse:
-    return templates.TemplateResponse(request, "settings.html", _base_context("settings"))
+async def settings_overview_page(request: Request) -> HTMLResponse:
+    context = {**_base_context("settings"), "settings_sections": SETTINGS_SECTIONS}
+    return templates.TemplateResponse(request, "settings/overview.html", context)
+
+
+@router.get("/settings/{section}", response_class=HTMLResponse)
+async def settings_section_page(request: Request, section: str) -> HTMLResponse:
+    match = _SETTINGS_SECTIONS_BY_SLUG.get(section)
+    if match is None:
+        raise HTTPException(status_code=404, detail="Unknown settings section")
+    context = {
+        **_base_context("settings"),
+        "settings_sections": SETTINGS_SECTIONS,
+        "active_settings_section": section,
+        "active_section_label_key": match["label_key"],
+    }
+    return templates.TemplateResponse(request, match["template"], context)
 
 
 @router.get("/search", response_class=HTMLResponse)

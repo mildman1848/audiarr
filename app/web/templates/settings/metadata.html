@@ -1,0 +1,22 @@
+{% extends "settings/shell.html" %}
+
+{% block settings_content %}
+  <section class="card settings-form">
+    <div class="section-head">
+      <span class="eyebrow">{{ t.settings_eyebrow }}</span>
+      <h2>{{ t.settings_section_metadata }}</h2>
+    </div>
+    <label>{{ t.settings_metadata_locale }}
+      <select id="metadata-locale">
+        <option value="us">us</option>
+        <option value="de">de</option>
+      </select>
+    </label>
+    <p class="muted">{{ t.settings_metadata_provider_order }}: <span id="provider-order">—</span></p>
+
+    <div class="settings-subsection">
+      <h3>{{ t.settings_metadata_profiles_heading }}</h3>
+      <p class="callout">{{ t.settings_metadata_profiles_next_note }}</p>
+    </div>
+  </section>
+{% endblock %}

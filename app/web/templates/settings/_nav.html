@@ -1,0 +1,7 @@
+<!-- Sonarr-style settings sub-nav: horizontal pill row of section links,
+     shared by every dedicated settings page via settings/shell.html. -->
+<nav class="section-tabs settings-subnav" aria-label="{{ t.settings_nav_label }}">
+  {% for section in settings_sections %}
+  <a href="/settings/{{ section.slug }}" class="{{ 'active' if active_settings_section == section.slug else '' }}"{% if active_settings_section == section.slug %} aria-current="page"{% endif %}>{{ t[section.label_key] }}</a>
+  {% endfor %}
+</nav>

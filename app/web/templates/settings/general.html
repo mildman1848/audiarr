@@ -1,0 +1,60 @@
+{% extends "settings/shell.html" %}
+
+{% block settings_content %}
+  <section class="card settings-form">
+    <div class="section-head">
+      <span class="eyebrow">{{ t.settings_eyebrow }}</span>
+      <h2>{{ t.settings_section_general }}</h2>
+    </div>
+    <p class="section-hint">{{ t.settings_general_hint }}</p>
+
+    <div class="settings-subsection">
+      <h3>{{ t.settings_section_host }}</h3>
+      <label>{{ t.settings_host_app_name }}
+        <input type="text" value="{{ t.app_name }}" readonly>
+      </label>
+      <p class="muted">{{ t.settings_host_port_info }}: <code id="host-port">—</code></p>
+    </div>
+
+    <div class="settings-subsection">
+      <h3>{{ t.settings_section_security }}</h3>
+      <p class="section-hint">{{ t.settings_security_subtitle }}</p>
+      <label>{{ t.settings_security_method_label }}
+        <select id="security-method">
+          <option value="none">{{ t.settings_security_method_none }}</option>
+          <option value="forms">{{ t.settings_security_method_forms }}</option>
+        </select>
+      </label>
+      <label>{{ t.settings_security_username_label }}
+        <input type="text" id="security-username" autocomplete="off">
+      </label>
+      <label>{{ t.settings_security_password_label }}
+        <input type="password" id="security-password" autocomplete="new-password">
+      </label>
+      <p class="muted small">{{ t.settings_security_password_hint }}</p>
+      <label>{{ t.settings_security_api_key_label }}
+        <input type="text" id="security-api-key" readonly>
+      </label>
+      <div class="button-row">
+        <button type="button" id="security-api-key-copy-btn" class="btn btn-secondary">{{ t.settings_security_api_key_copy }}</button>
+        <button type="button" id="security-api-key-regen-btn" class="btn btn-secondary">{{ t.settings_security_api_key_regenerate }}</button>
+      </div>
+    </div>
+
+    <div class="settings-subsection">
+      <h3>{{ t.settings_general_maintenance_heading }}</h3>
+      <p class="callout">{{ t.settings_general_maintenance_note }}</p>
+    </div>
+
+    <div class="settings-subsection settings-advanced-row">
+      <h3>{{ t.settings_advanced_heading }}</h3>
+      <p class="callout">{{ t.settings_general_advanced_note }}</p>
+    </div>
+
+    <div class="settings-subsection danger-card">
+      <h3>{{ t.settings_danger_zone }}</h3>
+      <p class="muted">{{ t.settings_danger_note }}</p>
+      <a href="/library">{{ t.settings_danger_dry_run_link }}</a>
+    </div>
+  </section>
+{% endblock %}

@@ -1,0 +1,28 @@
+{% extends "settings/shell.html" %}
+
+{% block settings_content %}
+  <section class="card settings-form">
+    <div class="section-head">
+      <span class="eyebrow">{{ t.settings_eyebrow }}</span>
+      <h2>{{ t.settings_section_conversion }}</h2>
+    </div>
+    <label>{{ t.settings_conversion_backend }}
+      <select id="conversion-backend">
+        <option value="disabled">disabled</option>
+        <option value="m4b-convertarr">m4b-convertarr</option>
+        <option value="command">command</option>
+      </select>
+    </label>
+    <label class="inline-check">
+      <input type="checkbox" id="conversion-delete-originals">
+      {{ t.settings_conversion_delete_originals }}
+    </label>
+    <label>{{ t.settings_conversion_job_timeout }}
+      <input type="number" id="conversion-job-timeout" min="1" max="168">
+    </label>
+    <label>{{ t.settings_conversion_webhook_key }}
+      <input type="password" id="conversion-webhook-key" autocomplete="new-password">
+    </label>
+    <p class="muted small">{{ t.settings_api_key_hint }}</p>
+  </section>
+{% endblock %}
