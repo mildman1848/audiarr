@@ -33,6 +33,7 @@ class BookCreate:
     provider: str = ""
     provider_id: str = ""
     locale: str = ""
+    monitored: bool = True
 
 
 @dataclass
@@ -123,8 +124,8 @@ def create_book(conn: sqlite3.Connection, data: BookCreate) -> int:
     cur = conn.execute(
         """INSERT INTO books
            (title, subtitle, description, release_date, language, publisher,
-            duration_seconds, cover_url, series_id, series_position)
-           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+            duration_seconds, cover_url, series_id, series_position, monitored)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
         (
             data.title,
             data.subtitle,
@@ -136,6 +137,7 @@ def create_book(conn: sqlite3.Connection, data: BookCreate) -> int:
             data.cover_url,
             series_id,
             data.series_position,
+            int(data.monitored),
         ),
     )
     assert cur.lastrowid is not None
@@ -184,6 +186,7 @@ def list_books(conn: sqlite3.Connection, limit: int = 50, offset: int = 0) -> li
     rows = conn.execute(
         """SELECT b.id, b.title, b.subtitle, b.description, b.language,
                   b.duration_seconds, b.cover_url, b.release_date, b.publisher,
+                  b.monitored,
                   s.name AS series_name, b.series_position,
                   (SELECT GROUP_CONCAT(a.name, ', ')
                      FROM book_authors ba JOIN authors a ON a.id = ba.author_id
@@ -204,12 +207,13 @@ def update_book(
     allowed = {
         "title", "subtitle", "description", "release_date", "language",
         "publisher", "duration_seconds", "cover_url", "series_position",
+        "monitored",
     }
     fields = [k for k in updates if k in allowed and updates[k] is not None]
     if not fields:
         return False
     sets = ", ".join(f"{k} = ?" for k in fields)
-    values = [updates[k] for k in fields]
+    values = [int(updates[k]) if k == "monitored" else updates[k] for k in fields]
     values.append(book_id)
     cur = conn.execute(f"UPDATE books SET {sets}, updated_at = datetime('now') WHERE id = ?", values)
     return cur.rowcount > 0

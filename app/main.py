@@ -30,6 +30,7 @@ from app.api import (
     routes_releases,
     routes_settings,
     routes_system,
+    routes_wanted,
     routes_webhooks,
 )
 from app.auth import AuthMiddleware
@@ -133,6 +134,7 @@ def create_app() -> FastAPI:
     app.include_router(routes_connections.router)
     app.include_router(routes_releases.router)
     app.include_router(routes_library.router)
+    app.include_router(routes_wanted.router)
     app.include_router(routes_import.router)
     app.include_router(routes_conversion.router)
     app.include_router(routes_webhooks.router)

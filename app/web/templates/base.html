@@ -28,6 +28,7 @@
       <nav class="side-nav">
         <a href="/" class="nav-item{{ ' active' if active_page == 'dashboard' else '' }}" data-nav-link><span class="nav-glyph" aria-hidden="true">◧</span><span class="nav-label">{{ t.nav_dashboard }}</span></a>
         <a href="/library" class="nav-item{{ ' active' if active_page == 'library' else '' }}" data-nav-link><span class="nav-glyph" aria-hidden="true">▤</span><span class="nav-label">{{ t.nav_library }}</span></a>
+        <a href="/wanted/missing" class="nav-item{{ ' active' if active_page == 'wanted' else '' }}" data-nav-link><span class="nav-glyph" aria-hidden="true">☆</span><span class="nav-label">{{ t.nav_wanted }}</span></a>
         <a href="/import" class="nav-item{{ ' active' if active_page == 'import' else '' }}" data-nav-link><span class="nav-glyph" aria-hidden="true">⚠</span><span class="nav-label">{{ t.nav_import }}</span></a>
         <a href="/metadata" class="nav-item{{ ' active' if active_page == 'metadata' else '' }}" data-nav-link><span class="nav-glyph" aria-hidden="true">⌕</span><span class="nav-label">{{ t.nav_metadata }}</span></a>
         <a href="/search" class="nav-item{{ ' active' if active_page == 'search' else '' }}" data-nav-link><span class="nav-glyph" aria-hidden="true">🔍</span><span class="nav-label">{{ t.nav_search }}</span></a>

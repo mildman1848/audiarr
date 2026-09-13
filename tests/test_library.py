@@ -76,6 +76,49 @@ def test_series_and_position_persisted(tmp_path):
         set_db_path_override(None)
 
 
+def test_book_defaults_to_monitored(tmp_path):
+    from app.db import set_db_path_override
+
+    set_db_path_override(tmp_path / "lib.db")
+    migrate(tmp_path / "lib.db")
+    try:
+        with get_conn() as conn:
+            book_id = create_book(conn, _make_book())
+            book = get_book(conn, book_id)
+        assert book["monitored"] == 1
+    finally:
+        set_db_path_override(None)
+
+
+def test_book_can_be_created_unmonitored(tmp_path):
+    from app.db import set_db_path_override
+
+    set_db_path_override(tmp_path / "lib.db")
+    migrate(tmp_path / "lib.db")
+    try:
+        with get_conn() as conn:
+            book_id = create_book(conn, _make_book(monitored=False))
+            book = get_book(conn, book_id)
+        assert book["monitored"] == 0
+    finally:
+        set_db_path_override(None)
+
+
+def test_update_book_monitored_field(tmp_path):
+    from app.db import set_db_path_override
+
+    set_db_path_override(tmp_path / "lib.db")
+    migrate(tmp_path / "lib.db")
+    try:
+        with get_conn() as conn:
+            book_id = create_book(conn, _make_book())
+            assert update_book(conn, book_id, {"monitored": False})
+            book = get_book(conn, book_id)
+        assert book["monitored"] == 0
+    finally:
+        set_db_path_override(None)
+
+
 def test_update_book_fields(tmp_path):
     from app.db import set_db_path_override
 
@@ -184,6 +227,50 @@ def test_api_book_lifecycle_with_provider_attribution(app_client):
     gone = app_client.delete(f"/api/v1/library/books/{book['id']}")
     assert gone.status_code == 204
     assert app_client.get("/api/v1/library/books").json() == []
+
+
+def test_api_book_monitored_roundtrip(app_client):
+    # Default: creating a book without specifying monitored -> True.
+    payload = {
+        "title": "Der Vorleser",
+        "authors": ["Bernhard Schlink"],
+        "provider": "audible",
+        "provider_id": "B004UWRY6M",
+        "locale": "de",
+    }
+    resp = app_client.post("/api/v1/library/books", json=payload)
+    assert resp.status_code == 201
+    book = resp.json()
+    assert book["monitored"] is True
+
+    listing = app_client.get("/api/v1/library/books").json()
+    assert listing[0]["monitored"] is True
+
+    single = app_client.get(f"/api/v1/library/books/{book['id']}").json()
+    assert single["monitored"] is True
+
+    # Patch flips it off and the change round-trips through get/list.
+    patched = app_client.patch(
+        f"/api/v1/library/books/{book['id']}", json={"monitored": False}
+    )
+    assert patched.status_code == 200
+    assert patched.json()["monitored"] is False
+
+    single_after = app_client.get(f"/api/v1/library/books/{book['id']}").json()
+    assert single_after["monitored"] is False
+
+    # Explicitly creating a book as unmonitored also round-trips.
+    unmonitored_payload = {
+        "title": "The Reader",
+        "authors": ["Bernhard Schlink"],
+        "provider": "audible",
+        "provider_id": "B004UWRY6M-EN",
+        "locale": "us",
+        "monitored": False,
+    }
+    resp2 = app_client.post("/api/v1/library/books", json=unmonitored_payload)
+    assert resp2.status_code == 201
+    assert resp2.json()["monitored"] is False
 
 
 def test_book_endpoints_include_file_stats(app_client):

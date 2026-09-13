@@ -62,6 +62,7 @@ class BookIn(BaseModel):
     provider: str = ""
     provider_id: str = ""
     locale: str = ""
+    monitored: bool = True
 
 
 class BookPatch(BaseModel):
@@ -74,6 +75,7 @@ class BookPatch(BaseModel):
     duration_seconds: int | None = None
     cover_url: str | None = None
     series_position: float | None = None
+    monitored: bool | None = None
 
 
 class ProviderIdOut(BaseModel):
@@ -101,6 +103,7 @@ class BookOut(BaseModel):
     size_bytes: int
     formats: list[str]
     added_at: str | None
+    monitored: bool
 
 
 class LibraryFileOut(BaseModel):
@@ -218,6 +221,7 @@ def _book_out(conn: Any, book_id: int) -> BookOut:
         authors=_split_names(book["authors"]),
         narrators=_split_names(book["narrators"]),
         provider_ids=[ProviderIdOut(**p) for p in pids],
+        monitored=bool(book["monitored"]),
         **stats,
     )
 
@@ -247,6 +251,7 @@ async def get_books(limit: int = 50, offset: int = 0) -> list[BookOut]:
                     authors=_split_names(b["authors"]),
                     narrators=_split_names(b["narrators"]),
                     provider_ids=[ProviderIdOut(**p) for p in pids],
+                    monitored=bool(b["monitored"]),
                     **stats,
                 )
             )

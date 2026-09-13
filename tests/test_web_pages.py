@@ -210,7 +210,10 @@ def test_book_detail_js_defines_hero_markup():
 def test_navigation_marks_active_route(app_client):
     _set_ui_language(app_client, "en")
 
-    routes = ("/", "/library", "/import", "/metadata", "/connections", "/settings")
+    routes = (
+        "/", "/library", "/wanted/missing", "/import", "/metadata",
+        "/connections", "/settings",
+    )
     for route in routes:
         page = app_client.get(route)
         classes = _nav_item_classes(page.text, route)
@@ -539,6 +542,7 @@ def test_common_js_has_mobile_sidebar_drawer_logic():
 ALL_PAGES = (
     "/",
     "/library",
+    "/wanted/missing",
     "/import",
     "/metadata",
     "/search",
@@ -642,6 +646,43 @@ def test_library_page_has_filter_and_sort_controls(app_client):
     assert 'id="library-refresh-top"' in page.text
     assert 'id="view-grid-btn"' in page.text
     assert 'id="view-table-btn"' in page.text
+
+
+@pytest.mark.parametrize(
+    ("language", "marker"),
+    [
+        ("en", "Wanted / Missing"),
+        ("de", "Gesucht / Fehlend"),
+    ],
+)
+def test_wanted_missing_page_renders(app_client, language, marker):
+    _set_ui_language(app_client, language)
+
+    page = app_client.get("/wanted/missing")
+    assert page.status_code == 200
+    assert marker in page.text
+    assert "/static/js/wanted.js" in page.text
+
+
+def test_wanted_missing_page_has_root_marker_and_toolbar_controls(app_client):
+    _set_ui_language(app_client, "en")
+
+    page = app_client.get("/wanted/missing")
+    assert page.status_code == 200
+    assert 'id="wanted-missing-root"' in page.text
+    assert 'id="wanted-refresh-top"' in page.text
+    assert 'id="wanted-filter"' in page.text
+    assert 'id="wanted-missing-list"' in page.text
+
+
+def test_wanted_missing_page_marks_nav_active(app_client):
+    _set_ui_language(app_client, "en")
+
+    page = app_client.get("/wanted/missing")
+    assert "active" in _nav_item_classes(page.text, "/wanted/missing")
+
+    other = app_client.get("/library")
+    assert "active" not in _nav_item_classes(other.text, "/wanted/missing")
 
 
 def test_common_js_has_global_search_overlay_logic():

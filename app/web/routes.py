@@ -142,6 +142,11 @@ async def library_page(request: Request) -> HTMLResponse:
     return templates.TemplateResponse(request, "library.html", _base_context("library"))
 
 
+@router.get("/wanted/missing", response_class=HTMLResponse)
+async def wanted_missing_page(request: Request) -> HTMLResponse:
+    return templates.TemplateResponse(request, "wanted_missing.html", _base_context("wanted"))
+
+
 @router.get("/library/books/{book_id}", response_class=HTMLResponse)
 async def book_detail_page(request: Request, book_id: int) -> HTMLResponse:
     # Server-rendered shell only; the JS client fetches book data by id and

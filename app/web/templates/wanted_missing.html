@@ -1,0 +1,36 @@
+{% extends "base.html" %}
+
+{% block page_title %}{{ t.wanted_title }}{% endblock %}
+{% block page_eyebrow %}{{ t.wanted_eyebrow }}{% endblock %}
+{% block page_heading %}{{ t.wanted_title }}{% endblock %}
+
+{% block page_toolbar %}
+  <div class="toolbar-group toolbar-left">
+    <button type="button" id="wanted-refresh-top" class="toolbar-btn">{{ t.wanted_refresh }}</button>
+  </div>
+  <div class="toolbar-group toolbar-right">
+    <input type="search" id="wanted-filter" class="toolbar-input" placeholder="{{ t.wanted_filter_placeholder }}" aria-label="{{ t.wanted_filter_placeholder }}">
+  </div>
+{% endblock %}
+
+{% block content %}
+  <div id="wanted-missing-root">
+    <p class="section-hint">{{ t.wanted_subtitle }}</p>
+
+    <section class="panel">
+      <div class="section-head">
+        <span class="eyebrow">{{ t.wanted_eyebrow }}</span>
+        <h2>{{ t.wanted_title }}</h2>
+      </div>
+      <div class="card">
+        <div id="wanted-missing-list">
+          <p class="muted">{{ t.library_books_loading }}</p>
+        </div>
+      </div>
+    </section>
+  </div>
+{% endblock %}
+
+{% block scripts %}
+  <script src="/static/js/wanted.js?v={{ version }}-wantedmissing"></script>
+{% endblock %}
