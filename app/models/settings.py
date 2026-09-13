@@ -153,6 +153,12 @@ class MetadataSettings(BaseModel):
     provider_order: list[str] = Field(default_factory=lambda: ["audible", "audnexus"])
     audible_locale: AudibleLocale = "us"
     audnexus_base_url: str = "https://api.audnex.us"
+    # When true, a startup task best-effort backfills asin + release_date
+    # for legacy books that have both NULL (see app/metadata/backfill.py).
+    # Defaults to false: prod imports predate this pipeline and backfilling
+    # is a network-dependent, opt-in operation, not something that should
+    # run unannounced on every boot.
+    backfill_on_start: bool = False
 
 
 class ConversionSettings(BaseModel):

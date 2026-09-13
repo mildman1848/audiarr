@@ -9,6 +9,8 @@ from fastapi import APIRouter, Depends
 from pydantic import BaseModel
 
 from app.config import load_settings
+from app.db import migrate
+from app.metadata.backfill import run_backfill_batch
 from app.providers.chain import ProviderChain, ProviderChainConfig
 
 log = logging.getLogger("audiarr.api.metadata")
@@ -108,3 +110,22 @@ async def search_metadata(
         provider_used=provider_used,
         total_results=response.provider_metadata.get("total_results"),
     )
+
+
+class BackfillResultOut(BaseModel):
+    updated: int
+    failed: int
+    remaining: int
+
+
+@router.post("/api/v1/metadata/backfill", response_model=BackfillResultOut)
+async def trigger_backfill(chain: ChainDep = None) -> BackfillResultOut:  # type: ignore[assignment]
+    """Run one backfill batch (see app.metadata.backfill) and report counts.
+
+    Manual trigger for the same best-effort asin/release_date backfill the
+    startup task runs when ``metadata.backfill_on_start`` is enabled; each
+    call processes one batch, so repeated calls drain the backlog.
+    """
+    migrate()  # defensive, mirrors the other stateful routers
+    result = await run_backfill_batch(chain)
+    return BackfillResultOut(updated=result.updated, failed=result.failed, remaining=result.remaining)

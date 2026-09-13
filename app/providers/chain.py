@@ -9,6 +9,7 @@ from pydantic import BaseModel, Field
 
 from app.providers.base import (
     BaseMetadataProvider,
+    BookDetailInfo,
     BrowseResponse,
     SearchResponse,
 )
@@ -125,6 +126,28 @@ class ProviderChain:
                 )
 
         return BrowseResponse(results=[], page=page, page_size=page_size)
+
+    async def get_detail(
+        self, provider_name: str, external_id: str, **kwargs: Any
+    ) -> BookDetailInfo | None:
+        """Fetch full detail from a specific, already-known provider.
+
+        Unlike ``search``/``browse`` this does not iterate ``provider_order``
+        -- callers (e.g. the metadata backfill task) already know which
+        provider a search hit came from and want its detail record, not a
+        fallback search. Failures are logged and treated as "no detail",
+        matching the rest of the chain's best-effort semantics.
+        """
+        provider = self._resolve_provider(provider_name)
+        if provider is None:
+            return None
+        try:
+            return await provider.get_detail(external_id, **kwargs)
+        except Exception as exc:  # noqa: BLE001
+            log.warning(
+                "provider %s get_detail failed for %s: %s", provider_name, external_id, exc
+            )
+            return None
 
     async def healthcheck(self) -> dict[str, bool]:
         """Run healthchecks of all configured providers concurrently."""

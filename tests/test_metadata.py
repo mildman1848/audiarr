@@ -154,3 +154,43 @@ def test_metadata_search_endpoint_falls_back_to_audnexus(app_client):
     assert body["provider_used"] == "audnexus"
     assert body["results"][0]["title"] == "Fallback Hit"
     assert body["results"][0]["provider_name"] == "audnexus"
+
+
+def test_backfill_endpoint_with_no_candidates_is_a_noop(app_client):
+    chain = _mock_chain([])
+    app_client.app.dependency_overrides[build_provider_chain] = lambda: chain
+
+    response = app_client.post("/api/v1/metadata/backfill")
+    assert response.status_code == 200
+    assert response.json() == {"updated": 0, "failed": 0, "remaining": 0}
+
+
+def test_backfill_endpoint_resolves_asin_and_release_date(app_client):
+    created = app_client.post(
+        "/api/v1/library/books",
+        json={"title": "Der Vorleser", "authors": ["Bernhard Schlink"]},
+    )
+    assert created.status_code == 201
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        # The search hit (BookQuickInfo) carries no release_date, only the
+        # detail lookup does -- return distinct shapes per endpoint so the
+        # test actually exercises the search-then-detail path.
+        if request.url.path == "/1.0/catalog/products":
+            return httpx.Response(200, json=_catalog_envelope([_product("B004UWRY6M", "Der Vorleser")]))
+        return httpx.Response(200, json={"product": _product("B004UWRY6M", "Der Vorleser")})
+
+    client = httpx.AsyncClient(transport=httpx.MockTransport(handler), base_url=api_host_for("de"))
+    audible = AudibleProvider(client=client, region="de")
+    chain = ProviderChain(
+        config=ProviderChainConfig(provider_order=["audible"], audible_locale="de"),
+        provider_overrides={"audible": audible},
+    )
+    app_client.app.dependency_overrides[build_provider_chain] = lambda: chain
+
+    response = app_client.post("/api/v1/metadata/backfill")
+    assert response.status_code == 200
+    assert response.json() == {"updated": 1, "failed": 0, "remaining": 0}
+
+    book = app_client.get("/api/v1/library/books").json()[0]
+    assert book["release_date"] == "2010-11-08"

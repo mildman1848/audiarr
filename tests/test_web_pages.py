@@ -542,6 +542,7 @@ def test_common_js_has_mobile_sidebar_drawer_logic():
 ALL_PAGES = (
     "/",
     "/library",
+    "/calendar",
     "/wanted/missing",
     "/import",
     "/metadata",
@@ -683,6 +684,47 @@ def test_wanted_missing_page_marks_nav_active(app_client):
 
     other = app_client.get("/library")
     assert "active" not in _nav_item_classes(other.text, "/wanted/missing")
+
+
+@pytest.mark.parametrize(
+    ("language", "marker"),
+    [
+        ("en", "Calendar"),
+        ("de", "Kalender"),
+    ],
+)
+def test_calendar_page_renders(app_client, language, marker):
+    _set_ui_language(app_client, language)
+
+    page = app_client.get("/calendar")
+    assert page.status_code == 200
+    assert marker in page.text
+    assert "/static/js/calendar.js" in page.text
+
+
+def test_calendar_page_has_root_marker_and_toolbar_controls(app_client):
+    _set_ui_language(app_client, "en")
+
+    page = app_client.get("/calendar")
+    assert page.status_code == 200
+    assert 'id="calendar-root"' in page.text
+    assert 'id="calendar-prev-btn"' in page.text
+    assert 'id="calendar-next-btn"' in page.text
+    assert 'id="calendar-today-btn"' in page.text
+    assert 'id="calendar-month-label"' in page.text
+    assert 'id="calendar-grid"' in page.text
+    assert 'id="calendar-agenda-list"' in page.text
+    assert 'id="calendar-day-modal"' in page.text
+
+
+def test_calendar_page_marks_nav_active(app_client):
+    _set_ui_language(app_client, "en")
+
+    page = app_client.get("/calendar")
+    assert "active" in _nav_item_classes(page.text, "/calendar")
+
+    other = app_client.get("/library")
+    assert "active" not in _nav_item_classes(other.text, "/calendar")
 
 
 def test_common_js_has_global_search_overlay_logic():

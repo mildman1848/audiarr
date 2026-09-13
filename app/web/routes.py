@@ -142,6 +142,11 @@ async def library_page(request: Request) -> HTMLResponse:
     return templates.TemplateResponse(request, "library.html", _base_context("library"))
 
 
+@router.get("/calendar", response_class=HTMLResponse)
+async def calendar_page(request: Request) -> HTMLResponse:
+    return templates.TemplateResponse(request, "calendar.html", _base_context("calendar"))
+
+
 @router.get("/wanted/missing", response_class=HTMLResponse)
 async def wanted_missing_page(request: Request) -> HTMLResponse:
     return templates.TemplateResponse(request, "wanted_missing.html", _base_context("wanted"))

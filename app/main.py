@@ -22,6 +22,7 @@ from fastapi.staticfiles import StaticFiles
 from app import __version__
 from app.api import (
     routes_auth,
+    routes_calendar,
     routes_connections,
     routes_conversion,
     routes_import,
@@ -79,6 +80,31 @@ class NoCacheHtmlMiddleware:
         await self.app(scope, receive, send_with_cache_control)
 
 
+async def _run_startup_backfill() -> None:
+    """Fire-and-forget: run one metadata backfill batch (see app.metadata.backfill).
+
+    Best-effort by construction (the batch itself never raises for
+    individual book failures), but this wrapper also swallows anything
+    unexpected -- a broken provider chain or config must never take the
+    app down, since this runs detached from the request/response cycle.
+    """
+    try:
+        import app.providers  # noqa: F401 -- ensure built-ins are registered
+        from app.api.routes_metadata import build_provider_chain
+        from app.metadata.backfill import run_backfill_batch
+
+        chain = build_provider_chain()
+        result = await run_backfill_batch(chain)
+        log.info(
+            "metadata backfill: updated=%d failed=%d remaining=%d",
+            result.updated,
+            result.failed,
+            result.remaining,
+        )
+    except Exception:  # noqa: BLE001 -- must never crash startup
+        log.warning("metadata backfill: startup batch failed", exc_info=True)
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     settings = load_settings()
@@ -103,12 +129,24 @@ async def lifespan(app: FastAPI):
         worker_task = asyncio.create_task(worker_loop(stop_event))
         log.info("conversion worker enabled (backend=%s)", settings.conversion.backend)
 
+    # Metadata backfill: opt-in (see MetadataSettings.backfill_on_start),
+    # since prod imports predate the metadata pipeline and this makes
+    # outbound provider requests. Runs detached so a slow/unreachable
+    # provider never delays startup.
+    backfill_task = None
+    if settings.metadata.backfill_on_start:
+        backfill_task = asyncio.create_task(_run_startup_backfill())
+
     yield
 
     if worker_task is not None:
         stop_event.set()
         with contextlib.suppress(asyncio.CancelledError):
             await asyncio.wait_for(worker_task, timeout=5)
+
+    if backfill_task is not None:
+        with contextlib.suppress(asyncio.CancelledError, TimeoutError):
+            await asyncio.wait_for(backfill_task, timeout=5)
 
 
 def create_app() -> FastAPI:
@@ -135,6 +173,7 @@ def create_app() -> FastAPI:
     app.include_router(routes_releases.router)
     app.include_router(routes_library.router)
     app.include_router(routes_wanted.router)
+    app.include_router(routes_calendar.router)
     app.include_router(routes_import.router)
     app.include_router(routes_conversion.router)
     app.include_router(routes_webhooks.router)

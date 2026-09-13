@@ -1,0 +1,55 @@
+{% extends "base.html" %}
+
+{% block page_title %}{{ t.calendar_title }}{% endblock %}
+{% block page_eyebrow %}{{ t.calendar_eyebrow }}{% endblock %}
+{% block page_heading %}{{ t.calendar_title }}{% endblock %}
+
+{% block page_toolbar %}
+  <div class="toolbar-group toolbar-left">
+    <button type="button" id="calendar-prev-btn" class="toolbar-btn icon-only" aria-label="{{ t.calendar_prev_month }}" title="{{ t.calendar_prev_month }}">‹</button>
+    <button type="button" id="calendar-today-btn" class="toolbar-btn">{{ t.calendar_today }}</button>
+    <button type="button" id="calendar-next-btn" class="toolbar-btn icon-only" aria-label="{{ t.calendar_next_month }}" title="{{ t.calendar_next_month }}">›</button>
+    <span id="calendar-month-label" class="calendar-month-label"></span>
+  </div>
+{% endblock %}
+
+{% block content %}
+  <div id="calendar-root">
+    <p class="section-hint">{{ t.calendar_subtitle }}</p>
+
+    <section class="panel">
+      <div id="calendar-grid" class="calendar-grid" aria-live="polite">
+        <p class="muted">{{ t.calendar_loading }}</p>
+      </div>
+    </section>
+
+    <section class="panel">
+      <div class="section-head">
+        <span class="eyebrow">{{ t.calendar_agenda_eyebrow }}</span>
+        <h2>{{ t.calendar_agenda_title }}</h2>
+      </div>
+      <div class="card">
+        <div id="calendar-agenda-list">
+          <p class="muted">{{ t.calendar_loading }}</p>
+        </div>
+      </div>
+    </section>
+  </div>
+
+  <div id="calendar-day-modal" class="import-overlay" hidden>
+    <div class="card" style="width:min(520px, 92vw);max-height:85vh;overflow-y:auto;">
+      <div class="section-head">
+        <span class="eyebrow">{{ t.calendar_eyebrow }}</span>
+        <h2 id="calendar-day-modal-title"></h2>
+      </div>
+      <div id="calendar-day-modal-body"></div>
+      <div class="button-row">
+        <button type="button" id="calendar-day-modal-close" class="btn btn-secondary">{{ t.calendar_modal_close }}</button>
+      </div>
+    </div>
+  </div>
+{% endblock %}
+
+{% block scripts %}
+  <script src="/static/js/calendar.js?v={{ version }}-calendar"></script>
+{% endblock %}
