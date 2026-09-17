@@ -47,6 +47,35 @@
     info: (message) => toast(message, "info"),
   };
 
+  // Small local escaper so common.js has no import on any per-page script —
+  // keeps this file dependency-free for every page that loads it.
+  function escapeHtmlLocal(value) {
+    return String(value ?? "").replace(/[&<>"']/g, (c) => ({
+      "&": "&amp;",
+      "<": "&lt;",
+      ">": "&gt;",
+      '"': "&quot;",
+      "'": "&#39;",
+    }[c]));
+  }
+
+  // Shared "nothing here yet" placeholder markup for Library, Wanted,
+  // Calendar, and Activity — an icon, a short message, and an optional
+  // action (e.g. a link to Settings), instead of each page inventing its
+  // own <p class="muted"> line. `actionHtml` is trusted, pre-built markup;
+  // callers are responsible for escaping any dynamic values within it.
+  function emptyState({ icon = "•", title = "", hint = "", actionHtml = "" } = {}) {
+    return `
+      <div class="empty-state">
+        <span class="empty-state-icon" aria-hidden="true">${icon}</span>
+        ${title ? `<p class="empty-state-title">${escapeHtmlLocal(title)}</p>` : ""}
+        ${hint ? `<p class="empty-state-hint">${escapeHtmlLocal(hint)}</p>` : ""}
+        ${actionHtml ? `<div class="empty-state-actions">${actionHtml}</div>` : ""}
+      </div>`;
+  }
+
+  window.AudiarrUI = { emptyState };
+
   async function switchLanguage(language) {
     try {
       const getResp = await fetch("/api/v1/settings");
@@ -152,18 +181,6 @@
   // faking a detail-page URL.
   const GLOBAL_SEARCH_DEBOUNCE_MS = 300;
   const GLOBAL_SEARCH_RESULT_LIMIT = 10;
-
-  // Small local escaper so common.js has no import on settings.js — keeps
-  // this file dependency-free for every page that loads it.
-  function escapeHtmlLocal(value) {
-    return String(value ?? "").replace(/[&<>"']/g, (c) => ({
-      "&": "&amp;",
-      "<": "&lt;",
-      ">": "&gt;",
-      '"': "&quot;",
-      "'": "&#39;",
-    }[c]));
-  }
 
   function setupGlobalSearch() {
     const trigger = document.querySelector(".global-search-btn");

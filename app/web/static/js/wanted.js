@@ -41,7 +41,7 @@ function filteredMissing() {
 function renderRow(b) {
   return `
     <tr>
-      <td><div class="library-cover" style="width:2.5rem;height:2.5rem;">${coverHtml(b)}</div></td>
+      <td><div class="library-cover small">${coverHtml(b)}</div></td>
       <td>${esc(b.title)}</td>
       <td>${esc((b.authors || []).join(", ")) || "—"}</td>
       <td>${esc(b.release_date) || "—"}</td>
@@ -55,13 +55,13 @@ function renderMissing() {
   const container = document.getElementById("wanted-missing-list");
 
   if (!allMissing.length) {
-    container.innerHTML = `<p class="muted">${esc(T.wanted_empty)}</p>`;
+    container.innerHTML = window.AudiarrUI.emptyState({ icon: "☆", title: T.wanted_empty });
     return;
   }
 
   const books = filteredMissing();
   if (!books.length) {
-    container.innerHTML = `<p class="muted">${esc(T.toolbar_search_no_results)}</p>`;
+    container.innerHTML = window.AudiarrUI.emptyState({ icon: "⌕", title: T.toolbar_search_no_results });
     return;
   }
 

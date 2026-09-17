@@ -13,27 +13,70 @@
 {% block content %}
   <p class="section-hint">{{ t.dashboard_welcome }}</p>
 
-  <div class="card-grid">
-    <div class="card stat-card">
-      <h2>{{ t.card_root_folders }}</h2>
-      <div class="value">{{ root_folder_count }}</div>
+  <section class="panel">
+    <div class="section-head">
+      <span class="eyebrow">{{ t.dashboard_eyebrow }}</span>
+      <h2>{{ t.dashboard_quick_actions_heading }}</h2>
     </div>
-    <div class="card stat-card">
-      <h2>{{ t.card_quality_profiles }}</h2>
-      <div class="value">{{ quality_profile_count }}</div>
+    <div class="quick-action-grid">
+      <a class="quick-action-card" href="/metadata">
+        <span class="quick-action-icon" aria-hidden="true">⌕</span>
+        <span class="quick-action-body">
+          <span class="quick-action-title">{{ t.dashboard_action_add_title }}</span>
+          <span class="quick-action-desc">{{ t.dashboard_action_add_desc }}</span>
+        </span>
+      </a>
+      <a class="quick-action-card" href="/library">
+        <span class="quick-action-icon" aria-hidden="true">▤</span>
+        <span class="quick-action-body">
+          <span class="quick-action-title">{{ t.dashboard_action_library_title }}</span>
+          <span class="quick-action-desc">{{ t.dashboard_action_library_desc }}</span>
+        </span>
+      </a>
+      <a class="quick-action-card" href="/wanted/missing">
+        <span class="quick-action-icon" aria-hidden="true">☆</span>
+        <span class="quick-action-body">
+          <span class="quick-action-title">{{ t.dashboard_action_wanted_title }}</span>
+          <span class="quick-action-desc">{{ t.dashboard_action_wanted_desc }}</span>
+        </span>
+      </a>
+      <a class="quick-action-card" href="/calendar">
+        <span class="quick-action-icon" aria-hidden="true">▦</span>
+        <span class="quick-action-body">
+          <span class="quick-action-title">{{ t.dashboard_action_calendar_title }}</span>
+          <span class="quick-action-desc">{{ t.dashboard_action_calendar_desc }}</span>
+        </span>
+      </a>
     </div>
-    <div class="card stat-card">
-      <h2>{{ t.card_metadata_provider }}</h2>
-      <div class="value">{{ primary_metadata_provider }}</div>
+  </section>
+
+  <section class="panel">
+    <div class="section-head">
+      <span class="eyebrow">{{ t.dashboard_eyebrow }}</span>
+      <h2>{{ t.dashboard_overview_heading }}</h2>
     </div>
-    <div class="card stat-card">
-      <h2>{{ t.card_connections }}</h2>
-      <div class="pill-row">
-        <span class="badge">Audiobookshelf: {{ audiobookshelf_status }}</span>
-        <span class="badge">m4b-convertarr: {{ m4b_convertarr_status }}</span>
+    <div class="card-grid">
+      <div class="card stat-card">
+        <h2>{{ t.card_root_folders }}</h2>
+        <div class="value">{{ root_folder_count }}</div>
+      </div>
+      <div class="card stat-card">
+        <h2>{{ t.card_quality_profiles }}</h2>
+        <div class="value">{{ quality_profile_count }}</div>
+      </div>
+      <div class="card stat-card">
+        <h2>{{ t.card_metadata_provider }}</h2>
+        <div class="value">{{ primary_metadata_provider }}</div>
+      </div>
+      <div class="card stat-card">
+        <h2>{{ t.card_connections }}</h2>
+        <div class="pill-row">
+          <span class="badge">Audiobookshelf: {{ audiobookshelf_status }}</span>
+          <span class="badge">m4b-convertarr: {{ m4b_convertarr_status }}</span>
+        </div>
       </div>
     </div>
-  </div>
+  </section>
 
   <section class="panel">
     <div class="section-head">

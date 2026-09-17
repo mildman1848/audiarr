@@ -178,7 +178,7 @@ function renderAgenda(grouped) {
   const dates = Object.keys(grouped).sort();
 
   if (!dates.length) {
-    container.innerHTML = `<p class="muted">${esc(T.calendar_agenda_empty)}</p>`;
+    container.innerHTML = window.AudiarrUI.emptyState({ icon: "▦", title: T.calendar_agenda_empty });
     return;
   }
 
@@ -210,7 +210,7 @@ function modalRowHtml(book) {
 function renderModalBody(books) {
   const body = document.getElementById("calendar-day-modal-body");
   if (!books.length) {
-    body.innerHTML = `<p class="muted">${esc(T.calendar_agenda_empty)}</p>`;
+    body.innerHTML = window.AudiarrUI.emptyState({ icon: "▦", title: T.calendar_agenda_empty });
     return;
   }
   body.innerHTML = books.map(modalRowHtml).join("");
@@ -274,11 +274,14 @@ function showLoading() {
 }
 
 function renderError(err) {
-  const message = `<p class="muted">${esc(T.calendar_load_error)} (${esc(err.message)})</p>`;
   const retry = `<button type="button" class="btn btn-secondary" id="calendar-retry-btn">${esc(
     T.calendar_retry
   )}</button>`;
-  document.getElementById("calendar-grid").innerHTML = message + retry;
+  document.getElementById("calendar-grid").innerHTML = window.AudiarrUI.emptyState({
+    icon: "▦",
+    title: `${T.calendar_load_error} (${err.message})`,
+    actionHtml: retry,
+  });
   document.getElementById("calendar-agenda-list").innerHTML = "";
   document.getElementById("calendar-retry-btn").addEventListener("click", loadMonth);
 }

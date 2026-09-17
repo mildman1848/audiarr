@@ -25,9 +25,10 @@ async function loadConversionJobs() {
     const jobs = await resp.json();
 
     if (!Array.isArray(jobs) || jobs.length === 0) {
-      container.innerHTML = `<p class="muted" data-i18n="conversion_empty">${escapeHtml(
-        t("conversion_empty", "No conversion jobs yet.")
-      )}</p>`;
+      container.innerHTML = window.AudiarrUI.emptyState({
+        icon: "◧",
+        title: t("conversion_empty", "No conversion jobs yet."),
+      });
       return;
     }
 
@@ -48,22 +49,24 @@ async function loadConversionJobs() {
       .join("");
 
     container.innerHTML = `
-      <table class="table">
-        <thead>
-          <tr>
-            <th>${escapeHtml(t("conversion_table_id", "ID"))}</th>
-            <th>${escapeHtml(t("conversion_table_book", "Book"))}</th>
-            <th>${escapeHtml(t("conversion_table_source", "Source"))}</th>
-            <th>${escapeHtml(t("conversion_table_status", "Status"))}</th>
-            <th>${escapeHtml(t("conversion_table_tries", "Tries"))}</th>
-            <th>${escapeHtml(t("conversion_table_error", "Error"))}</th>
-          </tr>
-        </thead>
-        <tbody>${rows}</tbody>
-      </table>`;
+      <div class="table-scroll">
+        <table class="table">
+          <thead>
+            <tr>
+              <th>${escapeHtml(t("conversion_table_id", "ID"))}</th>
+              <th>${escapeHtml(t("conversion_table_book", "Book"))}</th>
+              <th>${escapeHtml(t("conversion_table_source", "Source"))}</th>
+              <th>${escapeHtml(t("conversion_table_status", "Status"))}</th>
+              <th>${escapeHtml(t("conversion_table_tries", "Tries"))}</th>
+              <th>${escapeHtml(t("conversion_table_error", "Error"))}</th>
+            </tr>
+          </thead>
+          <tbody>${rows}</tbody>
+        </table>
+      </div>`;
   } catch (err) {
     const message = `${t("conversion_error", "Conversion status unavailable.")} (${err.message})`;
-    container.innerHTML = `<p class="muted" data-i18n="conversion_error">${escapeHtml(message)}</p>`;
+    container.innerHTML = `<p class="muted">${escapeHtml(message)}</p>`;
   }
 }
 
