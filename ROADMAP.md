@@ -75,11 +75,11 @@ but with real gaps; **Next** — not started.
 
 ### 9. Profiles, Quality, Tags, Connect (notifications) — Partial
 
-- Profiles: modeled and persisted, shown as a read-only summary; no editor yet.
-- Quality: modeled only; settings page is a placeholder marked "Planned".
+- Profiles: audiobook-specific semantics modeled and editable — an ordered, best-first list of quality tiers plus an upgrade cutoff (see `docs/design/quality-profiles.md`). Not yet used by import matching or conversion job dispatch.
+- Quality: real, editable quality definitions (container/codec/bitrate band/lossless/chapter expectations), not a copy of video quality definitions. Not yet used by import matching or conversion job dispatch.
 - Tags: not modeled beyond the settings document shape; placeholder page.
 - Connect (outbound webhooks/notifications): not implemented; placeholder page that links to the working Audiobookshelf/m4b-convertarr connections instead.
-- All four are explicitly marked "Planned" in the Settings overview and their own pages rather than pretending to be editable.
+- Tags and Connect are explicitly marked "Planned" in the Settings overview and their own pages; Profiles and Quality are now active, editable sections.
 
 ### 10. Release hardening — Partial
 
@@ -91,7 +91,7 @@ but with real gaps; **Next** — not started.
 
 ## Next
 
-- Real Profiles/Quality editor with audiobook-specific semantics (bitrate/container/chapter handling), not a copy of video quality definitions.
+- Wire quality profiles/definitions into import matching and conversion job dispatch (settings model + editor landed; decisioning is next, see `docs/design/quality-profiles.md`).
 - Tags management once indexers/download clients/connections support multiple entries.
 - Connect: a webhook/notification editor for grab/import/health events.
 - Automatic config DB backups and update-check settings.

@@ -524,7 +524,7 @@ def test_settings_subnav_renders_translated_text(app_client, language, nav_label
 @pytest.mark.parametrize("language", ["en", "de"])
 def test_settings_page_has_media_management_and_summary_fields(app_client, language):
     """Media Management exposes the modeled rename/pattern/delete-empty-folder
-    fields, and the Profiles/Connect pages render their summary
+    fields, and the Profiles/Quality/Connect pages render their editor/summary
     containers."""
     _set_ui_language(app_client, language)
 
@@ -536,7 +536,13 @@ def test_settings_page_has_media_management_and_summary_fields(app_client, langu
 
     profiles = app_client.get("/settings/profiles")
     assert profiles.status_code == 200
-    assert 'id="profile-summary"' in profiles.text
+    assert 'id="profiles-editor"' in profiles.text
+    assert 'id="profiles-add-btn"' in profiles.text
+
+    quality = app_client.get("/settings/quality")
+    assert quality.status_code == 200
+    assert 'id="quality-definitions"' in quality.text
+    assert 'id="quality-add-btn"' in quality.text
 
     connect = app_client.get("/settings/connect")
     assert connect.status_code == 200
@@ -551,20 +557,20 @@ def test_settings_page_has_media_management_and_summary_fields(app_client, langu
     ],
 )
 def test_settings_overview_marks_planned_sections(app_client, language, planned_label):
-    """Profiles, Quality, Connect, and Tags are read-only/placeholder this
-    slice; the overview must badge exactly those four as planned so active
-    vs. planned sections are visually distinct (issue #11)."""
+    """Connect and Tags are read-only/placeholder this slice; Profiles and
+    Quality now have a real, saveable editor (issue #13), so the overview
+    must badge exactly those remaining two as planned."""
     _set_ui_language(app_client, language)
 
     settings = app_client.get("/settings")
     assert settings.status_code == 200
     badge = f'<span class="badge badge-planned">{planned_label}</span>'
-    assert settings.text.count(badge) == 4
+    assert settings.text.count(badge) == 2
 
 
 @pytest.mark.parametrize(
     "path",
-    ("/settings/quality", "/settings/tags", "/settings/profiles", "/settings/connect"),
+    ("/settings/tags", "/settings/connect"),
 )
 def test_planned_settings_pages_have_no_save_bar(app_client, path):
     """Placeholder-only settings pages must not render the Arr-style
@@ -582,6 +588,8 @@ def test_planned_settings_pages_have_no_save_bar(app_client, path):
     "path",
     (
         "/settings/media-management",
+        "/settings/profiles",
+        "/settings/quality",
         "/settings/indexers",
         "/settings/download-clients",
         "/settings/metadata",
