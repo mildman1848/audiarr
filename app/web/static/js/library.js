@@ -118,13 +118,13 @@ function renderBooks() {
   const container = document.getElementById("library-books");
 
   if (!allBooks.length) {
-    container.innerHTML = `<p class="muted">${esc(T.library_books_empty)}</p>`;
+    container.innerHTML = window.AudiarrUI.emptyState({ icon: "▤", title: T.library_books_empty });
     return;
   }
 
   const books = sortedBooks(filteredBooks());
   if (!books.length) {
-    container.innerHTML = `<p class="muted">${esc(T.library_search_no_results)}</p>`;
+    container.innerHTML = window.AudiarrUI.emptyState({ icon: "⌕", title: T.library_search_no_results });
     return;
   }
 
@@ -254,7 +254,7 @@ async function loadRootFolders() {
       .join("");
 
     if (!rootFolders.length) {
-      container.innerHTML = `<p class="muted">${esc(T.library_root_folders_empty)}</p>`;
+      container.innerHTML = window.AudiarrUI.emptyState({ icon: "▤", title: T.library_root_folders_empty });
       return;
     }
 

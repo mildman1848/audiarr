@@ -342,15 +342,15 @@ body {
 .card-grid {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
-  gap: 1rem;
-  margin-top: 1.25rem;
+  gap: 0.85rem;
+  margin-top: 1rem;
 }
 
 .card {
   background: var(--bg-panel);
   border: 1px solid var(--border-color);
   border-radius: var(--radius);
-  padding: 1rem 1.1rem;
+  padding: 0.85rem 1rem;
   box-shadow: var(--shadow-card);
 }
 
@@ -379,6 +379,105 @@ body {
   display: flex;
   flex-wrap: wrap;
   gap: 0.4rem;
+}
+
+/* --------------------------------------------------------- Empty states */
+
+/* Shared placeholder for "nothing here yet" across Library, Wanted,
+   Calendar, and Activity — an icon, a short message, and an optional
+   action — instead of ad hoc <p class="muted"> lines per page. Rendered
+   via window.AudiarrUI.emptyState() in common.js. */
+.empty-state {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 0.35rem;
+  padding: 2.25rem 1.5rem;
+  text-align: center;
+}
+
+.empty-state-icon {
+  font-size: 1.6rem;
+  color: var(--text-muted);
+  opacity: 0.7;
+}
+
+.empty-state-title {
+  margin: 0;
+  color: var(--text-main);
+  font-weight: 600;
+  font-size: 0.92rem;
+}
+
+.empty-state-hint {
+  margin: 0;
+  color: var(--text-muted);
+  font-size: 0.82rem;
+  max-width: 30rem;
+}
+
+.empty-state-actions {
+  margin-top: 0.35rem;
+}
+
+/* ------------------------------------------------- Dashboard quick actions */
+
+.quick-action-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+  gap: 0.85rem;
+  margin-top: 1rem;
+}
+
+.quick-action-card {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 0.85rem 1rem;
+  background: var(--bg-panel);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius);
+  color: inherit;
+  text-decoration: none;
+  box-shadow: var(--shadow-card);
+}
+
+.quick-action-card:hover,
+.quick-action-card:focus-visible {
+  border-color: var(--audiarr-accent);
+}
+
+.quick-action-icon {
+  flex: 0 0 auto;
+  width: 2rem;
+  height: 2rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: var(--radius);
+  background: var(--audiarr-accent-soft);
+  color: var(--audiarr-accent);
+  font-size: 1rem;
+}
+
+.quick-action-body {
+  display: flex;
+  flex-direction: column;
+  gap: 0.1rem;
+  min-width: 0;
+}
+
+.quick-action-title {
+  font-weight: 600;
+  font-size: 0.9rem;
+  color: var(--text-main);
+}
+
+.quick-action-desc {
+  font-size: 0.78rem;
+  line-height: 1.35;
+  color: var(--text-muted);
 }
 
 /* --------------------------------------------------------------- Badges */
@@ -426,6 +525,22 @@ body {
   background: transparent;
 }
 
+/* ----------------------------------------------------- Activity progress */
+
+.activity-progress {
+  background: var(--bg-panel-alt);
+  border: 1px solid var(--border-color);
+  border-radius: 999px;
+  height: 0.6rem;
+  overflow: hidden;
+  min-width: 6rem;
+}
+
+.activity-progress-bar {
+  background: var(--audiarr-accent);
+  height: 100%;
+}
+
 /* --------------------------------------------------------------- Tables */
 
 .table {
@@ -437,7 +552,7 @@ body {
 .table th,
 .table td {
   text-align: left;
-  padding: 0.5rem 0.65rem;
+  padding: 0.45rem 0.6rem;
   border-bottom: 1px solid var(--border-color);
   vertical-align: top;
 }
@@ -482,8 +597,8 @@ body {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
-  gap: 0.6rem;
-  padding: 0.5rem 2rem;
+  gap: 0.5rem;
+  padding: 0.45rem 2rem;
   background: var(--bg-panel);
   border-bottom: 1px solid var(--border-color);
 }
@@ -507,14 +622,14 @@ body {
   display: inline-flex;
   align-items: center;
   gap: 0.35rem;
-  height: 32px;
-  padding: 0 0.65rem;
+  height: 30px;
+  padding: 0 0.6rem;
   background: transparent;
   color: var(--text-main);
   border: 1px solid transparent;
   border-radius: var(--radius);
   font: inherit;
-  font-size: 0.82rem;
+  font-size: 0.8rem;
   font-weight: 600;
   cursor: pointer;
 }
@@ -534,15 +649,15 @@ body {
 }
 
 .toolbar-btn.icon-only {
-  width: 32px;
+  width: 30px;
   padding: 0;
   justify-content: center;
 }
 
 .toolbar-input,
 .toolbar-select {
-  height: 32px;
-  padding: 0 0.55rem;
+  height: 30px;
+  padding: 0 0.5rem;
 }
 
 /* ------------------------------------------------------- Global search */
@@ -665,6 +780,12 @@ body {
   text-align: center;
   color: var(--text-muted);
   font-size: 0.78rem;
+}
+
+/* Small inline cover used in table rows (Wanted/Missing). */
+.library-cover.small {
+  width: 2.5rem;
+  height: 2.5rem;
 }
 
 .library-card-body {
@@ -1565,6 +1686,13 @@ footer {
   color: var(--text-muted);
   flex: 0 0 auto;
   white-space: nowrap;
+}
+
+/* Day modal card sizing (was a page-specific inline style). */
+.calendar-day-modal-card {
+  width: min(520px, 92vw);
+  max-height: 85vh;
+  overflow-y: auto;
 }
 
 /* Day modal book list. */

@@ -63,8 +63,8 @@ function queueStatusIcon(status) {
 function progressBar(percent) {
   const pct = Math.max(0, Math.min(100, Number(percent) || 0));
   return `
-    <div style="background:var(--bg-panel-alt);border:1px solid var(--border-color);border-radius:999px;height:0.6rem;overflow:hidden;min-width:6rem;">
-      <div style="background:var(--audiarr-accent);height:100%;width:${pct}%;"></div>
+    <div class="activity-progress">
+      <div class="activity-progress-bar" style="width:${pct}%;"></div>
     </div>
     <span class="muted small">${pct.toFixed(0)}%</span>`;
 }
@@ -77,13 +77,16 @@ function historyStatusBadge(status) {
   return `<span class="${cls}">${esc(status || "—")}</span>`;
 }
 
-// Inline 503 warning: config missing, point the user at /settings.
+// 503: SABnzbd not configured. Rendered as the same empty-state pattern as
+// the queue/history "nothing here" cases (with a Settings CTA) rather than
+// a standalone error card, so the section still reads as Queue/History.
 function renderConfigWarning(container) {
-  container.innerHTML = `
-    <div class="card danger-card">
-      <p>${esc(T.activity_config_missing)}</p>
-      <p><a href="/settings">${esc(T.activity_config_link)}</a></p>
-    </div>`;
+  const link = `<a class="btn btn-secondary" href="/settings">${esc(T.activity_config_link)}</a>`;
+  container.innerHTML = window.AudiarrUI.emptyState({
+    icon: "⚙",
+    title: T.activity_config_missing,
+    actionHtml: link,
+  });
 }
 
 async function refreshQueue() {
@@ -100,7 +103,7 @@ async function refreshQueue() {
     console.debug("activity queue: %d slot(s)", slots.length);
 
     if (!slots.length) {
-      container.innerHTML = `<p class="muted">${esc(T.activity_queue_empty)}</p>`;
+      container.innerHTML = window.AudiarrUI.emptyState({ icon: "⇩", title: T.activity_queue_empty });
       return;
     }
 
@@ -119,19 +122,21 @@ async function refreshQueue() {
       .join("");
 
     container.innerHTML = `
-      <table class="table">
-        <thead>
-          <tr>
-            <th>${esc(T.activity_col_status)}</th>
-            <th>${esc(T.activity_col_filename)}</th>
-            <th>${esc(T.activity_col_category)}</th>
-            <th>${esc(T.activity_col_progress)}</th>
-            <th>${esc(T.activity_col_size_left)}</th>
-            <th>${esc(T.activity_col_time_left)}</th>
-          </tr>
-        </thead>
-        <tbody>${rows}</tbody>
-      </table>`;
+      <div class="table-scroll">
+        <table class="table">
+          <thead>
+            <tr>
+              <th>${esc(T.activity_col_status)}</th>
+              <th>${esc(T.activity_col_filename)}</th>
+              <th>${esc(T.activity_col_category)}</th>
+              <th>${esc(T.activity_col_progress)}</th>
+              <th>${esc(T.activity_col_size_left)}</th>
+              <th>${esc(T.activity_col_time_left)}</th>
+            </tr>
+          </thead>
+          <tbody>${rows}</tbody>
+        </table>
+      </div>`;
   } catch (err) {
     container.innerHTML = `<p class="muted">${esc(T.activity_queue_error)} (${esc(err.message)})</p>`;
   }
@@ -151,7 +156,7 @@ async function refreshHistory() {
     console.debug("activity history: %d slot(s)", slots.length);
 
     if (!slots.length) {
-      container.innerHTML = `<p class="muted">${esc(T.activity_history_empty)}</p>`;
+      container.innerHTML = window.AudiarrUI.emptyState({ icon: "⇩", title: T.activity_history_empty });
       return;
     }
 
@@ -169,18 +174,20 @@ async function refreshHistory() {
       .join("");
 
     container.innerHTML = `
-      <table class="table">
-        <thead>
-          <tr>
-            <th>${esc(T.activity_col_status)}</th>
-            <th>${esc(T.activity_col_name)}</th>
-            <th>${esc(T.activity_col_category)}</th>
-            <th>${esc(T.activity_col_size)}</th>
-            <th>${esc(T.activity_col_completed_at)}</th>
-          </tr>
-        </thead>
-        <tbody>${rows}</tbody>
-      </table>`;
+      <div class="table-scroll">
+        <table class="table">
+          <thead>
+            <tr>
+              <th>${esc(T.activity_col_status)}</th>
+              <th>${esc(T.activity_col_name)}</th>
+              <th>${esc(T.activity_col_category)}</th>
+              <th>${esc(T.activity_col_size)}</th>
+              <th>${esc(T.activity_col_completed_at)}</th>
+            </tr>
+          </thead>
+          <tbody>${rows}</tbody>
+        </table>
+      </div>`;
   } catch (err) {
     container.innerHTML = `<p class="muted">${esc(T.activity_history_error)} (${esc(err.message)})</p>`;
   }

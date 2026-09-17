@@ -842,3 +842,92 @@ def test_common_js_has_global_search_overlay_logic():
     assert 'event.key === "Escape" && !overlay.hidden' in script
     assert "event.target === overlay" in script
     assert "function escapeHtmlLocal" in script
+
+
+# -- Issue #12: standardized empty states + dashboard app-home polish -------
+
+
+def test_common_js_defines_shared_empty_state_helper():
+    """Library, Wanted, Calendar, and Activity share one empty-state
+    renderer (icon + message + optional action) instead of each page
+    inventing its own <p class="muted"> markup."""
+    script = (Path(__file__).parents[1] / "app/web/static/js/common.js").read_text()
+
+    assert "function emptyState" in script
+    assert "window.AudiarrUI = { emptyState }" in script
+    assert '"empty-state"' in script
+    assert "empty-state-icon" in script
+    assert "empty-state-title" in script
+
+
+@pytest.mark.parametrize(
+    ("js_file", "expected_calls"),
+    [
+        ("library.js", 3),
+        ("wanted.js", 2),
+        ("calendar.js", 3),
+        ("activity.js", 3),
+        ("app.js", 1),
+    ],
+)
+def test_pages_use_shared_empty_state_helper(js_file, expected_calls):
+    """Each touched page's client script renders its empty/config-missing
+    states through window.AudiarrUI.emptyState rather than ad hoc markup."""
+    script = (Path(__file__).parents[1] / "app/web/static/js" / js_file).read_text()
+    assert script.count("window.AudiarrUI.emptyState(") == expected_calls
+
+
+def test_activity_js_config_missing_state_reads_as_queue_history():
+    """Issue #12: the SABnzbd-not-configured state must not look like a
+    generic error card — it renders through the shared empty-state helper
+    (inside the existing Queue/History .card sections) with a Settings CTA,
+    not the standalone .danger-card used elsewhere (e.g. search.js)."""
+    script = (Path(__file__).parents[1] / "app/web/static/js/activity.js").read_text()
+
+    assert "danger-card" not in script
+    assert "function renderConfigWarning" in script
+    assert 'href="/settings"' in script
+
+
+def test_activity_js_wraps_tables_in_table_scroll():
+    """Both the queue and history tables must be wrapped in .table-scroll so
+    they scroll horizontally on narrow viewports instead of overflowing the
+    page (mobile behavior review, issue #12)."""
+    script = (Path(__file__).parents[1] / "app/web/static/js/activity.js").read_text()
+    assert script.count('<div class="table-scroll">') == 2
+
+
+def test_style_css_defines_empty_state_and_quick_action_components():
+    css = (Path(__file__).parents[1] / "app/web/static/css/style.css").read_text()
+    for selector in (
+        ".empty-state {",
+        ".empty-state-icon",
+        ".empty-state-title",
+        ".empty-state-hint",
+        ".quick-action-grid",
+        ".quick-action-card",
+    ):
+        assert selector in css
+
+
+@pytest.mark.parametrize(
+    ("language", "heading_marker", "action_title_marker"),
+    [
+        ("en", "Quick actions", "Add Audiobook"),
+        ("de", "Schnellzugriff", "Hörbuch hinzufügen"),
+    ],
+)
+def test_dashboard_has_quick_actions(app_client, language, heading_marker, action_title_marker):
+    """Issue #12: the dashboard leads with app-home quick actions (built
+    from existing routes only, no new backend data) instead of only stat
+    cards, in both UI languages."""
+    _set_ui_language(app_client, language)
+
+    page = app_client.get("/")
+    assert page.status_code == 200
+    assert heading_marker in page.text
+    assert action_title_marker in page.text
+    assert 'class="quick-action-card" href="/metadata"' in page.text
+    assert 'class="quick-action-card" href="/library"' in page.text
+    assert 'class="quick-action-card" href="/wanted/missing"' in page.text
+    assert 'class="quick-action-card" href="/calendar"' in page.text
