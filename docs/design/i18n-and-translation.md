@@ -15,12 +15,12 @@ The loader in `app/web/i18n_util.py` intentionally stays small. UI strings shoul
 
 Dynamic text translation is handled by `app/i18n/translation_service.py`.
 
-Supported MVP backend:
+Supported backend modes:
 
 | Backend | Status | Notes |
 |---|---|---|
 | `none` | default | Offline-safe no-op, returns original text |
-| `libretranslate` | scaffolded | Works with self-hosted LibreTranslate-compatible `/translate` endpoints |
+| `libretranslate` | available | Works with self-hosted LibreTranslate-compatible `/translate` endpoints |
 
 Future candidates:
 

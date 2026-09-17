@@ -1,6 +1,6 @@
 """Render tests for the server-rendered UI pages.
 
-Covers the Library, Metadata Search, Connections, and Settings pages. Each
+Covers the Library, Add Audiobook, Connections, and Settings pages. Each
 page must return 200 and contain a translated marker string for both the
 English and German UI language settings, and mark its own nav entry active.
 """
@@ -50,6 +50,38 @@ def test_library_and_metadata_pages_render(
     metadata = app_client.get("/metadata")
     assert metadata.status_code == 200
     assert metadata_marker in metadata.text
+
+
+@pytest.mark.parametrize(
+    ("language", "nav_label", "heading_marker"),
+    [
+        ("en", "Add New", "Add Audiobook"),
+        ("de", "Neu hinzufügen", "Hörbuch hinzufügen"),
+    ],
+)
+def test_metadata_page_uses_add_new_labels(app_client, language, nav_label, heading_marker):
+    """The Metadata Search page is reframed as an Arr-style Add New /
+    Add Audiobook workflow (issue #10) — the sidebar and the page heading
+    must agree in both languages."""
+    _set_ui_language(app_client, language)
+
+    page = app_client.get("/metadata")
+    assert page.status_code == 200
+    assert f'<span class="nav-label">{nav_label}</span>' in page.text
+    assert f'<h1 class="page-title">{heading_marker}</h1>' in page.text
+
+
+@pytest.mark.parametrize("language", ["en", "de"])
+def test_search_page_uses_releases_label(app_client, language):
+    """The release/download search page is labeled Releases (issue #10),
+    identically in both languages since it is already an established
+    Sonarr/Radarr loanword in German Arr UIs."""
+    _set_ui_language(app_client, language)
+
+    page = app_client.get("/search")
+    assert page.status_code == 200
+    assert '<span class="nav-label">Releases</span>' in page.text
+    assert '<h1 class="page-title">Releases</h1>' in page.text
 
 
 @pytest.mark.parametrize(
@@ -511,6 +543,65 @@ def test_settings_page_has_media_management_and_summary_fields(app_client, langu
     assert 'id="connect-summary"' in connect.text
 
 
+@pytest.mark.parametrize(
+    ("language", "planned_label"),
+    [
+        ("en", "Planned"),
+        ("de", "Geplant"),
+    ],
+)
+def test_settings_overview_marks_planned_sections(app_client, language, planned_label):
+    """Profiles, Quality, Connect, and Tags are read-only/placeholder this
+    slice; the overview must badge exactly those four as planned so active
+    vs. planned sections are visually distinct (issue #11)."""
+    _set_ui_language(app_client, language)
+
+    settings = app_client.get("/settings")
+    assert settings.status_code == 200
+    badge = f'<span class="badge badge-planned">{planned_label}</span>'
+    assert settings.text.count(badge) == 4
+
+
+@pytest.mark.parametrize(
+    "path",
+    ("/settings/quality", "/settings/tags", "/settings/profiles", "/settings/connect"),
+)
+def test_planned_settings_pages_have_no_save_bar(app_client, path):
+    """Placeholder-only settings pages must not render the Arr-style
+    No changes / Save changes bar — there is nothing real to save."""
+    _set_ui_language(app_client, "en")
+
+    page = app_client.get(path)
+    assert page.status_code == 200
+    assert 'id="settings-save-bar"' not in page.text
+    assert 'id="settings-advanced-toggle"' not in page.text
+    assert "badge-planned" in page.text
+
+
+@pytest.mark.parametrize(
+    "path",
+    (
+        "/settings/media-management",
+        "/settings/indexers",
+        "/settings/download-clients",
+        "/settings/metadata",
+        "/settings/general",
+        "/settings/ui",
+        "/settings/conversion",
+    ),
+)
+def test_active_settings_pages_keep_save_bar(app_client, path):
+    """Sections with real, saveable fields keep the dirty-state save bar
+    and advanced toggle, and are not marked planned."""
+    _set_ui_language(app_client, "en")
+
+    page = app_client.get(path)
+    assert page.status_code == 200
+    assert 'id="settings-save-bar"' in page.text
+    assert 'id="settings-advanced-toggle"' in page.text
+    assert "badge-planned" not in page.text
+
+
 def test_settings_js_logs_in_after_enabling_forms_auth():
     script = (Path(__file__).parents[1] / "app/web/static/js/settings.js").read_text()
 
@@ -552,6 +643,19 @@ ALL_PAGES = (
     "/settings",
     "/system/status",
 )
+
+
+@pytest.mark.parametrize("path", ALL_PAGES)
+def test_footer_has_no_scaffold_wording(app_client, path):
+    """Issue #9: no rendered page may call Audiarr an MVP/scaffold anymore —
+    the footer must use product wording instead."""
+    _set_ui_language(app_client, "en")
+
+    page = app_client.get(path)
+    assert page.status_code == 200
+    assert "scaffold" not in page.text.lower()
+    assert "MVP" not in page.text
+    assert "Audiobook library automation" in page.text
 
 
 @pytest.mark.parametrize("path", ALL_PAGES)

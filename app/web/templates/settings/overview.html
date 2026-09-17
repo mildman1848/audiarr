@@ -9,8 +9,8 @@
 
   <div class="card-grid settings-overview-grid">
     {% for section in settings_sections %}
-    <a class="card settings-overview-card" href="/settings/{{ section.slug }}">
-      <h2>{{ t[section.label_key] }}</h2>
+    <a class="card settings-overview-card{{ ' is-planned' if section.status == 'planned' else '' }}" href="/settings/{{ section.slug }}">
+      <h2>{{ t[section.label_key] }}{% if section.status == 'planned' %} <span class="badge badge-planned">{{ t.settings_status_planned }}</span>{% endif %}</h2>
       <p>{{ t[section.desc_key] }}</p>
     </a>
     {% endfor %}

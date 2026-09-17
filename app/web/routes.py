@@ -26,6 +26,12 @@ templates = Jinja2Templates(directory=str(TEMPLATES_DIR))
 # /settings/<slug>, rendered from its own template, sharing the
 # settings/shell.html sub-nav + advanced toggle + save bar. The overview
 # page (/settings) links to all of them via label_key/desc_key.
+#
+# "status" distinguishes sections with real, saveable fields ("active",
+# the default when omitted) from sections that are read-only/placeholder
+# for this slice ("planned"): the settings overview badges those cards and
+# settings/shell.html hides the save bar and advanced toggle on them, so a
+# page with nothing to save never claims otherwise.
 SETTINGS_SECTIONS: list[dict[str, str]] = [
     {
         "slug": "media-management",
@@ -38,12 +44,14 @@ SETTINGS_SECTIONS: list[dict[str, str]] = [
         "template": "settings/profiles.html",
         "label_key": "settings_section_profiles",
         "desc_key": "settings_overview_profiles_desc",
+        "status": "planned",
     },
     {
         "slug": "quality",
         "template": "settings/quality.html",
         "label_key": "settings_section_quality",
         "desc_key": "settings_overview_quality_desc",
+        "status": "planned",
     },
     {
         "slug": "indexers",
@@ -62,6 +70,7 @@ SETTINGS_SECTIONS: list[dict[str, str]] = [
         "template": "settings/connect.html",
         "label_key": "settings_section_connect",
         "desc_key": "settings_overview_connect_desc",
+        "status": "planned",
     },
     {
         "slug": "metadata",
@@ -74,6 +83,7 @@ SETTINGS_SECTIONS: list[dict[str, str]] = [
         "template": "settings/tags.html",
         "label_key": "settings_section_tags",
         "desc_key": "settings_overview_tags_desc",
+        "status": "planned",
     },
     {
         "slug": "general",
@@ -193,6 +203,7 @@ async def settings_section_page(request: Request, section: str) -> HTMLResponse:
         "settings_sections": SETTINGS_SECTIONS,
         "active_settings_section": section,
         "active_section_label_key": match["label_key"],
+        "active_section_status": match.get("status", "active"),
     }
     return templates.TemplateResponse(request, match["template"], context)
 
