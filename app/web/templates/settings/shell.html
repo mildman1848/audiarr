@@ -4,20 +4,27 @@
    sub-nav + "Show advanced" toggle in the page toolbar, and a prominent
    save-state bar under the form (Arr-style "No changes" / "Unsaved
    changes" + Save). Section pages extend this and fill in
-   settings_content with just their own card(s). #}
+   settings_content with just their own card(s).
+
+   active_section_status (see routes.py::SETTINGS_SECTIONS) is "planned"
+   for sections that are read-only/placeholder this slice — those get a
+   heading badge instead of the advanced toggle and save bar, so a page
+   with nothing to save never implies otherwise. #}
 
 {% block page_title %}{{ t[active_section_label_key] }} — {{ t.settings_title }}{% endblock %}
 {% block page_eyebrow %}{{ t.settings_eyebrow }}{% endblock %}
-{% block page_heading %}{{ t[active_section_label_key] }}{% endblock %}
+{% block page_heading %}{{ t[active_section_label_key] }}{% if active_section_status == "planned" %} <span class="badge badge-planned">{{ t.settings_status_planned }}</span>{% endif %}{% endblock %}
 
 {% block page_toolbar %}
   {% include "settings/_nav.html" %}
+  {% if active_section_status != "planned" %}
   <div class="toolbar-group toolbar-right">
     <button type="button" class="toolbar-btn settings-advanced-toggle" id="settings-advanced-toggle"
             data-settings-advanced-toggle aria-pressed="false">
       {{ t.settings_show_advanced }}
     </button>
   </div>
+  {% endif %}
 {% endblock %}
 
 {% block content %}
@@ -25,11 +32,13 @@
     {% block settings_content %}{% endblock %}
   </form>
 
+  {% if active_section_status != "planned" %}
   <div class="settings-save-bar" id="settings-save-bar" data-settings-save-bar>
     <span class="settings-save-status" id="settings-save-status">{{ t.settings_no_changes }}</span>
     <span id="settings-msg" class="muted" role="status"></span>
     <button type="submit" form="settings-form" class="btn btn-primary" id="settings-save-btn">{{ t.settings_save }}</button>
   </div>
+  {% endif %}
 {% endblock %}
 
 {% block scripts %}

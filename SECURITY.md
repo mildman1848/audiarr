@@ -14,7 +14,7 @@ Do not commit `.env`, `/config`, generated DBs, or secret files. Logs must never
 
 ## Supported versions
 
-Audiarr is pre-1.0. Only the `main` branch is supported while the project is in scaffold/MVP stage.
+Audiarr is pre-1.0. Only the `main` branch is supported until stable release channels exist.
 
 ## Reporting
 

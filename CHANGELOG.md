@@ -1,5 +1,11 @@
 # Changelog
 
+## Unreleased
+
+- Productize public wording: Audiarr is described as a pre-1.0 audiobook manager, not a scaffold.
+- Align web navigation labels around Arr-style Add New and Releases workflows.
+- Mark planned Settings sections explicitly instead of showing misleading save controls.
+
 ## 0.1.0-mldm2
 
 - Update FastAPI, Starlette, Pydantic, Uvicorn, and Jinja2 pins for security.
@@ -8,8 +14,8 @@
 
 ## 0.1.0-mldm1
 
-- Initial Audiarr scaffold.
+- Initial Audiarr application foundation.
 - FastAPI backend, settings API, metadata provider chain, Audiobookshelf and m4b-convertarr clients.
 - Minimal Servarr-inspired UI with Audible-orange accent.
-- LSIO/s6 Docker image scaffold.
+- LSIO/s6 Docker image foundation.
 - GitHub Actions for lint/test, Docker build/publish, security scan, and mirror placeholders.

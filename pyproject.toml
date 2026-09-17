@@ -1,7 +1,7 @@
 [project]
 name = "audiarr"
 version = "0.1.0"
-description = "Servarr-style audiobook manager scaffold"
+description = "Servarr-style audiobook manager"
 requires-python = ">=3.12"
 dependencies = [
   "fastapi==0.141.1",

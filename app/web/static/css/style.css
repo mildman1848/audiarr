@@ -417,6 +417,15 @@ body {
   border-color: transparent;
 }
 
+/* Marks a settings section as deliberately not-yet-editable (overview
+   card heading and dedicated page heading) instead of letting it look
+   like a broken/half-built form. Dashed border matches .callout, the
+   "coming next" note style used inside those same sections. */
+.badge-planned {
+  border-style: dashed;
+  background: transparent;
+}
+
 /* --------------------------------------------------------------- Tables */
 
 .table {
