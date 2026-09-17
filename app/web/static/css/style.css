@@ -1224,6 +1224,20 @@ button:disabled,
   color: var(--text-main);
 }
 
+/* Header row of a repeatable settings entry (quality definition / quality
+   profile): title on the left, remove button pinned to the right. */
+.repeat-row-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.6rem;
+  margin-bottom: 0.6rem;
+}
+
+.repeat-row-head h3 {
+  margin: 0;
+}
+
 /* "Coming next" / "Modeled, not wired yet" notes on placeholder sections. */
 .callout {
   margin-top: 0.75rem;

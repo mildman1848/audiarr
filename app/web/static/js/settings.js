@@ -134,32 +134,227 @@ function escapeHtml(value) {
     .replace(/"/g, "&quot;");
 }
 
-// Read-only summary table of the modeled quality profiles (Profiles
-// page). Editing is a later slice; this just shows what is stored.
-function renderProfileSummary(profiles) {
-  const el = $("profile-summary");
+// Comma-separated list <-> array helper for the plain-text list fields
+// (allowed formats, preferred quality tier IDs) in the Profiles editor.
+function splitList(value) {
+  return String(value || "")
+    .split(",")
+    .map((s) => s.trim())
+    .filter(Boolean);
+}
+
+// ---------------------------------------------------------------- Quality
+// Editable list of audiobook quality tiers (Quality page). Each row edits
+// one QualityDefinition (see app/models/settings.py); state is kept as a
+// plain array of objects and only re-rendered on add/remove so typing in a
+// field never loses focus/cursor position.
+let qualityDefinitionsState = null;
+
+function newQualityDefinition() {
+  return {
+    id: "",
+    name: "",
+    container: "m4b",
+    codec: "aac",
+    lossless: false,
+    min_bitrate_kbps: 32,
+    preferred_bitrate_kbps: 64,
+    max_bitrate_kbps: 128,
+    chapters: "preferred",
+  };
+}
+
+function paintQualityDefinitions() {
+  const el = $("quality-definitions");
+  if (!el || !qualityDefinitionsState) return;
+  if (!qualityDefinitionsState.length) {
+    el.innerHTML = `<p class="muted">${T.settings_quality_empty}</p>`;
+    return;
+  }
+  el.innerHTML = qualityDefinitionsState
+    .map((d, i) => {
+      const chaptersOption = (value, label) =>
+        `<option value="${value}" ${d.chapters === value ? "selected" : ""}>${label}</option>`;
+      return `
+    <div class="settings-subsection repeat-row" data-row="${i}">
+      <div class="repeat-row-head">
+        <h3>${escapeHtml(d.name) || T.settings_quality_untitled}</h3>
+        <button type="button" class="btn btn-secondary" data-remove-quality="${i}">${T.settings_remove}</button>
+      </div>
+      <label>${T.settings_field_name}
+        <input type="text" data-quality-field="name" data-row="${i}" value="${escapeHtml(d.name)}">
+      </label>
+      <label>${T.settings_quality_id_label}
+        <input type="text" data-quality-field="id" data-row="${i}" value="${escapeHtml(d.id)}">
+      </label>
+      <p class="muted small">${T.settings_quality_id_hint}</p>
+      <label>${T.settings_quality_container_label}
+        <input type="text" data-quality-field="container" data-row="${i}" value="${escapeHtml(d.container)}">
+      </label>
+      <label>${T.settings_quality_codec_label}
+        <input type="text" data-quality-field="codec" data-row="${i}" value="${escapeHtml(d.codec)}">
+      </label>
+      <label class="inline-check">
+        <input type="checkbox" data-quality-field="lossless" data-row="${i}" ${d.lossless ? "checked" : ""}>
+        ${T.settings_quality_lossless_label}
+      </label>
+      <label>${T.settings_quality_min_bitrate_label}
+        <input type="number" min="0" data-quality-field="min_bitrate_kbps" data-row="${i}" value="${d.min_bitrate_kbps}">
+      </label>
+      <label>${T.settings_quality_preferred_bitrate_label}
+        <input type="number" min="0" data-quality-field="preferred_bitrate_kbps" data-row="${i}" value="${d.preferred_bitrate_kbps}">
+      </label>
+      <label>${T.settings_quality_max_bitrate_label}
+        <input type="number" min="0" data-quality-field="max_bitrate_kbps" data-row="${i}" value="${d.max_bitrate_kbps}">
+      </label>
+      <label>${T.settings_quality_chapters_label}
+        <select data-quality-field="chapters" data-row="${i}">
+          ${chaptersOption("required", T.settings_quality_chapters_required)}
+          ${chaptersOption("preferred", T.settings_quality_chapters_preferred)}
+          ${chaptersOption("not_required", T.settings_quality_chapters_not_required)}
+        </select>
+      </label>
+    </div>`;
+    })
+    .join("");
+}
+
+function renderQualityDefinitionsEditor(definitions) {
+  const el = $("quality-definitions");
   if (!el) return;
-  if (!profiles || !profiles.length) {
+  qualityDefinitionsState = (definitions || []).map((d) => ({ ...d }));
+  paintQualityDefinitions();
+}
+
+function bindQualityDefinitionsEvents() {
+  const el = $("quality-definitions");
+  if (!el || el.dataset.bound) return;
+  el.dataset.bound = "1";
+
+  const applyFieldChange = (target) => {
+    const field = target.dataset.qualityField;
+    const row = target.dataset.row;
+    if (field == null || row == null || !qualityDefinitionsState) return;
+    const item = qualityDefinitionsState[Number(row)];
+    if (!item) return;
+    if (target.type === "checkbox") {
+      item[field] = target.checked;
+    } else if (target.type === "number") {
+      item[field] = Number(target.value) || 0;
+    } else {
+      item[field] = target.value;
+    }
+  };
+
+  el.addEventListener("input", (e) => applyFieldChange(e.target));
+  el.addEventListener("change", (e) => applyFieldChange(e.target));
+  el.addEventListener("click", (e) => {
+    const idx = e.target.dataset.removeQuality;
+    if (idx == null || !qualityDefinitionsState) return;
+    qualityDefinitionsState.splice(Number(idx), 1);
+    paintQualityDefinitions();
+    setDirty(true);
+  });
+}
+
+// ---------------------------------------------------------------- Profiles
+// Editable list of quality profiles (Profiles page). List-shaped fields
+// (allowed formats, preferred quality tier IDs) are edited as plain
+// comma-separated text and only split into arrays at save time.
+let profilesState = null;
+let profilesQualityDefs = [];
+
+function paintProfiles() {
+  const el = $("profiles-editor");
+  if (!el || !profilesState) return;
+  if (!profilesState.length) {
     el.innerHTML = `<p class="muted">${T.settings_profiles_empty}</p>`;
     return;
   }
-  const rows = profiles
+  const qualityOptionsHtml = (selectedId) => {
+    const opts = [
+      `<option value="">${T.settings_profiles_cutoff_quality_none}</option>`,
+      ...profilesQualityDefs.map(
+        (d) =>
+          `<option value="${escapeHtml(d.id)}" ${d.id === selectedId ? "selected" : ""}>${escapeHtml(d.name)} (${escapeHtml(d.id)})</option>`
+      ),
+    ];
+    return opts.join("");
+  };
+  el.innerHTML = profilesState
     .map(
-      (p) => `<tr>
-        <td>${escapeHtml(p.name)}</td>
-        <td>${escapeHtml((p.allowed_formats || []).join(", "))}</td>
-        <td>${escapeHtml(p.cutoff_format || "")}</td>
-      </tr>`
+      (p, i) => `
+    <div class="settings-subsection repeat-row" data-row="${i}">
+      <div class="repeat-row-head">
+        <h3>${escapeHtml(p.name) || T.settings_profiles_untitled}</h3>
+        <button type="button" class="btn btn-secondary" data-remove-profile="${i}">${T.settings_remove}</button>
+      </div>
+      <label>${T.settings_field_name}
+        <input type="text" data-profile-field="name" data-row="${i}" value="${escapeHtml(p.name)}">
+      </label>
+      <label>${T.settings_profiles_allowed_formats_label}
+        <input type="text" data-profile-field="allowed_formats" data-row="${i}" value="${escapeHtml(p.allowed_formats)}">
+      </label>
+      <p class="muted small">${T.settings_profiles_allowed_formats_hint}</p>
+      <label>${T.settings_profiles_cutoff_format_label}
+        <input type="text" data-profile-field="cutoff_format" data-row="${i}" value="${escapeHtml(p.cutoff_format)}">
+      </label>
+      <label>${T.settings_profiles_quality_ids_label}
+        <input type="text" data-profile-field="quality_ids" data-row="${i}" value="${escapeHtml(p.quality_ids)}">
+      </label>
+      <p class="muted small">${T.settings_profiles_quality_ids_hint}</p>
+      <label>${T.settings_profiles_cutoff_quality_label}
+        <select data-profile-field="cutoff_quality_id" data-row="${i}">
+          ${qualityOptionsHtml(p.cutoff_quality_id)}
+        </select>
+      </label>
+      <label class="inline-check">
+        <input type="checkbox" data-profile-field="upgrade_allowed" data-row="${i}" ${p.upgrade_allowed ? "checked" : ""}>
+        ${T.settings_profiles_upgrade_allowed_label}
+      </label>
+    </div>`
     )
     .join("");
-  el.innerHTML = `<table class="table summary-table">
-    <thead><tr>
-      <th>${T.settings_profiles_col_name}</th>
-      <th>${T.settings_profiles_col_formats}</th>
-      <th>${T.settings_profiles_col_cutoff}</th>
-    </tr></thead>
-    <tbody>${rows}</tbody>
-  </table>`;
+}
+
+function renderProfilesEditor(profiles, qualityDefs) {
+  const el = $("profiles-editor");
+  if (!el) return;
+  profilesState = (profiles || []).map((p) => ({
+    name: p.name || "",
+    allowed_formats: (p.allowed_formats || []).join(", "),
+    cutoff_format: p.cutoff_format || "",
+    quality_ids: (p.quality_ids || []).join(", "),
+    cutoff_quality_id: p.cutoff_quality_id || "",
+    upgrade_allowed: p.upgrade_allowed !== false,
+  }));
+  profilesQualityDefs = qualityDefs || [];
+  paintProfiles();
+}
+
+function bindProfilesEvents() {
+  const el = $("profiles-editor");
+  if (!el || el.dataset.bound) return;
+  el.dataset.bound = "1";
+
+  const applyFieldChange = (target) => {
+    const field = target.dataset.profileField;
+    const row = target.dataset.row;
+    if (field == null || row == null || !profilesState) return;
+    const item = profilesState[Number(row)];
+    if (!item) return;
+    item[field] = target.type === "checkbox" ? target.checked : target.value;
+  };
+
+  el.addEventListener("input", (e) => applyFieldChange(e.target));
+  el.addEventListener("change", (e) => applyFieldChange(e.target));
+  el.addEventListener("click", (e) => {
+    const idx = e.target.dataset.removeProfile;
+    if (idx == null || !profilesState) return;
+    profilesState.splice(Number(idx), 1);
+    paintProfiles();
+    setDirty(true);
+  });
 }
 
 // Populate whichever of these fields exist on the current settings page.
@@ -175,7 +370,14 @@ function populate(s) {
   setChecked("media-rename-files", s.media_management.rename_files);
   setValue("media-file-name-pattern", s.media_management.file_name_pattern || "");
   setChecked("media-delete-empty-folders", s.media_management.delete_empty_folders);
-  renderProfileSummary(s.quality_profiles);
+  if ($("quality-definitions")) {
+    renderQualityDefinitionsEditor(s.quality_definitions);
+    bindQualityDefinitionsEvents();
+  }
+  if ($("profiles-editor")) {
+    renderProfilesEditor(s.quality_profiles, s.quality_definitions);
+    bindProfilesEvents();
+  }
   setText("connect-summary", (s.connect || []).length);
   setText("ui-theme-summary", s.ui.theme || "—");
   setText("ui-date-format-summary", s.ui.date_format || "—");
@@ -255,6 +457,35 @@ async function saveSettings(event) {
       sab.category = getValue("sab-category").trim() || "audiobooks";
       const sabKey = getValue("sab-api-key");
       if (sabKey) sab.api_key = sabKey; // empty means keep stored key
+    }
+
+    if ($("quality-definitions") && qualityDefinitionsState) {
+      doc.quality_definitions = qualityDefinitionsState
+        .map((d) => ({
+          id: (d.id || "").trim(),
+          name: (d.name || "").trim(),
+          container: (d.container || "").trim() || "m4b",
+          codec: (d.codec || "").trim() || "aac",
+          lossless: Boolean(d.lossless),
+          min_bitrate_kbps: Number(d.min_bitrate_kbps) || 0,
+          preferred_bitrate_kbps: Number(d.preferred_bitrate_kbps) || 0,
+          max_bitrate_kbps: Number(d.max_bitrate_kbps) || 0,
+          chapters: d.chapters || "preferred",
+        }))
+        .filter((d) => d.id && d.name);
+    }
+
+    if ($("profiles-editor") && profilesState) {
+      doc.quality_profiles = profilesState
+        .map((p) => ({
+          name: (p.name || "").trim(),
+          allowed_formats: splitList(p.allowed_formats),
+          cutoff_format: (p.cutoff_format || "").trim() || "m4b",
+          quality_ids: splitList(p.quality_ids),
+          cutoff_quality_id: (p.cutoff_quality_id || "").trim(),
+          upgrade_allowed: Boolean(p.upgrade_allowed),
+        }))
+        .filter((p) => p.name);
     }
 
     if ($("prowlarr-url") || $("prowlarr-enabled")) {
@@ -413,6 +644,33 @@ document.addEventListener("DOMContentLoaded", () => {
         "prowlarr-msg"
       )
     );
+  }
+
+  const qualityAddBtn = $("quality-add-btn");
+  if (qualityAddBtn) {
+    qualityAddBtn.addEventListener("click", () => {
+      if (!qualityDefinitionsState) qualityDefinitionsState = [];
+      qualityDefinitionsState.push(newQualityDefinition());
+      paintQualityDefinitions();
+      setDirty(true);
+    });
+  }
+
+  const profilesAddBtn = $("profiles-add-btn");
+  if (profilesAddBtn) {
+    profilesAddBtn.addEventListener("click", () => {
+      if (!profilesState) profilesState = [];
+      profilesState.push({
+        name: "",
+        allowed_formats: "m4b, mp3, flac",
+        cutoff_format: "m4b",
+        quality_ids: "",
+        cutoff_quality_id: "",
+        upgrade_allowed: true,
+      });
+      paintProfiles();
+      setDirty(true);
+    });
   }
 
   const copyBtn = $("security-api-key-copy-btn");

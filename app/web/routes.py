@@ -44,14 +44,12 @@ SETTINGS_SECTIONS: list[dict[str, str]] = [
         "template": "settings/profiles.html",
         "label_key": "settings_section_profiles",
         "desc_key": "settings_overview_profiles_desc",
-        "status": "planned",
     },
     {
         "slug": "quality",
         "template": "settings/quality.html",
         "label_key": "settings_section_quality",
         "desc_key": "settings_overview_quality_desc",
-        "status": "planned",
     },
     {
         "slug": "indexers",

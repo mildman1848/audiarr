@@ -68,12 +68,101 @@ class MediaManagementSettings(BaseModel):
     delete_empty_folders: bool = True
 
 
+ChapterExpectation = Literal["required", "preferred", "not_required"]
+
+
+class QualityDefinition(BaseModel):
+    """A single audiobook quality tier.
+
+    Audiobook quality isn't resolution/source like video: what matters is
+    the container/codec, the bitrate band (spoken word compresses far
+    better than music, so these bands are much lower than a video/music
+    quality ladder would suggest), whether the encoding is lossless, and
+    whether chapter markers are present (they drive in-app navigation and
+    have no video-quality equivalent). See docs/design/quality-profiles.md.
+    ``id`` is a stable key that QualityProfile.quality_ids and
+    cutoff_quality_id reference.
+    """
+
+    id: str
+    name: str
+    container: str = "m4b"
+    codec: str = "aac"
+    lossless: bool = False
+    min_bitrate_kbps: int = 32
+    preferred_bitrate_kbps: int = 64
+    max_bitrate_kbps: int = 256
+    chapters: ChapterExpectation = "preferred"
+
+
+def _default_quality_definitions() -> list[QualityDefinition]:
+    """Audiobook-shaped starter tiers -- not a copy of a video quality pack."""
+    return [
+        QualityDefinition(
+            id="m4b-aac-64",
+            name="M4B AAC ~64 kbps",
+            container="m4b",
+            codec="aac",
+            min_bitrate_kbps=32,
+            preferred_bitrate_kbps=64,
+            max_bitrate_kbps=96,
+            chapters="preferred",
+        ),
+        QualityDefinition(
+            id="m4b-aac-128",
+            name="M4B AAC ~128 kbps",
+            container="m4b",
+            codec="aac",
+            min_bitrate_kbps=96,
+            preferred_bitrate_kbps=128,
+            max_bitrate_kbps=160,
+            chapters="required",
+        ),
+        QualityDefinition(
+            id="mp3-320",
+            name="MP3 320 kbps",
+            container="mp3",
+            codec="mp3",
+            min_bitrate_kbps=192,
+            preferred_bitrate_kbps=320,
+            max_bitrate_kbps=320,
+            chapters="not_required",
+        ),
+        QualityDefinition(
+            id="flac-lossless",
+            name="FLAC Lossless",
+            container="flac",
+            codec="flac",
+            lossless=True,
+            min_bitrate_kbps=400,
+            preferred_bitrate_kbps=1000,
+            max_bitrate_kbps=1500,
+            chapters="preferred",
+        ),
+    ]
+
+
 class QualityProfile(BaseModel):
-    """A named ordered list of acceptable audio formats."""
+    """A named, ordered preference list of acceptable audiobook quality tiers.
+
+    ``allowed_formats``/``cutoff_format`` are the original MVP fields (bare
+    file extensions) and are kept as-is for backwards compatibility with
+    existing settings.json documents. ``quality_ids`` is the richer
+    audiobook-specific addition: an ordered, best-first list of
+    QualityDefinition ids; ``cutoff_quality_id`` is the tier at which
+    Audiarr stops seeking upgrades (mirrors ``cutoff_format`` but keyed to a
+    real quality tier instead of a bare extension). See
+    docs/design/quality-profiles.md for what's wired up vs. deferred.
+    """
 
     name: str
     allowed_formats: list[str] = Field(default_factory=lambda: ["m4b", "mp3", "flac"])
     cutoff_format: str = "m4b"
+    quality_ids: list[str] = Field(
+        default_factory=lambda: ["m4b-aac-128", "m4b-aac-64", "mp3-320"]
+    )
+    cutoff_quality_id: str = "m4b-aac-128"
+    upgrade_allowed: bool = True
 
 
 class RootFolder(BaseModel):
@@ -267,6 +356,9 @@ class Settings(BaseModel):
     host: HostSettings = Field(default_factory=HostSettings)
     auth: AuthSettings = Field(default_factory=AuthSettings)
     media_management: MediaManagementSettings = Field(default_factory=MediaManagementSettings)
+    quality_definitions: list[QualityDefinition] = Field(
+        default_factory=_default_quality_definitions
+    )
     quality_profiles: list[QualityProfile] = Field(
         default_factory=lambda: [QualityProfile(name="Standard")]
     )

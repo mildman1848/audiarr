@@ -7,7 +7,7 @@ Audiarr models the settings categories from Radarr/Sonarr now, but implementatio
 | Host | modeled | reverse proxy URL base, SSL flags, API key auth |
 | Auth | modeled only | forms/API key enforcement |
 | Media management | modeled | rename, organize, hardlink/copy/import decisions |
-| Quality profiles | modeled | format/bitrate scoring for audiobooks |
+| Quality profiles | modeled + editable | use profiles/quality tiers in import matching and conversion decisions |
 | Root folders | modeled | scan, free-space, permissions, identity tracking |
 | Download clients | modeled | SABnzbd/qBittorrent clients |
 | Indexers | modeled | Prowlarr/Newznab/Torznab |
