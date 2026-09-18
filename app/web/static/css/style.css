@@ -525,6 +525,33 @@ body {
   background: transparent;
 }
 
+/* Audiobook quality-fit badges (release search results): status reported
+   by app/quality.py's evaluate_quality_for_profile. "unknown" falls back
+   to the base .badge muted style. */
+.badge-quality-preferred {
+  background: rgba(76, 175, 125, 0.16);
+  color: var(--ok);
+  border-color: transparent;
+}
+
+.badge-quality-accepted {
+  background: var(--audiarr-accent-soft);
+  color: var(--audiarr-accent);
+  border-color: transparent;
+}
+
+.badge-quality-below-cutoff {
+  background: rgba(224, 160, 48, 0.16);
+  color: var(--warn);
+  border-color: transparent;
+}
+
+.badge-quality-rejected {
+  background: rgba(224, 96, 94, 0.16);
+  color: var(--err);
+  border-color: transparent;
+}
+
 /* ----------------------------------------------------- Activity progress */
 
 .activity-progress {
