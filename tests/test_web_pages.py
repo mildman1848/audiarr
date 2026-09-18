@@ -786,6 +786,7 @@ def test_wanted_missing_page_has_root_marker_and_toolbar_controls(app_client):
     assert 'id="wanted-refresh-top"' in page.text
     assert 'id="wanted-filter"' in page.text
     assert 'id="wanted-missing-list"' in page.text
+    assert 'id="wanted-cutoff-list"' in page.text
 
 
 def test_wanted_missing_page_marks_nav_active(app_client):
@@ -872,7 +873,7 @@ def test_common_js_defines_shared_empty_state_helper():
     ("js_file", "expected_calls"),
     [
         ("library.js", 3),
-        ("wanted.js", 2),
+        ("wanted.js", 3),
         ("calendar.js", 3),
         ("activity.js", 3),
         ("app.js", 1),
