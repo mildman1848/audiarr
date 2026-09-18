@@ -56,6 +56,60 @@ function protocolBadge(protocol) {
   return `<span class="badge">${esc(protocol || "—")}</span>`;
 }
 
+// quality_status (from app/quality.py, via /api/v1/releases/search) -> i18n
+// label key and badge modifier class. Falls back to "unknown" for missing
+// or unrecognized statuses (e.g. an older cached response).
+const QUALITY_STATUS_KEYS = {
+  preferred: "search_quality_preferred",
+  accepted: "search_quality_accepted",
+  below_cutoff: "search_quality_below_cutoff",
+  rejected: "search_quality_rejected",
+  unknown: "search_quality_unknown",
+};
+
+const QUALITY_STATUS_CLASSES = {
+  preferred: "badge-quality-preferred",
+  accepted: "badge-quality-accepted",
+  below_cutoff: "badge-quality-below-cutoff",
+  rejected: "badge-quality-rejected",
+};
+
+// Tooltip text: inferred container/codec/bitrate plus the English
+// quality_reason string from app/quality.py, shown as-is (not translated).
+function qualityTooltip(r) {
+  const parts = [];
+  if (r.quality_container) parts.push(String(r.quality_container).toUpperCase());
+  // For mp3/flac the container IS the codec — avoid "MP3 MP3 320 kbps".
+  if (r.quality_codec && r.quality_codec !== r.quality_container) {
+    parts.push(String(r.quality_codec).toUpperCase());
+  }
+  if (r.quality_bitrate_kbps) parts.push(`${r.quality_bitrate_kbps} kbps`);
+  const head = parts.join(" ");
+  const reason = r.quality_reason || "";
+  if (head && reason) return `${head} — ${reason}`;
+  return head || reason;
+}
+
+// Compact "M4B · 128k" hint shown next to the badge when known.
+function qualityCompact(r) {
+  const bits = [];
+  if (r.quality_container) bits.push(String(r.quality_container).toUpperCase());
+  if (r.quality_bitrate_kbps) bits.push(`${r.quality_bitrate_kbps}k`);
+  return bits.join(" · ");
+}
+
+function qualityBadge(r) {
+  const status = String(r.quality_status || "unknown");
+  const cls = QUALITY_STATUS_CLASSES[status] || "";
+  const label = T[QUALITY_STATUS_KEYS[status]] || T.search_quality_unknown || status;
+  const tooltip = qualityTooltip(r);
+  const titleAttr = tooltip ? ` title="${esc(tooltip)}"` : "";
+  const compact = qualityCompact(r);
+  const compactHtml = compact ? ` <span class="muted small">${esc(compact)}</span>` : "";
+  const badgeClass = `badge ${cls}`.trim();
+  return `<span class="${badgeClass}"${titleAttr}>${esc(label)}</span>${compactHtml}`;
+}
+
 // Inline 503 warning: config missing, point the user at /settings.
 function renderConfigWarning(container) {
   container.innerHTML = `
@@ -100,6 +154,7 @@ async function runSearch(event) {
           <tr>
             <th>${esc(T.search_col_protocol)}</th>
             <th>${esc(T.search_col_title)}</th>
+            <th>${esc(T.search_col_quality)}</th>
             <th>${esc(T.search_col_indexer)}</th>
             <th>${esc(T.search_col_size)}</th>
             <th>${esc(T.search_col_age)}</th>
@@ -129,6 +184,7 @@ function renderRow(r, i) {
     <tr>
       <td>${protocolBadge(r.protocol)}</td>
       <td>${esc(r.title)}</td>
+      <td>${qualityBadge(r)}</td>
       <td>${esc(r.indexer || "—")}</td>
       <td>${esc(humanSize(r.size))}</td>
       <td>${esc(humanAge(r.age))}</td>
