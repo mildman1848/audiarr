@@ -26,6 +26,7 @@ from app.library import BookCreate
 from app.library import create_book as library_create_book
 from app.library.matcher import MatchResult, match_candidate_to_hits
 from app.library.scanner import BookCandidate, scan_folder
+from app.models.settings import QualityProfile, Settings
 from app.providers.base import BookQuickInfo
 from app.providers.chain import ProviderChain
 from app.quality import should_convert_candidate
@@ -383,17 +384,40 @@ def _persist_files(conn: Any, book_id: int, candidate: BookCandidate, locale: st
         )
 
 
+def _resolve_quality_profile(
+    conn: Any, book_id: int, settings: Settings
+) -> QualityProfile | None:
+    """Resolve the quality profile that applies to a book.
+
+    Books store an optional ``quality_profile`` name (see migration #008 /
+    issue #20); empty or a name that no longer matches a configured profile
+    falls back to the first configured profile (the settings-wide default).
+    """
+    if not settings.quality_profiles:
+        return None
+    row = conn.execute(
+        "SELECT quality_profile FROM books WHERE id = ?", (book_id,)
+    ).fetchone()
+    name = row["quality_profile"] if row else ""
+    if name:
+        for profile in settings.quality_profiles:
+            if profile.name == name:
+                return profile
+    return settings.quality_profiles[0]
+
+
 async def _maybe_enqueue_conversion(conn: Any, book_id: int, candidate: BookCandidate) -> None:
     """Offer a candidate to the conversion backend if the quality profile wants it.
 
     Profile-aware replacement for the old hardcoded "mp3/m4a always enqueue"
-    check (see app/quality.py::should_convert_candidate and #17): the first
-    configured quality profile decides whether this candidate's format is
-    worth converting toward, given its target quality tier. Never blocks the
-    import itself -- only the conversion enqueue decision.
+    check (see app/quality.py::should_convert_candidate and #17): the book's
+    own quality profile decides whether this candidate's format is worth
+    converting toward, given its target quality tier, falling back to the
+    first configured profile when the book has none set (see #20). Never
+    blocks the import itself -- only the conversion enqueue decision.
     """
     settings = load_settings()
-    profile = settings.quality_profiles[0] if settings.quality_profiles else None
+    profile = _resolve_quality_profile(conn, book_id, settings)
     if profile is None or not should_convert_candidate(
         candidate.dominant_format, profile, settings.quality_definitions
     ):

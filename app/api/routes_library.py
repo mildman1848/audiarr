@@ -8,6 +8,7 @@ from typing import Any
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel, Field
 
+from app.config import load_settings
 from app.db import get_conn, migrate
 from app.library import (
     BookCreate,
@@ -76,6 +77,7 @@ class BookPatch(BaseModel):
     cover_url: str | None = None
     series_position: float | None = None
     monitored: bool | None = None
+    quality_profile: str | None = None
 
 
 class ProviderIdOut(BaseModel):
@@ -104,6 +106,7 @@ class BookOut(BaseModel):
     formats: list[str]
     added_at: str | None
     monitored: bool
+    quality_profile: str
 
 
 class LibraryFileOut(BaseModel):
@@ -222,6 +225,7 @@ def _book_out(conn: Any, book_id: int) -> BookOut:
         narrators=_split_names(book["narrators"]),
         provider_ids=[ProviderIdOut(**p) for p in pids],
         monitored=bool(book["monitored"]),
+        quality_profile=book["quality_profile"],
         **stats,
     )
 
@@ -252,6 +256,7 @@ async def get_books(limit: int = 50, offset: int = 0) -> list[BookOut]:
                     narrators=_split_names(b["narrators"]),
                     provider_ids=[ProviderIdOut(**p) for p in pids],
                     monitored=bool(b["monitored"]),
+                    quality_profile=b["quality_profile"],
                     **stats,
                 )
             )
@@ -328,10 +333,22 @@ async def get_book_files(book_id: int) -> list[LibraryFileOut]:
     return [LibraryFileOut(**dict(r)) for r in rows]
 
 
+def _validate_quality_profile(name: str) -> None:
+    """Empty string ("inherit default") is always valid; otherwise the name
+    must match a configured quality_profiles[].name."""
+    if not name:
+        return
+    profiles = {p.name for p in load_settings().quality_profiles}
+    if name not in profiles:
+        raise HTTPException(422, f"Unknown quality profile {name!r}")
+
+
 @router.patch("/api/v1/library/books/{book_id}", response_model=BookOut)
 async def patch_book(book_id: int, patch: BookPatch) -> BookOut:
     _ensure_schema()
     updates = patch.model_dump(exclude_unset=True)
+    if "quality_profile" in updates:
+        _validate_quality_profile(updates["quality_profile"])
     with get_conn() as conn:
         if get_book(conn, book_id) is None:
             raise HTTPException(404, "Book not found")

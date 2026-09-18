@@ -186,7 +186,7 @@ def list_books(conn: sqlite3.Connection, limit: int = 50, offset: int = 0) -> li
     rows = conn.execute(
         """SELECT b.id, b.title, b.subtitle, b.description, b.language,
                   b.duration_seconds, b.cover_url, b.release_date, b.publisher,
-                  b.monitored,
+                  b.monitored, b.quality_profile,
                   s.name AS series_name, b.series_position,
                   (SELECT GROUP_CONCAT(a.name, ', ')
                      FROM book_authors ba JOIN authors a ON a.id = ba.author_id
@@ -207,7 +207,7 @@ def update_book(
     allowed = {
         "title", "subtitle", "description", "release_date", "language",
         "publisher", "duration_seconds", "cover_url", "series_position",
-        "monitored",
+        "monitored", "quality_profile",
     }
     fields = [k for k in updates if k in allowed and updates[k] is not None]
     if not fields:
