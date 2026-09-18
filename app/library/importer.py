@@ -21,12 +21,14 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
+from app.config import load_settings
 from app.library import BookCreate
 from app.library import create_book as library_create_book
 from app.library.matcher import MatchResult, match_candidate_to_hits
 from app.library.scanner import BookCandidate, scan_folder
 from app.providers.base import BookQuickInfo
 from app.providers.chain import ProviderChain
+from app.quality import should_convert_candidate
 
 log = logging.getLogger("audiarr.library.importer")
 
@@ -249,17 +251,10 @@ async def _import_one(
     book_id = _persist_book(conn, hit, locale)
     _persist_files(conn, book_id, candidate, locale)
 
-    # Offer MP3-source candidates to the conversion backend (no-op when
-    # conversion is disabled; the backend owns file movement).
-    if candidate.dominant_format in ("mp3", "m4a"):
-        try:
-            from app.conversion.worker import enqueue_for_book
-
-            await enqueue_for_book(
-                conn, book_id, candidate.folder_path, output_path=""
-            )
-        except Exception:  # noqa: BLE001 — conversion must never break imports
-            log.warning("auto-enqueue conversion failed for book %d", book_id, exc_info=True)
+    # Offer the candidate to the conversion backend if the quality profile
+    # wants it (no-op when conversion is disabled; the backend owns file
+    # movement).
+    await _maybe_enqueue_conversion(conn, book_id, candidate)
 
     base.status = "matched"
     base.matched_book_id = book_id
@@ -347,13 +342,7 @@ async def import_single_folder(
     book_id = _persist_book(conn, hit, locale)
     _persist_files(conn, book_id, candidate, locale)
 
-    if candidate.dominant_format in ("mp3", "m4a"):
-        try:
-            from app.conversion.worker import enqueue_for_book
-
-            await enqueue_for_book(conn, book_id, candidate.folder_path, output_path="")
-        except Exception:  # noqa: BLE001 — conversion must never break imports
-            log.warning("auto-enqueue conversion failed for book %d", book_id, exc_info=True)
+    await _maybe_enqueue_conversion(conn, book_id, candidate)
 
     result.status = "matched"
     result.matched_book_id = book_id
@@ -392,6 +381,29 @@ def _persist_files(conn: Any, book_id: int, candidate: BookCandidate, locale: st
                (edition_id, path, size_bytes, format) VALUES (?, ?, ?, ?)""",
             (edition_id, f.path, f.size_bytes, f.format),
         )
+
+
+async def _maybe_enqueue_conversion(conn: Any, book_id: int, candidate: BookCandidate) -> None:
+    """Offer a candidate to the conversion backend if the quality profile wants it.
+
+    Profile-aware replacement for the old hardcoded "mp3/m4a always enqueue"
+    check (see app/quality.py::should_convert_candidate and #17): the first
+    configured quality profile decides whether this candidate's format is
+    worth converting toward, given its target quality tier. Never blocks the
+    import itself -- only the conversion enqueue decision.
+    """
+    settings = load_settings()
+    profile = settings.quality_profiles[0] if settings.quality_profiles else None
+    if profile is None or not should_convert_candidate(
+        candidate.dominant_format, profile, settings.quality_definitions
+    ):
+        return
+    try:
+        from app.conversion.worker import enqueue_for_book
+
+        await enqueue_for_book(conn, book_id, candidate.folder_path, output_path="")
+    except Exception:  # noqa: BLE001 — conversion must never break imports
+        log.warning("auto-enqueue conversion failed for book %d", book_id, exc_info=True)
 
 
 def _job_outcome(result: ImportCandidateResult) -> tuple[str, str | None]:

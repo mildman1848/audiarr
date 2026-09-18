@@ -23,7 +23,8 @@ from pydantic import BaseModel
 from app.config import load_settings
 from app.connections.prowlarr import ProwlarrClient
 from app.connections.sabnzbd import SABnzbdClient
-from app.models.settings import DownloadClient, Indexer
+from app.models.settings import DownloadClient, Indexer, QualityDefinition, QualityProfile
+from app.quality import evaluate_quality_for_profile, infer_quality_from_name
 
 log = logging.getLogger("audiarr.api.releases")
 
@@ -46,6 +47,15 @@ class ReleaseRow(BaseModel):
     protocol: str | None = None
     age: int | None = None
     categories: list[str] = []
+    # Audiobook quality fit against the first configured quality profile
+    # (see app/quality.py); does not change existing fields above.
+    quality_container: str | None = None
+    quality_codec: str | None = None
+    quality_bitrate_kbps: int | None = None
+    quality_chapters: bool | None = None
+    matched_quality_id: str | None = None
+    quality_status: str = "unknown"
+    quality_reason: str = ""
 
 
 class ReleaseSearchResponse(BaseModel):
@@ -105,6 +115,41 @@ def _require_sabnzbd() -> DownloadClient:
     return client
 
 
+def _default_quality_profile() -> QualityProfile | None:
+    """First configured quality profile (no per-book assignment yet, see #17)."""
+    profiles = load_settings().quality_profiles
+    return profiles[0] if profiles else None
+
+
+def _quality_fit_fields(
+    title: str | None,
+    profile: QualityProfile | None,
+    definitions: list[QualityDefinition],
+) -> dict:
+    """Build the ReleaseRow quality_* fields for one release title."""
+    inferred = infer_quality_from_name(title or "")
+    if profile is None:
+        return {
+            "quality_container": inferred.container,
+            "quality_codec": inferred.codec,
+            "quality_bitrate_kbps": inferred.bitrate_kbps,
+            "quality_chapters": inferred.chapters,
+            "matched_quality_id": None,
+            "quality_status": "unknown",
+            "quality_reason": "no quality profile configured",
+        }
+    fit = evaluate_quality_for_profile(inferred, profile, definitions)
+    return {
+        "quality_container": inferred.container,
+        "quality_codec": inferred.codec,
+        "quality_bitrate_kbps": inferred.bitrate_kbps,
+        "quality_chapters": inferred.chapters,
+        "matched_quality_id": fit.matched_quality_id,
+        "quality_status": fit.status,
+        "quality_reason": fit.reason,
+    }
+
+
 @router.get("/api/v1/releases/search", response_model=ReleaseSearchResponse)
 async def search_releases(query: str, limit: int = 50) -> ReleaseSearchResponse:
     """Interactive release search against the configured Prowlarr."""
@@ -112,10 +157,14 @@ async def search_releases(query: str, limit: int = 50) -> ReleaseSearchResponse:
     client = ProwlarrClient(base_url=indexer.url, api_key=indexer.api_key or None)
     releases = await client.search(query, limit=limit)
     log.info("Release search for %r -> %d result(s)", query, len(releases))
-    return ReleaseSearchResponse(
-        releases=[ReleaseRow(**row) for row in releases],
-        total_results=len(releases),
-    )
+
+    settings = load_settings()
+    profile = _default_quality_profile()
+    rows = [
+        ReleaseRow(**row, **_quality_fit_fields(row.get("title"), profile, settings.quality_definitions))
+        for row in releases
+    ]
+    return ReleaseSearchResponse(releases=rows, total_results=len(releases))
 
 
 @router.post("/api/v1/releases/grab", response_model=GrabResponse)

@@ -7,8 +7,10 @@ from pathlib import Path
 
 import pytest
 
+from app.config import load_settings, save_settings
 from app.db import get_conn, migrate
 from app.library.importer import run_import
+from app.models.settings import QualityProfile
 from app.providers.base import (
     BaseMetadataProvider,
     BookDetailInfo,
@@ -165,3 +167,67 @@ async def test_run_import_unmatched_reports_failure(tmp_path, db, chain):
     jobs = db.execute("SELECT status, error FROM import_jobs").fetchall()
     assert jobs[0]["status"] == "failed"
     assert jobs[0]["error"] == "unmatched"
+
+
+# ---------------------------------------------------------------------------
+# Quality-profile-driven conversion enqueue (#17)
+# ---------------------------------------------------------------------------
+
+
+async def test_default_profile_enqueues_mp3_source_for_conversion(tmp_path, db, chain, monkeypatch):
+    """The mp3 tree's candidate.dominant_format is "mp3"; the default quality
+    profile's top tier targets m4b, so should_convert_candidate says yes."""
+    root = _make_tree(tmp_path)
+    folder_id = db.execute(
+        "INSERT INTO root_folders (path) VALUES (?)", (str(root),)
+    ).lastrowid
+    db.commit()
+
+    calls: list[tuple[int, str]] = []
+
+    async def fake_enqueue(conn, book_id, source_path, output_path=""):
+        calls.append((book_id, source_path))
+        return 1
+
+    monkeypatch.setattr("app.conversion.worker.enqueue_for_book", fake_enqueue)
+
+    summary = await run_import(conn=db, chain=chain, root_folder_id=folder_id, dry_run=False, locale="de")
+
+    assert summary.matched == 1
+    assert len(calls) == 1
+    assert calls[0][1] == str(root / "Bernhard Schlink - Der Vorleser [B004UWRY6M]")
+
+
+async def test_profile_not_targeting_m4b_skips_conversion_enqueue(tmp_path, db, chain, monkeypatch):
+    """A quality profile whose top tier is an mp3 tier (not m4b) should never
+    offer an mp3 source to the conversion backend."""
+    root = _make_tree(tmp_path)
+    folder_id = db.execute(
+        "INSERT INTO root_folders (path) VALUES (?)", (str(root),)
+    ).lastrowid
+    db.commit()
+
+    settings = load_settings()
+    settings.quality_profiles = [
+        QualityProfile(
+            name="MP3 shop",
+            allowed_formats=["mp3"],
+            cutoff_format="mp3",
+            quality_ids=["mp3-320"],
+            cutoff_quality_id="mp3-320",
+        )
+    ]
+    save_settings(settings)
+
+    calls: list[tuple[int, str]] = []
+
+    async def fake_enqueue(conn, book_id, source_path, output_path=""):
+        calls.append((book_id, source_path))
+        return 1
+
+    monkeypatch.setattr("app.conversion.worker.enqueue_for_book", fake_enqueue)
+
+    summary = await run_import(conn=db, chain=chain, root_folder_id=folder_id, dry_run=False, locale="de")
+
+    assert summary.matched == 1
+    assert calls == []
