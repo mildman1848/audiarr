@@ -75,11 +75,11 @@ but with real gaps; **Next** — not started.
 
 ### 9. Profiles, Quality, Tags, Connect (notifications) — Partial
 
-- Profiles: audiobook-specific semantics modeled and editable — an ordered, best-first list of quality tiers plus an upgrade cutoff (see `docs/design/quality-profiles.md`). Not yet used by import matching or conversion job dispatch.
-- Quality: real, editable quality definitions (container/codec/bitrate band/lossless/chapter expectations), not a copy of video quality definitions. Not yet used by import matching or conversion job dispatch.
+- Profiles: audiobook-specific semantics modeled and editable — an ordered, best-first list of quality tiers plus an upgrade cutoff (see `docs/design/quality-profiles.md`). Wired into release-search quality fit and conversion enqueue since #18/#19 (first configured profile); per-book assignment is next.
+- Quality: real, editable quality definitions (container/codec/bitrate band/lossless/chapter expectations), not a copy of video quality definitions. Used by the same decision paths as Profiles (see `docs/design/quality-profiles.md`, "Wired behavior").
 - Tags: not modeled beyond the settings document shape; placeholder page.
 - Connect (outbound webhooks/notifications): not implemented; placeholder page that links to the working Audiobookshelf/m4b-convertarr connections instead.
-- Tags and Connect are explicitly marked "Planned" in the Settings overview and their own pages; Profiles and Quality are now active, editable sections.
+- Tags and Connect are explicitly marked "Planned" in the Settings overview and their own pages; Profiles and Quality are active, editable sections.
 
 ### 10. Release hardening — Partial
 
@@ -89,13 +89,43 @@ but with real gaps; **Next** — not started.
 - Runtime image does not include unnecessary build tooling such as pip/setuptools/wheel.
 - Automatic config backups and update checks are modeled in settings but not implemented — **Next**.
 
-## Next
+## Roadmap to 1.0.0
 
-- Wire quality profiles/definitions into import matching and conversion job dispatch (settings model + editor landed; decisioning is next, see `docs/design/quality-profiles.md`).
-- Tags management once indexers/download clients/connections support multiple entries.
-- Connect: a webhook/notification editor for grab/import/health events.
-- Automatic config DB backups and update-check settings.
-- UI polish pass: consistent empty states and density across Dashboard, Library, Calendar, Wanted, and Activity.
+Phased plan; each phase lands as small verified slices (issue → branch → PR → CI → deploy).
+
+### Phase 1 — Finish quality routing — in progress
+
+- Per-book quality profile assignment: `books.quality_profile` column, book detail UI selector, profile-aware conversion enqueue (empty assignment falls back to the first configured profile). **Next**
+- Upgrade search: chase the profile cutoff for monitored books (Wanted page action using per-book profiles). **Next**
+- Optional quality filter when grabbing releases (only releases that fit the profile). **Next**
+
+### Phase 2 — Close the automation loop
+
+- Periodic root-folder import scans (scheduler). **Next**
+- Auto-import after SABnzbd completes a download. **Next**
+- Metadata refresh / wanted-search scheduler. **Next**
+
+### Phase 3 — Tags and Connect
+
+- Tags data model and tagging UI for books and root folders. **Next**
+- Connect editor: webhooks/notifications for grab/import/health events. **Next**
+
+### Phase 4 — Media management
+
+- Rename/organize imports per `file_name_pattern` — explicit opt-in only; the import pipeline itself never moves files today. **Next**
+- Hardlink/copy import strategies. **Next**
+- Root folder free-space and permissions view. **Next**
+
+### Phase 5 — Hardening for 1.0
+
+- Automatic config DB + settings backups with rotation. **Next**
+- Update check (display only, no auto-update). **Next**
+- Backup/restore documented and tested once for real. **Next**
+- Dependency hygiene and a final security pass (issue #8). **Partial**
+
+### Release
+
+- `1.0.0` ships when Phases 1–5 are green: the automation loop is complete, quality decisions are per-book, and backups exist.
 
 ## Later Ideas
 
