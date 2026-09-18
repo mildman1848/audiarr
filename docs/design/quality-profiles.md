@@ -88,3 +88,50 @@ should be queued for a conversion upgrade toward its cutoff tier. This
 requires books to carry an assigned profile (a library-model change) and is
 intentionally out of scope here — this slice only makes the settings
 model and editor real.
+
+## Wired behavior (#17)
+
+Issue #17 wires the settings model from the previous section into two
+read paths. Per-book profile assignment is still deferred — every
+decision below uses the **first configured quality profile**
+(`Settings.quality_profiles[0]`) as the default/only profile.
+
+### Inference: `app/quality.py`
+
+A new, pure/deterministic module (no I/O, no video-quality logic copied
+from Radarr/Sonarr) turns a release/folder/file name into an
+`InferredQuality` (container, codec, bitrate_kbps, chapters) and matches
+it against a profile's ordered `quality_ids` to produce a `QualityFit`
+(`matched_quality_id`, `status`, `reason`). `status` is one of
+`preferred` (top-preference tier), `accepted` (within cutoff, or no tier
+matched but the container is in the profile's legacy `allowed_formats`),
+`below_cutoff` (matched a tier ranked after the cutoff), `rejected`
+(container not allowed at all), or `unknown` (no container signal could
+be extracted from the name at all).
+
+Missing signals never cause a rejection: an unknown bitrate or codec is
+treated as "no evidence against", not "fails to match". A tier with
+`chapters: "required"` is the one exception — it needs an explicit
+chapter/cue hint in the name to match.
+
+### Release search: `app/api/routes_releases.py`
+
+`GET /api/v1/releases/search` evaluates every release's title against the
+default quality profile and adds `quality_container`, `quality_codec`,
+`quality_bitrate_kbps`, `quality_chapters`, `matched_quality_id`,
+`quality_status`, and `quality_reason` to each `ReleaseRow`. All
+pre-existing fields are unchanged.
+
+### Import → conversion enqueue: `app/library/importer.py`
+
+The old hardcoded rule ("auto-enqueue conversion when
+`candidate.dominant_format` is `mp3` or `m4a`") is replaced by
+`should_convert_candidate()`: it reads the target container off the
+default profile's top-preference quality tier (falling back to
+`cutoff_format` if the tier can't be resolved) and only offers mp3/m4a
+sources to the conversion backend when that target is `m4b`. An already-
+`m4b` candidate is never re-offered (this slice has no upgrade-seeking
+re-conversion), and a profile whose top tier targets something other than
+m4b (e.g. an all-mp3 profile) never triggers conversion. This only changes
+the *conversion enqueue* decision — importing itself never depends on
+quality profile fit, and no file is ever moved/renamed/deleted here.

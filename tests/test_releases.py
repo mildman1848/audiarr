@@ -346,6 +346,35 @@ def test_search_endpoint_returns_rows(app_client, monkeypatch):
     assert body["indexer"] == "Prowlarr"
     assert body["releases"][0]["guid"] == "abc-123"
     assert body["releases"][0]["categories"] == ["Audio/Audiobook"]
+    # Quality fit metadata (#17): title has no recognizable container/codec
+    # token, so inference is unknown against the default quality profile.
+    row = body["releases"][0]
+    assert row["quality_container"] is None
+    assert row["quality_status"] == "unknown"
+    assert row["matched_quality_id"] is None
+
+
+def test_search_endpoint_reports_quality_fit_for_recognizable_titles(app_client, monkeypatch):
+    _configure(app_client)
+
+    release = dict(_RAW_RELEASE, title="Some Audiobook M4B AAC 128kbps Chaptered")
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        return httpx.Response(200, json=[release])
+
+    monkeypatch.setattr(
+        "app.api.routes_releases.ProwlarrClient", _factory(ProwlarrClient, handler)
+    )
+
+    resp = app_client.get("/api/v1/releases/search", params={"query": "vorleser"})
+    assert resp.status_code == 200
+    row = resp.json()["releases"][0]
+    assert row["quality_container"] == "m4b"
+    assert row["quality_codec"] == "aac"
+    assert row["quality_bitrate_kbps"] == 128
+    assert row["quality_chapters"] is True
+    assert row["matched_quality_id"] == "m4b-aac-128"
+    assert row["quality_status"] == "preferred"
 
 
 def test_search_endpoint_503_without_prowlarr(app_client):
