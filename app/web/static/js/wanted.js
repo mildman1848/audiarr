@@ -1,11 +1,17 @@
 // Wanted/Missing page: monitored books that have zero files in the library
-// yet, Arr-style. Read-only in this slice — no indexer search/grab actions.
+// yet (Missing section, read-only), plus monitored books that already have
+// files but fall below their quality profile's cutoff (Cutoff unmet
+// section), where a "Search for upgrade" button triggers a server-side
+// search + grab against the book's own profile.
 
 const T = window.AUDIARR_I18N || {};
 
 // Cache of the last fetched list so the filter field can re-render without
 // refetching, same pattern as library.js.
 let allMissing = [];
+
+// Cache of the last fetched cutoff-unmet list.
+let allCutoff = [];
 
 function esc(value) {
   return String(value ?? "").replace(/[&<>"']/g, (c) => ({
@@ -97,8 +103,108 @@ async function loadMissing() {
   }
 }
 
+// Compact "Tier name · M4B · 128k" hint for a cutoff candidate's current quality.
+function cutoffQualitySummary(b) {
+  const parts = [];
+  if (b.current_quality_name) parts.push(b.current_quality_name);
+  if (b.current_container) parts.push(String(b.current_container).toUpperCase());
+  if (b.current_bitrate_kbps) parts.push(`${b.current_bitrate_kbps}k`);
+  return parts.join(" · ") || "—";
+}
+
+function renderCutoffRow(b) {
+  return `
+    <tr>
+      <td>${esc(b.title)}</td>
+      <td>${esc((b.authors || []).join(", ")) || "—"}</td>
+      <td>${esc(cutoffQualitySummary(b))}</td>
+      <td>${esc(b.profile_name)} / ${esc(b.cutoff_name)}</td>
+      <td><button type="button" class="btn btn-primary" data-book-id="${b.id}">${esc(T.wanted_cutoff_search)}</button></td>
+    </tr>`;
+}
+
+function renderCutoff() {
+  const container = document.getElementById("wanted-cutoff-list");
+
+  if (!allCutoff.length) {
+    container.innerHTML = window.AudiarrUI.emptyState({ icon: "⇪", title: T.wanted_cutoff_empty });
+    return;
+  }
+
+  container.innerHTML = `
+    <div class="table-scroll">
+      <table class="table">
+        <thead>
+          <tr>
+            <th>${esc(T.wanted_col_title)}</th>
+            <th>${esc(T.wanted_col_authors)}</th>
+            <th>${esc(T.wanted_cutoff_col_current_quality)}</th>
+            <th>${esc(T.wanted_cutoff_col_profile)}</th>
+            <th>${esc(T.wanted_col_actions)}</th>
+          </tr>
+        </thead>
+        <tbody>${allCutoff.map(renderCutoffRow).join("")}</tbody>
+      </table>
+    </div>`;
+
+  container.querySelectorAll("button[data-book-id]").forEach((btn) => {
+    btn.addEventListener("click", () => searchCutoffUpgrade(Number(btn.dataset.bookId), btn));
+  });
+}
+
+async function loadCutoff() {
+  const container = document.getElementById("wanted-cutoff-list");
+  try {
+    const resp = await fetch("/api/v1/wanted/cutoff");
+    if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+    allCutoff = await resp.json();
+    renderCutoff();
+  } catch (err) {
+    allCutoff = [];
+    container.innerHTML = `<p class="muted">${esc(T.wanted_cutoff_load_error)} (${esc(err.message)})</p>`;
+  }
+}
+
+async function searchCutoffUpgrade(bookId, btn) {
+  const originalLabel = btn.textContent;
+  btn.disabled = true;
+  btn.textContent = T.wanted_cutoff_searching;
+  console.debug("cutoff upgrade search: book_id=%s", bookId);
+
+  try {
+    const resp = await fetch(`/api/v1/wanted/cutoff/${bookId}/search`, { method: "POST" });
+    const data = await resp.json().catch(() => ({}));
+    if (!resp.ok && resp.status !== 202) throw new Error(data.detail || `HTTP ${resp.status}`);
+
+    if (data.ok) {
+      if (window.AudiarrToast) {
+        window.AudiarrToast.success(`${T.wanted_cutoff_search_success}: ${data.release_title || ""}`.trim());
+      }
+      await loadCutoff();
+    } else {
+      btn.disabled = false;
+      btn.textContent = originalLabel;
+      if (window.AudiarrToast) {
+        window.AudiarrToast.error(
+          `${T.wanted_cutoff_search_no_release}: ${data.reason || data.message || ""}`.trim()
+        );
+      }
+    }
+  } catch (err) {
+    btn.disabled = false;
+    btn.textContent = originalLabel;
+    if (window.AudiarrToast) {
+      window.AudiarrToast.error(`${T.wanted_cutoff_search_error} (${err.message})`);
+    }
+  }
+}
+
 document.addEventListener("DOMContentLoaded", () => {
   loadMissing();
-  document.getElementById("wanted-refresh-top").addEventListener("click", loadMissing);
+  loadCutoff();
+  document.getElementById("wanted-refresh-top").addEventListener("click", () => {
+    loadMissing();
+    loadCutoff();
+  });
   document.getElementById("wanted-filter").addEventListener("input", renderMissing);
 });
