@@ -47,7 +47,19 @@ function coverHtml(book) {
   return `<div class="book-hero-cover-placeholder">${esc(T.library_grid_cover_placeholder)}</div>`;
 }
 
-function renderBook(book, files) {
+function qualityProfileOptionsHtml(selected, profiles) {
+  const options = [
+    `<option value="" ${selected ? "" : "selected"}>${esc(T.book_detail_quality_profile_default)}</option>`,
+  ];
+  for (const p of profiles) {
+    options.push(
+      `<option value="${esc(p.name)}" ${selected === p.name ? "selected" : ""}>${esc(p.name)}</option>`
+    );
+  }
+  return options.join("");
+}
+
+function renderBook(book, files, profiles) {
   const container = document.getElementById("book-detail");
 
   const authorsChips = (book.authors || []).map((a) => `<span class="badge">${esc(a)}</span>`).join(" ") || "—";
@@ -89,6 +101,10 @@ function renderBook(book, files) {
         ${seriesBadge ? `<div class="book-hero-badges">${seriesBadge}</div>` : ""}
         <p class="book-hero-line"><span class="book-hero-line-label">${esc(T.book_detail_authors_label)}</span>${authorsChips}</p>
         <p class="book-hero-line"><span class="book-hero-line-label">${esc(T.book_detail_narrators_label)}</span>${narratorsChips}</p>
+        <p class="book-hero-line">
+          <span class="book-hero-line-label">${esc(T.book_detail_quality_profile_label)}</span>
+          <select id="book-detail-quality-profile-select">${qualityProfileOptionsHtml(book.quality_profile, profiles)}</select>
+        </p>
         <p class="book-hero-meta-heading">${esc(T.book_detail_meta_heading)}</p>
         <div class="book-hero-stats">
           <span class="badge" title="${esc(T.book_detail_duration_label)}">${esc(formatDuration(book.duration_seconds))}</span>
@@ -160,13 +176,42 @@ async function deleteBook(bookId, title) {
   }
 }
 
+// Saves the book's quality profile via the existing book PATCH endpoint;
+// "" selects the default (first configured) profile.
+async function updateQualityProfile(bookId, value, select) {
+  select.disabled = true;
+  try {
+    const resp = await fetch(`/api/v1/library/books/${bookId}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ quality_profile: value }),
+    });
+    if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+    currentBook = await resp.json();
+    if (window.AudiarrToast) window.AudiarrToast.success(T.book_detail_quality_profile_updated);
+  } catch (err) {
+    if (window.AudiarrToast) {
+      window.AudiarrToast.error(`${T.book_detail_quality_profile_error} (${err.message})`);
+    }
+  } finally {
+    select.disabled = false;
+  }
+}
+
+function wireQualityProfileSelect(bookId) {
+  const select = document.getElementById("book-detail-quality-profile-select");
+  if (!select) return;
+  select.addEventListener("change", () => updateQualityProfile(bookId, select.value, select));
+}
+
 async function loadBook() {
   const container = document.getElementById("book-detail");
   const bookId = container.dataset.bookId;
   try {
-    const [bookResp, filesResp] = await Promise.all([
+    const [bookResp, filesResp, settingsResp] = await Promise.all([
       fetch(`/api/v1/library/books/${bookId}`),
       fetch(`/api/v1/library/books/${bookId}/files`),
+      fetch("/api/v1/settings"),
     ]);
     if (bookResp.status === 404) {
       container.innerHTML = `<p class="muted">${esc(T.book_detail_not_found)}</p>`;
@@ -175,8 +220,11 @@ async function loadBook() {
     if (!bookResp.ok) throw new Error(`HTTP ${bookResp.status}`);
     const book = await bookResp.json();
     const files = filesResp.ok ? await filesResp.json() : [];
+    const settings = settingsResp.ok ? await settingsResp.json() : {};
+    const profiles = settings.quality_profiles || [];
     currentBook = book;
-    renderBook(book, files);
+    renderBook(book, files, profiles);
+    wireQualityProfileSelect(book.id);
     const deleteBtn = document.getElementById("book-detail-delete-btn");
     if (deleteBtn) deleteBtn.disabled = false;
   } catch (err) {

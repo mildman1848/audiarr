@@ -273,6 +273,44 @@ def test_api_book_monitored_roundtrip(app_client):
     assert resp2.json()["monitored"] is False
 
 
+def test_api_book_quality_profile_validation(app_client):
+    payload = {
+        "title": "Der Vorleser",
+        "authors": ["Bernhard Schlink"],
+        "provider": "audible",
+        "provider_id": "B004UWRY6M",
+        "locale": "de",
+    }
+    resp = app_client.post("/api/v1/library/books", json=payload)
+    assert resp.status_code == 201
+    book = resp.json()
+    # New books inherit the default (empty) profile.
+    assert book["quality_profile"] == ""
+
+    # Unknown profile name -> 422.
+    invalid = app_client.patch(
+        f"/api/v1/library/books/{book['id']}", json={"quality_profile": "Does Not Exist"}
+    )
+    assert invalid.status_code == 422
+
+    # A configured profile name -> ok and round-trips.
+    valid = app_client.patch(
+        f"/api/v1/library/books/{book['id']}", json={"quality_profile": "Standard"}
+    )
+    assert valid.status_code == 200
+    assert valid.json()["quality_profile"] == "Standard"
+
+    single = app_client.get(f"/api/v1/library/books/{book['id']}")
+    assert single.json()["quality_profile"] == "Standard"
+
+    # Empty string ("inherit default") is always valid.
+    cleared = app_client.patch(
+        f"/api/v1/library/books/{book['id']}", json={"quality_profile": ""}
+    )
+    assert cleared.status_code == 200
+    assert cleared.json()["quality_profile"] == ""
+
+
 def test_book_endpoints_include_file_stats(app_client):
     payload = {
         "title": "Der Vorleser",

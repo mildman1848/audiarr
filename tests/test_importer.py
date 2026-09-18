@@ -9,7 +9,9 @@ import pytest
 
 from app.config import load_settings, save_settings
 from app.db import get_conn, migrate
-from app.library.importer import run_import
+from app.library import BookCreate, create_book
+from app.library.importer import _maybe_enqueue_conversion, run_import
+from app.library.scanner import BookCandidate
 from app.models.settings import QualityProfile
 from app.providers.base import (
     BaseMetadataProvider,
@@ -231,3 +233,42 @@ async def test_profile_not_targeting_m4b_skips_conversion_enqueue(tmp_path, db, 
 
     assert summary.matched == 1
     assert calls == []
+
+
+async def test_book_quality_profile_overrides_default_for_conversion_enqueue(db, monkeypatch):
+    """Per-book quality_profile (#20) decides the conversion outcome: a book
+    left on the default profile (targets m4b) enqueues an mp3 source, while a
+    book pinned to a profile that doesn't target m4b does not."""
+    settings = load_settings()
+    settings.quality_profiles = [
+        QualityProfile(name="Standard"),
+        QualityProfile(
+            name="MP3 shop",
+            allowed_formats=["mp3"],
+            cutoff_format="mp3",
+            quality_ids=["mp3-320"],
+            cutoff_quality_id="mp3-320",
+        ),
+    ]
+    save_settings(settings)
+
+    default_book_id = create_book(db, BookCreate(title="Book A"))
+    mp3_book_id = create_book(db, BookCreate(title="Book B"))
+    db.execute(
+        "UPDATE books SET quality_profile = ? WHERE id = ?", ("MP3 shop", mp3_book_id)
+    )
+    db.commit()
+
+    calls: list[int] = []
+
+    async def fake_enqueue(conn, book_id, source_path, output_path=""):
+        calls.append(book_id)
+        return 1
+
+    monkeypatch.setattr("app.conversion.worker.enqueue_for_book", fake_enqueue)
+
+    candidate = BookCandidate(folder_path="/x", folder_name="x", dominant_format="mp3")
+    await _maybe_enqueue_conversion(db, default_book_id, candidate)
+    await _maybe_enqueue_conversion(db, mp3_book_id, candidate)
+
+    assert calls == [default_book_id]
