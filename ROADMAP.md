@@ -102,7 +102,7 @@ Phased plan; each phase lands as small verified slices (issue → branch → PR 
 ### Phase 2 — Close the automation loop
 
 - Periodic root-folder import scans (scheduler). **Done**
-- Auto-import after SABnzbd completes a download. **Next**
+- Auto-import after SABnzbd completes a download. **Done**
 - Metadata refresh / wanted-search scheduler. **Next**
 
 ### Phase 3 — Tags and Connect
