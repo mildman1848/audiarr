@@ -107,7 +107,7 @@ Phased plan; each phase lands as small verified slices (issue → branch → PR 
 
 ### Phase 3 — Tags and Connect
 
-- Tags data model and tagging UI for books and root folders. **Next**
+- Tags data model and tagging UI for books and root folders. **Done**
 - Connect editor: webhooks/notifications for grab/import/health events. **Next**
 
 ### Phase 4 — Media management
