@@ -169,6 +169,48 @@ async def lifespan(app: FastAPI):
         else:
             log.info("SABnzbd auto-import enabled but no enabled SABnzbd client configured")
 
+    # Periodic metadata refresh (issue #26): only runs when a positive
+    # interval is configured; 0 (the default) disables it. Reuses the same
+    # run_backfill_batch/build_provider_chain path as backfill_on_start and
+    # the manual backfill endpoint -- no second metadata engine.
+    metadata_refresh_stop_event = asyncio.Event()
+    metadata_refresh_task = None
+    refresh_interval_minutes = settings.metadata.refresh_interval_minutes
+    if refresh_interval_minutes > 0:
+        from app.import_scheduler import scheduler_loop
+        from app.metadata_scheduler import MetadataRefreshScheduler
+
+        metadata_refresh_task = asyncio.create_task(
+            scheduler_loop(
+                MetadataRefreshScheduler(), refresh_interval_minutes, metadata_refresh_stop_event
+            )
+        )
+        log.info("metadata refresh scheduler enabled (interval=%d minute(s))", refresh_interval_minutes)
+
+    # Periodic wanted-search scheduler (issue #26): only runs when a
+    # positive interval is configured AND an enabled Prowlarr indexer +
+    # SABnzbd download client are both present, so a bare interval with no
+    # connections configured never spins up a useless poller.
+    wanted_search_stop_event = asyncio.Event()
+    wanted_search_task = None
+    search_interval_minutes = settings.wanted.search_interval_minutes
+    if search_interval_minutes > 0:
+        from app.api.routes_wanted import _enabled_prowlarr, _enabled_sabnzbd
+        from app.import_scheduler import scheduler_loop
+        from app.wanted_scheduler import WantedSearchScheduler
+
+        if _enabled_prowlarr() is not None and _enabled_sabnzbd() is not None:
+            wanted_search_task = asyncio.create_task(
+                scheduler_loop(
+                    WantedSearchScheduler(), search_interval_minutes, wanted_search_stop_event
+                )
+            )
+            log.info("wanted search scheduler enabled (interval=%d minute(s))", search_interval_minutes)
+        else:
+            log.info(
+                "wanted search scheduler configured but Prowlarr/SABnzbd not both enabled; disabled"
+            )
+
     yield
 
     if worker_task is not None:
@@ -185,6 +227,16 @@ async def lifespan(app: FastAPI):
         sab_import_stop_event.set()
         with contextlib.suppress(asyncio.CancelledError):
             await asyncio.wait_for(sab_import_task, timeout=5)
+
+    if metadata_refresh_task is not None:
+        metadata_refresh_stop_event.set()
+        with contextlib.suppress(asyncio.CancelledError):
+            await asyncio.wait_for(metadata_refresh_task, timeout=5)
+
+    if wanted_search_task is not None:
+        wanted_search_stop_event.set()
+        with contextlib.suppress(asyncio.CancelledError):
+            await asyncio.wait_for(wanted_search_task, timeout=5)
 
     if backfill_task is not None:
         with contextlib.suppress(asyncio.CancelledError, TimeoutError):

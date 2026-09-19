@@ -99,11 +99,11 @@ Phased plan; each phase lands as small verified slices (issue → branch → PR 
 - Upgrade search: chase the profile cutoff for monitored books (Wanted page action using per-book profiles). **Done**
 - Optional quality filter when grabbing releases (only releases that fit the profile). **Done**
 
-### Phase 2 — Close the automation loop
+### Phase 2 — Close the automation loop — Done
 
 - Periodic root-folder import scans (scheduler). **Done**
 - Auto-import after SABnzbd completes a download. **Done**
-- Metadata refresh / wanted-search scheduler. **Next**
+- Metadata refresh / wanted-search scheduler. **Done**
 
 ### Phase 3 — Tags and Connect
 

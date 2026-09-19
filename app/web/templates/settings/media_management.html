@@ -50,6 +50,20 @@
       </label>
     </div>
 
+    <div class="settings-subsection">
+      <h3>{{ t.settings_wanted_search_heading }}</h3>
+      <p class="section-hint">{{ t.settings_wanted_search_hint }}</p>
+      <label>{{ t.settings_wanted_search_interval_label }}
+        <input type="number" id="wanted-search-interval" min="0" step="1" autocomplete="off">
+      </label>
+      <p class="muted">{{ t.settings_wanted_search_last_run_label }}: <span id="wanted-search-last-run">—</span></p>
+      <p class="muted small">
+        {{ t.settings_wanted_search_grabbed_label }}: <span id="wanted-search-grabbed">0</span> ·
+        {{ t.settings_wanted_search_no_release_label }}: <span id="wanted-search-no-release">0</span> ·
+        {{ t.settings_wanted_search_skipped_label }}: <span id="wanted-search-skipped">0</span>
+      </p>
+    </div>
+
     <div class="settings-subsection settings-advanced-row">
       <h3>{{ t.settings_advanced_heading }}</h3>
       <p class="callout">{{ t.settings_media_advanced_note }}</p>

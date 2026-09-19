@@ -266,6 +266,44 @@ class MetadataSettings(BaseModel):
     # is a network-dependent, opt-in operation, not something that should
     # run unannounced on every boot.
     backfill_on_start: bool = False
+    # Periodic metadata refresh scheduler (issue #26). 0 = disabled
+    # (default); a positive value is the interval in minutes between
+    # scheduled runs of run_backfill_batch(build_provider_chain()) -- the
+    # same best-effort asin/release_date backfill as backfill_on_start and
+    # the manual POST /api/v1/metadata/backfill endpoint (no second
+    # metadata engine). See app/metadata_scheduler.py.
+    refresh_interval_minutes: int = Field(default=0, ge=0)
+    # Books processed per scheduled tick; mirrors DEFAULT_BATCH_SIZE in
+    # app/metadata/backfill.py.
+    refresh_batch_size: int = Field(default=10, ge=1)
+    # UTC timestamp ("%Y-%m-%d %H:%M:%S") of the last scheduled refresh
+    # tick that ran to completion; empty until the scheduler has run once.
+    last_scheduled_refresh_at: str = ""
+    last_refresh_updated: int = 0
+    last_refresh_failed: int = 0
+    last_refresh_remaining: int = 0
+
+
+class WantedSettings(BaseModel):
+    """Periodic wanted-search scheduler settings (issue #26).
+
+    Reuses the cutoff-unmet candidate selection and Prowlarr search /
+    SABnzbd grab path from app/api/routes_wanted.py (issue #21) instead of
+    a second scoring engine; see app/wanted_scheduler.py for the scheduler
+    itself. Independent of MetadataSettings.refresh_interval_minutes.
+    """
+
+    # 0 = disabled (default); a positive value is the interval in minutes
+    # between scheduled cutoff-upgrade search ticks. Only takes effect when
+    # an enabled Prowlarr indexer and SABnzbd download client are both
+    # configured (see app.main's lifespan).
+    search_interval_minutes: int = Field(default=0, ge=0)
+    # UTC timestamp ("%Y-%m-%d %H:%M:%S") of the last scheduled search tick
+    # that ran to completion; empty until the scheduler has run once.
+    last_scheduled_search_at: str = ""
+    last_search_grabbed: int = 0
+    last_search_no_release: int = 0
+    last_search_skipped: int = 0
 
 
 class ConversionSettings(BaseModel):
@@ -387,6 +425,7 @@ class Settings(BaseModel):
     indexers: list[Indexer] = Field(default_factory=list)
     connect: list[ConnectNotification] = Field(default_factory=list)
     metadata: MetadataSettings = Field(default_factory=MetadataSettings)
+    wanted: WantedSettings = Field(default_factory=WantedSettings)
     conversion: ConversionSettings = Field(default_factory=ConversionSettings)
     ui: UiSettings = Field(default_factory=UiSettings)
     translation: TranslationSettings = Field(default_factory=TranslationSettings)
