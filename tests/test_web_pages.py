@@ -579,6 +579,13 @@ def test_settings_page_has_media_management_and_summary_fields(app_client, langu
     assert connect.status_code == 200
     assert 'id="connect-summary"' in connect.text
 
+    tags = app_client.get("/settings/tags")
+    assert tags.status_code == 200
+    assert 'id="tags-list"' in tags.text
+    assert 'id="tags-new-label"' in tags.text
+    assert 'id="tags-add-btn"' in tags.text
+    assert "placeholder-card" not in tags.text
+
 
 @pytest.mark.parametrize(
     ("language", "planned_label"),
@@ -588,20 +595,20 @@ def test_settings_page_has_media_management_and_summary_fields(app_client, langu
     ],
 )
 def test_settings_overview_marks_planned_sections(app_client, language, planned_label):
-    """Connect and Tags are read-only/placeholder this slice; Profiles and
-    Quality now have a real, saveable editor (issue #13), so the overview
-    must badge exactly those remaining two as planned."""
+    """Connect is still read-only/placeholder this slice; Profiles, Quality
+    (issue #13), and now Tags (issue #27) have a real, saveable editor, so
+    the overview must badge exactly that one remaining section as planned."""
     _set_ui_language(app_client, language)
 
     settings = app_client.get("/settings")
     assert settings.status_code == 200
     badge = f'<span class="badge badge-planned">{planned_label}</span>'
-    assert settings.text.count(badge) == 2
+    assert settings.text.count(badge) == 1
 
 
 @pytest.mark.parametrize(
     "path",
-    ("/settings/tags", "/settings/connect"),
+    ("/settings/connect",),
 )
 def test_planned_settings_pages_have_no_save_bar(app_client, path):
     """Placeholder-only settings pages must not render the Arr-style
@@ -624,6 +631,7 @@ def test_planned_settings_pages_have_no_save_bar(app_client, path):
         "/settings/indexers",
         "/settings/download-clients",
         "/settings/metadata",
+        "/settings/tags",
         "/settings/general",
         "/settings/ui",
         "/settings/conversion",

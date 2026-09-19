@@ -10,6 +10,7 @@ let allBooks = [];
 let rootFolders = [];
 let currentView = "grid";
 let currentSort = "title";
+let currentTagFilter = "";
 
 function esc(value) {
   return String(value ?? "").replace(/[&<>"']/g, (c) => ({
@@ -41,6 +42,14 @@ function humanSize(bytes) {
   }
   const rounded = value >= 100 || unit === 0 ? Math.round(value) : value.toFixed(1);
   return `${rounded} ${units[unit]}`;
+}
+
+function chipStyleAttr(color) {
+  return color ? ` style="background:${esc(color)};color:#fff;border-color:transparent;"` : "";
+}
+
+function tagChipsHtml(tags) {
+  return (tags || []).map((t) => `<span class="chip"${chipStyleAttr(t.color)}>${esc(t.label)}</span>`).join(" ");
 }
 
 function seriesLabel(b) {
@@ -93,13 +102,35 @@ async function loadStats() {
 
 function filteredBooks() {
   const query = (document.getElementById("library-filter").value || "").trim().toLowerCase();
-  if (!query) return allBooks;
-  return allBooks.filter((b) => {
+  let books = allBooks;
+  if (currentTagFilter) {
+    books = books.filter((b) => (b.tags || []).some((t) => t.label === currentTagFilter));
+  }
+  if (!query) return books;
+  return books.filter((b) => {
     const haystack = [b.title, b.subtitle, ...(b.authors || []), ...(b.narrators || []), b.series]
       .join(" ")
       .toLowerCase();
     return haystack.includes(query);
   });
+}
+
+// Rebuilds the tag filter dropdown from the tags actually present on the
+// currently loaded books, keeping the current selection if it still exists.
+function populateTagFilterOptions() {
+  const select = document.getElementById("library-tag-filter");
+  if (!select) return;
+  const labels = [...new Set(allBooks.flatMap((b) => (b.tags || []).map((t) => t.label)))].sort((a, b) =>
+    a.localeCompare(b)
+  );
+  select.innerHTML =
+    `<option value="">${esc(T.library_tag_filter_all)}</option>` +
+    labels.map((label) => `<option value="${esc(label)}">${esc(label)}</option>`).join("");
+  if (labels.includes(currentTagFilter)) {
+    select.value = currentTagFilter;
+  } else {
+    currentTagFilter = "";
+  }
 }
 
 // Client-side only: sorts a copy of the already-filtered list, leaving
@@ -150,6 +181,7 @@ function renderGrid(books) {
           <h3 class="library-card-title" title="${esc(b.title)}">${esc(b.title)}</h3>
           <p class="library-card-author" title="${esc((b.authors || []).join(", "))}">${esc((b.authors || []).join(", ")) || "—"}</p>
           ${badgeRowHtml(b)}
+          ${(b.tags || []).length ? `<div class="library-badge-row">${tagChipsHtml(b.tags)}</div>` : ""}
           ${bookActionsHtml(b)}
         </div>
       </div>`
@@ -170,6 +202,7 @@ function renderTable(books) {
         <td>${esc(formatDuration(b.duration_seconds))}</td>
         <td>${b.file_count}</td>
         <td>${esc(humanSize(b.size_bytes))}</td>
+        <td>${tagChipsHtml(b.tags) || "—"}</td>
         <td>${bookActionsHtml(b)}</td>
       </tr>`
     )
@@ -186,6 +219,7 @@ function renderTable(books) {
             <th>${esc(T.library_col_duration)}</th>
             <th>${esc(T.library_col_files)}</th>
             <th>${esc(T.library_col_size)}</th>
+            <th>${esc(T.library_col_tags)}</th>
             <th>${esc(T.library_col_actions)}</th>
           </tr>
         </thead>
@@ -206,6 +240,7 @@ async function loadBooks() {
     const resp = await fetch("/api/v1/library/books");
     if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
     allBooks = await resp.json();
+    populateTagFilterOptions();
     renderBooks();
   } catch (err) {
     allBooks = [];
@@ -241,6 +276,98 @@ function setView(view) {
 
 // -- root folders -----------------------------------------------------------------
 
+function folderTagChipsHtml(folder) {
+  return (folder.tags || [])
+    .map(
+      (t) => `
+      <span class="chip"${chipStyleAttr(t.color)}>
+        ${esc(t.label)}
+        <span class="chip-remove" data-remove-folder-tag="${t.id}" data-folder-id="${folder.id}" role="button">×</span>
+      </span>`
+    )
+    .join("");
+}
+
+function renderRootFoldersList() {
+  const container = document.getElementById("root-folders-list");
+  if (!rootFolders.length) {
+    container.innerHTML = window.AudiarrUI.emptyState({ icon: "▤", title: T.library_root_folders_empty });
+    return;
+  }
+
+  container.innerHTML = `<ul class="plain-list">${rootFolders
+    .map(
+      (f) => `
+      <li data-folder-row="${f.id}">
+        <div style="display:flex;align-items:center;justify-content:space-between;gap:0.5rem;">
+          <span><code>${esc(f.path)}</code>${f.label ? ` — ${esc(f.label)}` : ""}</span>
+          <button type="button" class="btn btn-danger" data-delete-folder="${f.id}">${esc(T.library_root_folder_delete)}</button>
+        </div>
+        <div class="library-badge-row" style="margin-top:0.35rem;">
+          ${folderTagChipsHtml(f)}
+          <input type="text" data-folder-tag-input="${f.id}" placeholder="${esc(T.library_root_folder_tags_add_placeholder)}">
+        </div>
+      </li>`
+    )
+    .join("")}</ul>`;
+
+  container.querySelectorAll("[data-delete-folder]").forEach((btn) => {
+    btn.addEventListener("click", () => deleteRootFolder(btn.dataset.deleteFolder));
+  });
+  container.querySelectorAll("[data-remove-folder-tag]").forEach((el) => {
+    el.addEventListener("click", () =>
+      removeRootFolderTag(Number(el.dataset.folderId), Number(el.dataset.removeFolderTag))
+    );
+  });
+  container.querySelectorAll("[data-folder-tag-input]").forEach((input) => {
+    input.addEventListener("keydown", (event) => {
+      if (event.key !== "Enter") return;
+      event.preventDefault();
+      const label = input.value.trim();
+      input.value = "";
+      addRootFolderTag(Number(input.dataset.folderTagInput), label);
+    });
+  });
+}
+
+async function putRootFolderTags(folderId, labels) {
+  const resp = await fetch(`/api/v1/library/root-folders/${folderId}/tags`, {
+    method: "PUT",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ tags: labels }),
+  });
+  if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+  return resp.json();
+}
+
+async function addRootFolderTag(folderId, label) {
+  if (!label) return;
+  const folder = rootFolders.find((f) => f.id === folderId);
+  if (!folder) return;
+  const existing = (folder.tags || []).map((t) => t.label);
+  if (existing.some((l) => l.toLowerCase() === label.toLowerCase())) return;
+  try {
+    folder.tags = await putRootFolderTags(folderId, [...existing, label]);
+    renderRootFoldersList();
+    if (window.AudiarrToast) window.AudiarrToast.success(T.library_root_folder_tags_updated);
+  } catch (err) {
+    if (window.AudiarrToast) window.AudiarrToast.error(`${T.library_root_folder_tags_error} (${err.message})`);
+  }
+}
+
+async function removeRootFolderTag(folderId, tagId) {
+  const folder = rootFolders.find((f) => f.id === folderId);
+  if (!folder) return;
+  const remaining = (folder.tags || []).filter((t) => t.id !== tagId).map((t) => t.label);
+  try {
+    folder.tags = await putRootFolderTags(folderId, remaining);
+    renderRootFoldersList();
+    if (window.AudiarrToast) window.AudiarrToast.success(T.library_root_folder_tags_updated);
+  } catch (err) {
+    if (window.AudiarrToast) window.AudiarrToast.error(`${T.library_root_folder_tags_error} (${err.message})`);
+  }
+}
+
 async function loadRootFolders() {
   const container = document.getElementById("root-folders-list");
   const importSelect = document.getElementById("import-root-folder");
@@ -253,24 +380,7 @@ async function loadRootFolders() {
       .map((f) => `<option value="${f.id}">${esc(f.label ? `${f.label} — ${f.path}` : f.path)}</option>`)
       .join("");
 
-    if (!rootFolders.length) {
-      container.innerHTML = window.AudiarrUI.emptyState({ icon: "▤", title: T.library_root_folders_empty });
-      return;
-    }
-
-    container.innerHTML = `<ul class="plain-list">${rootFolders
-      .map(
-        (f) => `
-        <li style="display:flex;align-items:center;justify-content:space-between;gap:0.5rem;">
-          <span><code>${esc(f.path)}</code>${f.label ? ` — ${esc(f.label)}` : ""}</span>
-          <button type="button" class="btn btn-danger" data-delete-folder="${f.id}">${esc(T.library_root_folder_delete)}</button>
-        </li>`
-      )
-      .join("")}</ul>`;
-
-    container.querySelectorAll("[data-delete-folder]").forEach((btn) => {
-      btn.addEventListener("click", () => deleteRootFolder(btn.dataset.deleteFolder));
-    });
+    renderRootFoldersList();
   } catch (err) {
     container.innerHTML = `<p class="muted">${esc(T.library_root_folders_error)} (${esc(err.message)})</p>`;
   }
@@ -411,6 +521,10 @@ document.addEventListener("DOMContentLoaded", () => {
 
   document.getElementById("root-folder-form").addEventListener("submit", addRootFolder);
   document.getElementById("library-filter").addEventListener("input", renderBooks);
+  document.getElementById("library-tag-filter").addEventListener("change", (event) => {
+    currentTagFilter = event.target.value;
+    renderBooks();
+  });
   document.getElementById("library-sort").addEventListener("change", (event) => {
     currentSort = event.target.value;
     renderBooks();

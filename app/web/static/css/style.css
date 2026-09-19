@@ -552,6 +552,34 @@ body {
   border-color: transparent;
 }
 
+/* -------------------------------------------------------------- Tag chips */
+/* Book/root-folder tags (#27): color is applied inline per-tag when set
+   (see routes_tags.py TagOut.color); an empty color falls back to this
+   default muted chip styling, matching .badge's neutral look. */
+
+.chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  padding: 0.12rem 0.55rem;
+  border-radius: 999px;
+  font-size: 0.72rem;
+  font-weight: 600;
+  background: var(--bg-panel-alt);
+  color: var(--text-muted);
+  border: 1px solid var(--border-color);
+}
+
+.chip-remove {
+  cursor: pointer;
+  font-weight: 700;
+  opacity: 0.7;
+}
+
+.chip-remove:hover {
+  opacity: 1;
+}
+
 /* ----------------------------------------------------- Activity progress */
 
 .activity-progress {

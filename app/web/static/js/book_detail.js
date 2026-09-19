@@ -59,6 +59,31 @@ function qualityProfileOptionsHtml(selected, profiles) {
   return options.join("");
 }
 
+function chipStyleAttr(color) {
+  return color ? ` style="background:${esc(color)};color:#fff;border-color:transparent;"` : "";
+}
+
+function tagsEditorHtml(tags) {
+  const chips = (tags || [])
+    .map(
+      (t) => `
+      <span class="chip"${chipStyleAttr(t.color)}>
+        ${esc(t.label)}
+        <span class="chip-remove" data-remove-tag="${t.id}" title="${esc(T.book_detail_tags_remove_label)}" role="button">×</span>
+      </span>`
+    )
+    .join("") || `<span class="muted">${esc(T.book_detail_tags_empty)}</span>`;
+  return `
+    <p class="book-hero-line">
+      <span class="book-hero-line-label">${esc(T.book_detail_tags_label)}</span>
+    </p>
+    <div id="book-detail-tags" class="library-badge-row">${chips}</div>
+    <div class="inline-form toolbar">
+      <input type="text" id="book-detail-tag-input" placeholder="${esc(T.book_detail_tags_add_placeholder)}" maxlength="60">
+      <button type="button" id="book-detail-tag-add-btn" class="btn btn-secondary">${esc(T.book_detail_tags_add)}</button>
+    </div>`;
+}
+
 function renderBook(book, files, profiles) {
   const container = document.getElementById("book-detail");
 
@@ -112,6 +137,7 @@ function renderBook(book, files, profiles) {
           <span class="badge" title="${esc(T.book_detail_publisher_label)}">${esc(book.publisher || "—")}</span>
           <span class="badge" title="${esc(T.book_detail_release_date_label)}">${esc(book.release_date || "—")}</span>
         </div>
+        ${tagsEditorHtml(book.tags)}
       </div>
     </div>
 
@@ -204,6 +230,76 @@ function wireQualityProfileSelect(bookId) {
   select.addEventListener("change", () => updateQualityProfile(bookId, select.value, select));
 }
 
+// Saves the book's full tag list via the PATCH endpoint (create-on-the-fly
+// by label), then re-renders the hero card in place from the server's
+// response so the chip list always reflects what actually got saved.
+async function saveTags(bookId, labels) {
+  const resp = await fetch(`/api/v1/library/books/${bookId}`, {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ tags: labels }),
+  });
+  if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+  return resp.json();
+}
+
+async function addTagToBook(bookId) {
+  const input = document.getElementById("book-detail-tag-input");
+  const label = input.value.trim();
+  if (!label) return;
+  const existingLabels = (currentBook.tags || []).map((t) => t.label);
+  if (existingLabels.some((l) => l.toLowerCase() === label.toLowerCase())) {
+    input.value = "";
+    return;
+  }
+  try {
+    currentBook = await saveTags(bookId, [...existingLabels, label]);
+    refreshBookView();
+    if (window.AudiarrToast) window.AudiarrToast.success(T.book_detail_tags_updated);
+  } catch (err) {
+    if (window.AudiarrToast) window.AudiarrToast.error(`${T.book_detail_tags_error} (${err.message})`);
+  }
+}
+
+async function removeTagFromBook(bookId, tagId) {
+  const remaining = (currentBook.tags || []).filter((t) => t.id !== tagId).map((t) => t.label);
+  try {
+    currentBook = await saveTags(bookId, remaining);
+    refreshBookView();
+    if (window.AudiarrToast) window.AudiarrToast.success(T.book_detail_tags_updated);
+  } catch (err) {
+    if (window.AudiarrToast) window.AudiarrToast.error(`${T.book_detail_tags_error} (${err.message})`);
+  }
+}
+
+function wireTagsEditor(bookId) {
+  const addBtn = document.getElementById("book-detail-tag-add-btn");
+  if (addBtn) addBtn.addEventListener("click", () => addTagToBook(bookId));
+  const input = document.getElementById("book-detail-tag-input");
+  if (input) {
+    input.addEventListener("keydown", (event) => {
+      if (event.key === "Enter") {
+        event.preventDefault();
+        addTagToBook(bookId);
+      }
+    });
+  }
+  document.querySelectorAll("[data-remove-tag]").forEach((el) => {
+    el.addEventListener("click", () => removeTagFromBook(bookId, Number(el.dataset.removeTag)));
+  });
+}
+
+let currentFiles = [];
+let currentProfiles = [];
+
+// Re-renders the hero/detail card from currentBook (e.g. after a tag edit)
+// and re-wires the event listeners the fresh markup needs.
+function refreshBookView() {
+  renderBook(currentBook, currentFiles, currentProfiles);
+  wireQualityProfileSelect(currentBook.id);
+  wireTagsEditor(currentBook.id);
+}
+
 async function loadBook() {
   const container = document.getElementById("book-detail");
   const bookId = container.dataset.bookId;
@@ -218,13 +314,11 @@ async function loadBook() {
       return;
     }
     if (!bookResp.ok) throw new Error(`HTTP ${bookResp.status}`);
-    const book = await bookResp.json();
-    const files = filesResp.ok ? await filesResp.json() : [];
+    currentBook = await bookResp.json();
+    currentFiles = filesResp.ok ? await filesResp.json() : [];
     const settings = settingsResp.ok ? await settingsResp.json() : {};
-    const profiles = settings.quality_profiles || [];
-    currentBook = book;
-    renderBook(book, files, profiles);
-    wireQualityProfileSelect(book.id);
+    currentProfiles = settings.quality_profiles || [];
+    refreshBookView();
     const deleteBtn = document.getElementById("book-detail-delete-btn");
     if (deleteBtn) deleteBtn.disabled = false;
   } catch (err) {

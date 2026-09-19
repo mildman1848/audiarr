@@ -31,6 +31,7 @@ from app.api import (
     routes_releases,
     routes_settings,
     routes_system,
+    routes_tags,
     routes_wanted,
     routes_webhooks,
 )
@@ -266,6 +267,7 @@ def create_app() -> FastAPI:
     app.include_router(routes_connections.router)
     app.include_router(routes_releases.router)
     app.include_router(routes_library.router)
+    app.include_router(routes_tags.router)
     app.include_router(routes_wanted.router)
     app.include_router(routes_calendar.router)
     app.include_router(routes_import.router)
