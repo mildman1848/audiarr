@@ -375,6 +375,17 @@ function populate(s) {
   setChecked("media-sab-import-enabled", s.media_management.sab_auto_import_enabled);
   setValue("media-sab-import-category", s.media_management.sab_auto_import_category || "");
   setValue("media-sab-import-interval", s.media_management.sab_auto_import_interval_minutes ?? 5);
+  setValue("metadata-refresh-interval", s.metadata.refresh_interval_minutes ?? 0);
+  setValue("metadata-refresh-batch-size", s.metadata.refresh_batch_size ?? 10);
+  setText("metadata-refresh-last-run", s.metadata.last_scheduled_refresh_at || "—");
+  setText("metadata-refresh-updated", s.metadata.last_refresh_updated ?? 0);
+  setText("metadata-refresh-failed", s.metadata.last_refresh_failed ?? 0);
+  setText("metadata-refresh-remaining", s.metadata.last_refresh_remaining ?? 0);
+  setValue("wanted-search-interval", s.wanted.search_interval_minutes ?? 0);
+  setText("wanted-search-last-run", s.wanted.last_scheduled_search_at || "—");
+  setText("wanted-search-grabbed", s.wanted.last_search_grabbed ?? 0);
+  setText("wanted-search-no-release", s.wanted.last_search_no_release ?? 0);
+  setText("wanted-search-skipped", s.wanted.last_search_skipped ?? 0);
   if ($("quality-definitions")) {
     renderQualityDefinitionsEditor(s.quality_definitions);
     bindQualityDefinitionsEvents();
@@ -454,7 +465,22 @@ async function saveSettings(event) {
       doc.media_management.sab_auto_import_interval_minutes =
         Number.isFinite(sabInterval) && sabInterval >= 1 ? Math.trunc(sabInterval) : 5;
     }
+    if ($("wanted-search-interval")) {
+      const searchInterval = Number(getValue("wanted-search-interval"));
+      doc.wanted.search_interval_minutes =
+        Number.isFinite(searchInterval) && searchInterval >= 0 ? Math.trunc(searchInterval) : 0;
+    }
     if ($("metadata-locale")) doc.metadata.audible_locale = getValue("metadata-locale");
+    if ($("metadata-refresh-interval")) {
+      const refreshInterval = Number(getValue("metadata-refresh-interval"));
+      doc.metadata.refresh_interval_minutes =
+        Number.isFinite(refreshInterval) && refreshInterval >= 0 ? Math.trunc(refreshInterval) : 0;
+    }
+    if ($("metadata-refresh-batch-size")) {
+      const batchSize = Number(getValue("metadata-refresh-batch-size"));
+      doc.metadata.refresh_batch_size =
+        Number.isFinite(batchSize) && batchSize >= 1 ? Math.trunc(batchSize) : 10;
+    }
     if ($("conversion-backend")) doc.conversion.backend = getValue("conversion-backend");
     if ($("conversion-delete-originals")) {
       doc.conversion.delete_originals = getChecked("conversion-delete-originals");

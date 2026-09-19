@@ -15,6 +15,23 @@
     <p class="muted">{{ t.settings_metadata_provider_order }}: <span id="provider-order">—</span></p>
 
     <div class="settings-subsection">
+      <h3>{{ t.settings_metadata_refresh_heading }}</h3>
+      <p class="section-hint">{{ t.settings_metadata_refresh_hint }}</p>
+      <label>{{ t.settings_metadata_refresh_interval_label }}
+        <input type="number" id="metadata-refresh-interval" min="0" step="1" autocomplete="off">
+      </label>
+      <label>{{ t.settings_metadata_refresh_batch_size_label }}
+        <input type="number" id="metadata-refresh-batch-size" min="1" step="1" autocomplete="off">
+      </label>
+      <p class="muted">{{ t.settings_metadata_refresh_last_run_label }}: <span id="metadata-refresh-last-run">—</span></p>
+      <p class="muted small">
+        {{ t.settings_metadata_refresh_updated_label }}: <span id="metadata-refresh-updated">0</span> ·
+        {{ t.settings_metadata_refresh_failed_label }}: <span id="metadata-refresh-failed">0</span> ·
+        {{ t.settings_metadata_refresh_remaining_label }}: <span id="metadata-refresh-remaining">0</span>
+      </p>
+    </div>
+
+    <div class="settings-subsection">
       <h3>{{ t.settings_metadata_profiles_heading }}</h3>
       <p class="callout">{{ t.settings_metadata_profiles_next_note }}</p>
     </div>

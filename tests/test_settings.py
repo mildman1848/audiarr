@@ -63,6 +63,73 @@ def test_sab_auto_import_interval_rejects_non_positive_values(app_client):
     assert put_response.status_code == 422
 
 
+def test_metadata_refresh_scheduler_defaults_to_off(app_client):
+    body = app_client.get("/api/v1/settings").json()
+    assert body["metadata"]["refresh_interval_minutes"] == 0
+    assert body["metadata"]["refresh_batch_size"] == 10
+    assert body["metadata"]["last_scheduled_refresh_at"] == ""
+    assert body["metadata"]["last_refresh_updated"] == 0
+    assert body["metadata"]["last_refresh_failed"] == 0
+    assert body["metadata"]["last_refresh_remaining"] == 0
+
+
+def test_metadata_refresh_scheduler_settings_persist(app_client):
+    current = app_client.get("/api/v1/settings").json()
+    current["metadata"]["refresh_interval_minutes"] = 120
+    current["metadata"]["refresh_batch_size"] = 25
+
+    put_response = app_client.put("/api/v1/settings", json=current)
+    assert put_response.status_code == 200
+
+    body = app_client.get("/api/v1/settings").json()
+    assert body["metadata"]["refresh_interval_minutes"] == 120
+    assert body["metadata"]["refresh_batch_size"] == 25
+
+
+def test_metadata_refresh_interval_rejects_negative_values(app_client):
+    current = app_client.get("/api/v1/settings").json()
+    current["metadata"]["refresh_interval_minutes"] = -1
+
+    put_response = app_client.put("/api/v1/settings", json=current)
+    assert put_response.status_code == 422
+
+
+def test_metadata_refresh_batch_size_rejects_non_positive_values(app_client):
+    current = app_client.get("/api/v1/settings").json()
+    current["metadata"]["refresh_batch_size"] = 0
+
+    put_response = app_client.put("/api/v1/settings", json=current)
+    assert put_response.status_code == 422
+
+
+def test_wanted_search_scheduler_defaults_to_off(app_client):
+    body = app_client.get("/api/v1/settings").json()
+    assert body["wanted"]["search_interval_minutes"] == 0
+    assert body["wanted"]["last_scheduled_search_at"] == ""
+    assert body["wanted"]["last_search_grabbed"] == 0
+    assert body["wanted"]["last_search_no_release"] == 0
+    assert body["wanted"]["last_search_skipped"] == 0
+
+
+def test_wanted_search_scheduler_settings_persist(app_client):
+    current = app_client.get("/api/v1/settings").json()
+    current["wanted"]["search_interval_minutes"] = 60
+
+    put_response = app_client.put("/api/v1/settings", json=current)
+    assert put_response.status_code == 200
+
+    body = app_client.get("/api/v1/settings").json()
+    assert body["wanted"]["search_interval_minutes"] == 60
+
+
+def test_wanted_search_interval_rejects_negative_values(app_client):
+    current = app_client.get("/api/v1/settings").json()
+    current["wanted"]["search_interval_minutes"] = -1
+
+    put_response = app_client.put("/api/v1/settings", json=current)
+    assert put_response.status_code == 422
+
+
 def test_put_settings_persists(app_client):
     current = app_client.get("/api/v1/settings").json()
     current["ui"]["language"] = "de"

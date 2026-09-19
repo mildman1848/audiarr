@@ -13,6 +13,8 @@ as the interactive release search (see routes_releases.py).
 from __future__ import annotations
 
 import logging
+from dataclasses import dataclass
+from typing import Any
 
 from fastapi import APIRouter, HTTPException
 from fastapi.responses import JSONResponse
@@ -23,7 +25,7 @@ from app.connections.prowlarr import ProwlarrClient
 from app.connections.sabnzbd import SABnzbdClient
 from app.db import get_conn, migrate
 from app.library.importer import _resolve_quality_profile
-from app.models.settings import DownloadClient, Indexer, QualityDefinition, QualityProfile
+from app.models.settings import DownloadClient, Indexer, QualityDefinition, QualityProfile, Settings
 from app.quality import QualityFit, evaluate_quality_for_profile, infer_quality_from_name
 
 log = logging.getLogger("audiarr.api.wanted")
@@ -168,6 +170,82 @@ async def get_wanted_missing() -> list[WantedBookOut]:
     ]
 
 
+@dataclass
+class CutoffCandidate:
+    """One monitored, below-cutoff book -- the unit shared by the GET
+    endpoint and the periodic wanted-search scheduler (see
+    app/wanted_scheduler.py)."""
+
+    id: int
+    title: str
+    authors: list[str]
+    profile: QualityProfile
+    fit: QualityFit
+
+
+def list_cutoff_candidates(conn: Any, settings: Settings) -> list[CutoffCandidate]:
+    """Monitored books whose best file is below their quality profile's cutoff.
+
+    Pure helper (no HTTP concerns) so GET /api/v1/wanted/cutoff and the
+    periodic wanted-search scheduler (issue #26) share the exact same
+    candidate-selection logic (issue #21) instead of a second engine.
+    """
+    definitions = settings.quality_definitions
+
+    rows = conn.execute(
+        """SELECT b.id, b.title,
+                  (SELECT GROUP_CONCAT(a.name, ', ')
+                     FROM book_authors ba JOIN authors a ON a.id = ba.author_id
+                    WHERE ba.book_id = b.id ORDER BY ba.position) AS authors
+             FROM books b
+            WHERE b.monitored = 1
+              AND EXISTS (
+                    SELECT 1 FROM editions e
+                      JOIN library_files lf ON lf.edition_id = e.id
+                     WHERE e.book_id = b.id)
+            ORDER BY b.title""",
+    ).fetchall()
+
+    candidates: list[CutoffCandidate] = []
+    for row in rows:
+        profile = _resolve_quality_profile(conn, row["id"], settings)
+        if profile is None or not profile.upgrade_allowed:
+            continue
+
+        paths = [
+            r["path"]
+            for r in conn.execute(
+                """SELECT lf.path FROM editions e
+                     JOIN library_files lf ON lf.edition_id = e.id
+                    WHERE e.book_id = ?""",
+                (row["id"],),
+            ).fetchall()
+        ]
+        fit = _best_current_fit(paths, profile, definitions)
+        if fit is None or fit.status != "below_cutoff":
+            continue
+
+        log.debug(
+            "book %d (%r) below cutoff: matched=%s profile=%r cutoff=%r",
+            row["id"],
+            row["title"],
+            fit.matched_quality_id,
+            profile.name,
+            profile.cutoff_quality_id,
+        )
+        candidates.append(
+            CutoffCandidate(
+                id=row["id"],
+                title=row["title"],
+                authors=row["authors"].split(", ") if row["authors"] else [],
+                profile=profile,
+                fit=fit,
+            )
+        )
+
+    return candidates
+
+
 @router.get("/api/v1/wanted/cutoff", response_model=list[CutoffCandidateOut])
 async def get_wanted_cutoff() -> list[CutoffCandidateOut]:
     """Monitored books whose best file is below their quality profile's cutoff."""
@@ -176,62 +254,116 @@ async def get_wanted_cutoff() -> list[CutoffCandidateOut]:
     definitions = settings.quality_definitions
 
     with get_conn() as conn:
-        rows = conn.execute(
-            """SELECT b.id, b.title,
-                      (SELECT GROUP_CONCAT(a.name, ', ')
-                         FROM book_authors ba JOIN authors a ON a.id = ba.author_id
-                        WHERE ba.book_id = b.id ORDER BY ba.position) AS authors
-                 FROM books b
-                WHERE b.monitored = 1
-                  AND EXISTS (
-                        SELECT 1 FROM editions e
-                          JOIN library_files lf ON lf.edition_id = e.id
-                         WHERE e.book_id = b.id)
-                ORDER BY b.title""",
-        ).fetchall()
+        candidates = list_cutoff_candidates(conn, settings)
 
-        candidates: list[CutoffCandidateOut] = []
-        for row in rows:
-            profile = _resolve_quality_profile(conn, row["id"], settings)
-            if profile is None or not profile.upgrade_allowed:
-                continue
+    return [
+        CutoffCandidateOut(
+            id=c.id,
+            title=c.title,
+            authors=c.authors,
+            current_quality_name=_quality_name(definitions, c.fit.matched_quality_id),
+            current_container=c.fit.inferred.container,
+            current_bitrate_kbps=c.fit.inferred.bitrate_kbps,
+            profile_name=c.profile.name,
+            cutoff_name=_quality_name(definitions, c.profile.cutoff_quality_id)
+            or c.profile.cutoff_quality_id,
+        )
+        for c in candidates
+    ]
 
-            paths = [
-                r["path"]
-                for r in conn.execute(
-                    """SELECT lf.path FROM editions e
-                         JOIN library_files lf ON lf.edition_id = e.id
-                        WHERE e.book_id = ?""",
-                    (row["id"],),
-                ).fetchall()
-            ]
-            fit = _best_current_fit(paths, profile, definitions)
-            if fit is None or fit.status != "below_cutoff":
-                continue
 
-            log.debug(
-                "book %d (%r) below cutoff: matched=%s profile=%r cutoff=%r",
-                row["id"],
-                row["title"],
-                fit.matched_quality_id,
-                profile.name,
-                profile.cutoff_quality_id,
-            )
-            candidates.append(
-                CutoffCandidateOut(
-                    id=row["id"],
-                    title=row["title"],
-                    authors=row["authors"].split(", ") if row["authors"] else [],
-                    current_quality_name=_quality_name(definitions, fit.matched_quality_id),
-                    current_container=fit.inferred.container,
-                    current_bitrate_kbps=fit.inferred.bitrate_kbps,
-                    profile_name=profile.name,
-                    cutoff_name=_quality_name(definitions, profile.cutoff_quality_id)
-                    or profile.cutoff_quality_id,
-                )
-            )
+async def find_fitting_release(
+    book_id: int,
+    title: str,
+    authors: list[str],
+    profile: QualityProfile,
+    indexer: Indexer,
+    definitions: list[QualityDefinition],
+) -> dict | None:
+    """Search Prowlarr and return the best cutoff-fitting release, or None.
 
-    return candidates
+    Shared by POST /api/v1/wanted/cutoff/{book_id}/search and the periodic
+    wanted-search scheduler (see app/wanted_scheduler.py) -- the same
+    Prowlarr search / evaluate_quality_for_profile logic as the interactive
+    release search (routes_releases.py), scoped to one book's own resolved
+    quality profile. Only "preferred"/"accepted" releases are considered.
+    """
+    query = f"{title} {' '.join(authors)}".strip()
+    client = ProwlarrClient(base_url=indexer.url, api_key=indexer.api_key or None)
+    releases = await client.search(query, limit=50)
+    log.info("Cutoff search for book %d (%r) -> %d result(s)", book_id, query, len(releases))
+
+    fitting: list[tuple[int, int, dict]] = []
+    for release in releases:
+        inferred = infer_quality_from_name(release.get("title") or "")
+        fit = evaluate_quality_for_profile(inferred, profile, definitions)
+        if fit.status not in ("preferred", "accepted"):
+            continue
+        tier_index = (
+            profile.quality_ids.index(fit.matched_quality_id)
+            if fit.matched_quality_id in profile.quality_ids
+            else len(profile.quality_ids)
+        )
+        fitting.append((tier_index, -(release.get("seeders") or 0), release))
+
+    if not fitting:
+        log.debug(
+            "cutoff search for book %d: no fitting release among %d result(s) for profile %r",
+            book_id,
+            len(releases),
+            profile.name,
+        )
+        return None
+
+    fitting.sort(key=lambda t: (t[0], t[1]))
+    return fitting[0][2]
+
+
+async def grab_cutoff_release(
+    book_id: int, release: dict, indexer: Indexer, sab: DownloadClient
+) -> CutoffSearchResponse:
+    """Fetch one release's NZB via Prowlarr and hand it to SABnzbd.
+
+    Shared by POST /api/v1/wanted/cutoff/{book_id}/search and the periodic
+    wanted-search scheduler; never raises for expected failures (NZB fetch
+    or SABnzbd rejection) -- those are reported via ``ok=False`` instead.
+    """
+    client = ProwlarrClient(base_url=indexer.url, api_key=indexer.api_key or None)
+    nzb = await client.download_nzb(release["download_url"])
+    if nzb is None:
+        log.warning("Cutoff search for book %d: NZB fetch from Prowlarr failed", book_id)
+        return CutoffSearchResponse(
+            ok=False,
+            found=True,
+            message="Could not fetch the NZB from Prowlarr",
+            release_title=release.get("title"),
+        )
+
+    sab_client = SABnzbdClient(base_url=sab.base_url(), api_key=sab.api_key or None)
+    nzo_id = await sab_client.add_nzb(nzb, release.get("title") or "", sab.category)
+    if nzo_id is None:
+        log.warning("Cutoff search for book %d: SABnzbd rejected the NZB", book_id)
+        return CutoffSearchResponse(
+            ok=False,
+            found=True,
+            message="SABnzbd did not accept the NZB",
+            release_title=release.get("title"),
+        )
+
+    log.info(
+        "Cutoff search for book %d: grabbed %r -> SABnzbd nzo_id %s (category=%s)",
+        book_id,
+        release.get("title"),
+        nzo_id,
+        sab.category,
+    )
+    return CutoffSearchResponse(
+        ok=True,
+        found=True,
+        message=f"Sent to SABnzbd (category {sab.category})",
+        release_title=release.get("title"),
+        nzo_id=nzo_id,
+    )
 
 
 @router.post("/api/v1/wanted/cutoff/{book_id}/search", response_model=CutoffSearchResponse)
@@ -275,31 +407,10 @@ async def search_cutoff_upgrade(book_id: int) -> CutoffSearchResponse | JSONResp
             ).model_dump(),
         )
 
-    query = f"{book['title']} {' '.join(authors)}".strip()
-    client = ProwlarrClient(base_url=indexer.url, api_key=indexer.api_key or None)
-    releases = await client.search(query, limit=50)
-    log.info("Cutoff search for book %d (%r) -> %d result(s)", book_id, query, len(releases))
-
-    fitting: list[tuple[int, int, dict]] = []
-    for release in releases:
-        inferred = infer_quality_from_name(release.get("title") or "")
-        fit = evaluate_quality_for_profile(inferred, profile, settings.quality_definitions)
-        if fit.status not in ("preferred", "accepted"):
-            continue
-        tier_index = (
-            profile.quality_ids.index(fit.matched_quality_id)
-            if fit.matched_quality_id in profile.quality_ids
-            else len(profile.quality_ids)
-        )
-        fitting.append((tier_index, -(release.get("seeders") or 0), release))
-
-    if not fitting:
-        log.debug(
-            "cutoff search for book %d: no fitting release among %d result(s) for profile %r",
-            book_id,
-            len(releases),
-            profile.name,
-        )
+    release = await find_fitting_release(
+        book_id, book["title"], authors, profile, indexer, settings.quality_definitions
+    )
+    if release is None:
         return JSONResponse(
             status_code=202,
             content=CutoffSearchResponse(
@@ -310,42 +421,5 @@ async def search_cutoff_upgrade(book_id: int) -> CutoffSearchResponse | JSONResp
             ).model_dump(),
         )
 
-    fitting.sort(key=lambda t: (t[0], t[1]))
-    best = fitting[0][2]
-
     sab = _require_sabnzbd()
-    nzb = await client.download_nzb(best["download_url"])
-    if nzb is None:
-        log.warning("Cutoff search for book %d: NZB fetch from Prowlarr failed", book_id)
-        return CutoffSearchResponse(
-            ok=False,
-            found=True,
-            message="Could not fetch the NZB from Prowlarr",
-            release_title=best.get("title"),
-        )
-
-    sab_client = SABnzbdClient(base_url=sab.base_url(), api_key=sab.api_key or None)
-    nzo_id = await sab_client.add_nzb(nzb, best.get("title") or query, sab.category)
-    if nzo_id is None:
-        log.warning("Cutoff search for book %d: SABnzbd rejected the NZB", book_id)
-        return CutoffSearchResponse(
-            ok=False,
-            found=True,
-            message="SABnzbd did not accept the NZB",
-            release_title=best.get("title"),
-        )
-
-    log.info(
-        "Cutoff search for book %d: grabbed %r -> SABnzbd nzo_id %s (category=%s)",
-        book_id,
-        best.get("title"),
-        nzo_id,
-        sab.category,
-    )
-    return CutoffSearchResponse(
-        ok=True,
-        found=True,
-        message=f"Sent to SABnzbd (category {sab.category})",
-        release_title=best.get("title"),
-        nzo_id=nzo_id,
-    )
+    return await grab_cutoff_release(book_id, release, indexer, sab)
