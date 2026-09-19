@@ -554,6 +554,8 @@ def test_settings_page_has_media_management_and_summary_fields(app_client, langu
     assert 'id="media-rename-files"' in media.text
     assert 'id="media-file-name-pattern"' in media.text
     assert 'id="media-delete-empty-folders"' in media.text
+    assert 'id="media-scan-interval"' in media.text
+    assert 'id="media-scan-last-run"' in media.text
 
     profiles = app_client.get("/settings/profiles")
     assert profiles.status_code == 200

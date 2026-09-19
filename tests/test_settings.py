@@ -8,6 +8,31 @@ def test_get_settings_defaults(app_client):
     assert body["translation"]["backend"] == "none"
 
 
+def test_import_scan_interval_defaults_to_off(app_client):
+    body = app_client.get("/api/v1/settings").json()
+    assert body["media_management"]["import_scan_interval_minutes"] == 0
+    assert body["media_management"]["last_scheduled_scan_at"] == ""
+
+
+def test_import_scan_interval_persists(app_client):
+    current = app_client.get("/api/v1/settings").json()
+    current["media_management"]["import_scan_interval_minutes"] = 30
+
+    put_response = app_client.put("/api/v1/settings", json=current)
+    assert put_response.status_code == 200
+
+    body = app_client.get("/api/v1/settings").json()
+    assert body["media_management"]["import_scan_interval_minutes"] == 30
+
+
+def test_import_scan_interval_rejects_negative_values(app_client):
+    current = app_client.get("/api/v1/settings").json()
+    current["media_management"]["import_scan_interval_minutes"] = -1
+
+    put_response = app_client.put("/api/v1/settings", json=current)
+    assert put_response.status_code == 422
+
+
 def test_put_settings_persists(app_client):
     current = app_client.get("/api/v1/settings").json()
     current["ui"]["language"] = "de"

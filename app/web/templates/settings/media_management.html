@@ -25,6 +25,15 @@
       </label>
     </div>
 
+    <div class="settings-subsection">
+      <h3>{{ t.settings_media_scan_heading }}</h3>
+      <p class="section-hint">{{ t.settings_media_scan_interval_hint }}</p>
+      <label>{{ t.settings_media_scan_interval_label }}
+        <input type="number" id="media-scan-interval" min="0" step="1" autocomplete="off">
+      </label>
+      <p class="muted">{{ t.settings_media_scan_last_run_label }}: <span id="media-scan-last-run">—</span></p>
+    </div>
+
     <div class="settings-subsection settings-advanced-row">
       <h3>{{ t.settings_advanced_heading }}</h3>
       <p class="callout">{{ t.settings_media_advanced_note }}</p>
