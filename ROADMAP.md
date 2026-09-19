@@ -75,8 +75,8 @@ but with real gaps; **Next** — not started.
 
 ### 9. Profiles, Quality, Tags, Connect (notifications) — Partial
 
-- Profiles: audiobook-specific semantics modeled and editable — an ordered, best-first list of quality tiers plus an upgrade cutoff (see `docs/design/quality-profiles.md`). Wired into release-search quality fit and conversion enqueue since #18/#19 (first configured profile); per-book assignment is next.
-- Quality: real, editable quality definitions (container/codec/bitrate band/lossless/chapter expectations), not a copy of video quality definitions. Used by the same decision paths as Profiles (see `docs/design/quality-profiles.md`, "Wired behavior").
+- Profiles: audiobook-specific semantics modeled and editable — an ordered, best-first list of quality tiers plus an upgrade cutoff (see `docs/design/quality-profiles.md`). Wired into release-search quality fit, conversion enqueue, per-book assignments, Wanted cutoff upgrades, and optional Releases filtering.
+- Quality: real, editable quality definitions (container/codec/bitrate band/lossless/chapter expectations), not a copy of video quality definitions. Used by the same decision paths as Profiles (see `docs/design/quality-profiles.md`, "Wired behavior"). Phase 1 quality routing is complete.
 - Tags: not modeled beyond the settings document shape; placeholder page.
 - Connect (outbound webhooks/notifications): not implemented; placeholder page that links to the working Audiobookshelf/m4b-convertarr connections instead.
 - Tags and Connect are explicitly marked "Planned" in the Settings overview and their own pages; Profiles and Quality are active, editable sections.
@@ -93,11 +93,11 @@ but with real gaps; **Next** — not started.
 
 Phased plan; each phase lands as small verified slices (issue → branch → PR → CI → deploy).
 
-### Phase 1 — Finish quality routing — in progress
+### Phase 1 — Finish quality routing — Done
 
-- Per-book quality profile assignment: `books.quality_profile` column, book detail UI selector, profile-aware conversion enqueue (empty assignment falls back to the first configured profile). **Next**
-- Upgrade search: chase the profile cutoff for monitored books (Wanted page action using per-book profiles). **Next**
-- Optional quality filter when grabbing releases (only releases that fit the profile). **Next**
+- Per-book quality profile assignment: `books.quality_profile` column, book detail UI selector, profile-aware conversion enqueue (empty assignment falls back to the first configured profile). **Done**
+- Upgrade search: chase the profile cutoff for monitored books (Wanted page action using per-book profiles). **Done**
+- Optional quality filter when grabbing releases (only releases that fit the profile). **Done**
 
 ### Phase 2 — Close the automation loop
 
