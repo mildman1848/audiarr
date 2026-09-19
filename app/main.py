@@ -150,6 +150,25 @@ async def lifespan(app: FastAPI):
         )
         log.info("import scheduler enabled (interval=%d minute(s))", scan_interval_minutes)
 
+    # SABnzbd completed-download auto-import (issue #25): only runs when
+    # enabled AND an enabled SABnzbd download client is configured, so a
+    # bare `enabled` flag with no client never spins up a useless poller.
+    sab_import_stop_event = asyncio.Event()
+    sab_import_task = None
+    if settings.media_management.sab_auto_import_enabled:
+        from app.api.routes_releases import _enabled_sabnzbd
+        from app.import_scheduler import scheduler_loop
+        from app.sab_auto_import import SabAutoImportScheduler
+
+        if _enabled_sabnzbd() is not None:
+            interval = settings.media_management.sab_auto_import_interval_minutes
+            sab_import_task = asyncio.create_task(
+                scheduler_loop(SabAutoImportScheduler(), interval, sab_import_stop_event)
+            )
+            log.info("SABnzbd auto-import enabled (interval=%d minute(s))", interval)
+        else:
+            log.info("SABnzbd auto-import enabled but no enabled SABnzbd client configured")
+
     yield
 
     if worker_task is not None:
@@ -161,6 +180,11 @@ async def lifespan(app: FastAPI):
         import_scan_stop_event.set()
         with contextlib.suppress(asyncio.CancelledError):
             await asyncio.wait_for(import_scan_task, timeout=5)
+
+    if sab_import_task is not None:
+        sab_import_stop_event.set()
+        with contextlib.suppress(asyncio.CancelledError):
+            await asyncio.wait_for(sab_import_task, timeout=5)
 
     if backfill_task is not None:
         with contextlib.suppress(asyncio.CancelledError, TimeoutError):

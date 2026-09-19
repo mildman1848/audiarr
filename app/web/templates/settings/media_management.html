@@ -34,6 +34,22 @@
       <p class="muted">{{ t.settings_media_scan_last_run_label }}: <span id="media-scan-last-run">—</span></p>
     </div>
 
+    <div class="settings-subsection">
+      <h3>{{ t.settings_media_sab_import_heading }}</h3>
+      <p class="section-hint">{{ t.settings_media_sab_import_hint }}</p>
+      <label class="inline-check">
+        <input type="checkbox" id="media-sab-import-enabled">
+        {{ t.settings_media_sab_import_enabled_label }}
+      </label>
+      <label>{{ t.settings_media_sab_import_category_label }}
+        <input type="text" id="media-sab-import-category" autocomplete="off" placeholder="audiobooks">
+      </label>
+      <p class="muted small">{{ t.settings_media_sab_import_category_hint }}</p>
+      <label>{{ t.settings_media_sab_import_interval_label }}
+        <input type="number" id="media-sab-import-interval" min="1" step="1" autocomplete="off">
+      </label>
+    </div>
+
     <div class="settings-subsection settings-advanced-row">
       <h3>{{ t.settings_advanced_heading }}</h3>
       <p class="callout">{{ t.settings_media_advanced_note }}</p>

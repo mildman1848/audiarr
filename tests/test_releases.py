@@ -254,6 +254,7 @@ async def test_history_normalization():
                             "category": "audiobooks",
                             "completed": 1725100000,
                             "nzb_name": "finished.nzb",
+                            "storage": "/downloads/audiobooks/Finished Book",
                         }
                     ],
                 }
@@ -274,6 +275,8 @@ async def test_history_normalization():
             "size": "512 MB",
             "category": "audiobooks",
             "completed_at": 1725100000,
+            "storage": "/downloads/audiobooks/Finished Book",
+            "fail_message": "",
         }
     ]
 
@@ -518,6 +521,59 @@ def test_history_endpoint(app_client, monkeypatch):
     slots = resp.json()["slots"]
     assert slots[0]["name"] == "Finished Book"
     assert slots[0]["completed_at"] == 1725100000
+    # No auto-import poller has touched this item -> untracked, not an error.
+    assert slots[0]["import_status"] is None
+    assert slots[0]["import_reason"] == ""
+
+
+def test_history_endpoint_surfaces_auto_import_state(app_client, monkeypatch):
+    """Rows the auto-import poller (issue #25) has processed carry their
+    status/reason so the Activity page can show them without a second
+    endpoint."""
+    import sqlite3
+
+    from app.config import get_db_path
+
+    _configure(app_client)
+
+    conn = sqlite3.connect(get_db_path())
+    conn.execute(
+        """INSERT INTO sab_import_state (nzo_key, name, folder_path, status, reason)
+           VALUES ('nzo_9', 'Finished Book', '/downloads/Finished Book', 'imported',
+                   'matched via ASIN B004UWRY6M')"""
+    )
+    conn.commit()
+    conn.close()
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        return httpx.Response(
+            200,
+            json={
+                "history": {
+                    "slots": [
+                        {
+                            "nzo_id": "nzo_9",
+                            "name": "Finished Book",
+                            "status": "Completed",
+                            "size": "512 MB",
+                            "category": "audiobooks",
+                            "completed": 1725100000,
+                            "storage": "/downloads/Finished Book",
+                        }
+                    ]
+                }
+            },
+        )
+
+    monkeypatch.setattr(
+        "app.api.routes_releases.SABnzbdClient", _factory(SABnzbdClient, handler)
+    )
+
+    resp = app_client.get("/api/v1/activity/history")
+    assert resp.status_code == 200
+    slot = resp.json()["slots"][0]
+    assert slot["import_status"] == "imported"
+    assert slot["import_reason"] == "matched via ASIN B004UWRY6M"
 
 
 def test_queue_endpoint_503_without_sabnzbd(app_client):

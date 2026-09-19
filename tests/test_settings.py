@@ -33,6 +33,36 @@ def test_import_scan_interval_rejects_negative_values(app_client):
     assert put_response.status_code == 422
 
 
+def test_sab_auto_import_defaults_to_off(app_client):
+    body = app_client.get("/api/v1/settings").json()
+    assert body["media_management"]["sab_auto_import_enabled"] is False
+    assert body["media_management"]["sab_auto_import_category"] == ""
+    assert body["media_management"]["sab_auto_import_interval_minutes"] == 5
+
+
+def test_sab_auto_import_settings_persist(app_client):
+    current = app_client.get("/api/v1/settings").json()
+    current["media_management"]["sab_auto_import_enabled"] = True
+    current["media_management"]["sab_auto_import_category"] = "hoerbuecher"
+    current["media_management"]["sab_auto_import_interval_minutes"] = 15
+
+    put_response = app_client.put("/api/v1/settings", json=current)
+    assert put_response.status_code == 200
+
+    body = app_client.get("/api/v1/settings").json()
+    assert body["media_management"]["sab_auto_import_enabled"] is True
+    assert body["media_management"]["sab_auto_import_category"] == "hoerbuecher"
+    assert body["media_management"]["sab_auto_import_interval_minutes"] == 15
+
+
+def test_sab_auto_import_interval_rejects_non_positive_values(app_client):
+    current = app_client.get("/api/v1/settings").json()
+    current["media_management"]["sab_auto_import_interval_minutes"] = 0
+
+    put_response = app_client.put("/api/v1/settings", json=current)
+    assert put_response.status_code == 422
+
+
 def test_put_settings_persists(app_client):
     current = app_client.get("/api/v1/settings").json()
     current["ui"]["language"] = "de"
