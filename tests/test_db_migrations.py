@@ -11,7 +11,7 @@ from app.db import SCHEMA_VERSION, migrate
 def test_fresh_db_reaches_latest_schema(tmp_path: Path) -> None:
     db = tmp_path / "fresh.db"
     version = migrate(db)
-    assert version == SCHEMA_VERSION == 10
+    assert version == SCHEMA_VERSION == 11
 
     conn = sqlite3.connect(db)
     tables = {
@@ -24,6 +24,7 @@ def test_fresh_db_reaches_latest_schema(tmp_path: Path) -> None:
         "books", "book_authors", "book_narrators", "editions", "provider_ids",
         "library_files", "import_jobs", "conversion_jobs", "import_ignores",
         "sab_import_state", "wanted_search_state",
+        "tags", "book_tags", "root_folder_tags",
     }
     assert expected <= tables
 
@@ -70,7 +71,7 @@ def test_migration_is_idempotent(tmp_path: Path) -> None:
     conn = sqlite3.connect(db)
     rows = conn.execute("SELECT version FROM schema_version ORDER BY version").fetchall()
     conn.close()
-    assert [r[0] for r in rows] == [1, 2, 3, 4, 5, 6, 7, 8, 9, 10]
+    assert [r[0] for r in rows] == [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11]
 
 
 def test_v1_db_upgrades_to_latest(tmp_path: Path) -> None:
@@ -149,7 +150,7 @@ def test_v6_db_upgrades_to_v7(tmp_path: Path) -> None:
     conn.close()
 
     version = migrate(db)
-    assert version == SCHEMA_VERSION == 10
+    assert version == SCHEMA_VERSION == 11
 
     conn = sqlite3.connect(db)
     cols = {r[1] for r in conn.execute("PRAGMA table_info(books)")}
@@ -170,7 +171,7 @@ def test_v7_db_upgrades_to_v8(tmp_path: Path) -> None:
     conn.close()
 
     version = migrate(db)
-    assert version == SCHEMA_VERSION == 10
+    assert version == SCHEMA_VERSION == 11
 
     conn = sqlite3.connect(db)
     cols = {r[1]: r for r in conn.execute("PRAGMA table_info(books)")}
@@ -192,7 +193,7 @@ def test_v8_db_upgrades_to_v9(tmp_path: Path) -> None:
     conn.close()
 
     version = migrate(db)
-    assert version == SCHEMA_VERSION == 10
+    assert version == SCHEMA_VERSION == 11
 
     conn = sqlite3.connect(db)
     tables = {
@@ -213,7 +214,7 @@ def test_v9_db_upgrades_to_v10(tmp_path: Path) -> None:
     conn.close()
 
     version = migrate(db)
-    assert version == SCHEMA_VERSION == 10
+    assert version == SCHEMA_VERSION == 11
 
     conn = sqlite3.connect(db)
     tables = {
@@ -223,10 +224,35 @@ def test_v9_db_upgrades_to_v10(tmp_path: Path) -> None:
     assert "wanted_search_state" in tables
 
 
+def test_v10_db_upgrades_to_v11(tmp_path: Path) -> None:
+    """A v10 (prod-shaped) DB gains the tags tables on upgrade."""
+    db = tmp_path / "v10.db"
+    migrate(db)
+    conn = sqlite3.connect(db)
+    conn.execute("DROP TABLE root_folder_tags")
+    conn.execute("DROP TABLE book_tags")
+    conn.execute("DROP TABLE tags")
+    conn.execute("DELETE FROM schema_version WHERE version >= 11")
+    conn.commit()
+    conn.close()
+
+    version = migrate(db)
+    assert version == SCHEMA_VERSION == 11
+
+    conn = sqlite3.connect(db)
+    tables = {
+        r[0] for r in conn.execute("SELECT name FROM sqlite_master WHERE type='table'")
+    }
+    conn.close()
+    assert "tags" in tables
+    assert "book_tags" in tables
+    assert "root_folder_tags" in tables
+
+
 def test_version_history_is_preserved(tmp_path: Path) -> None:
     db = tmp_path / "hist.db"
     migrate(db)
     conn = sqlite3.connect(db)
     rows = conn.execute("SELECT version FROM schema_version ORDER BY version").fetchall()
     conn.close()
-    assert [r[0] for r in rows] == [1, 2, 3, 4, 5, 6, 7, 8, 9, 10]
+    assert [r[0] for r in rows] == [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11]

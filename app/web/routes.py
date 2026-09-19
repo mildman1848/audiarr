@@ -81,7 +81,6 @@ SETTINGS_SECTIONS: list[dict[str, str]] = [
         "template": "settings/tags.html",
         "label_key": "settings_section_tags",
         "desc_key": "settings_overview_tags_desc",
-        "status": "planned",
     },
     {
         "slug": "general",

@@ -1,13 +1,27 @@
 {% extends "settings/shell.html" %}
 
 {% block settings_content %}
-  <section class="card settings-form placeholder-card">
+  <section class="card settings-form">
     <div class="section-head">
       <span class="eyebrow">{{ t.settings_eyebrow }}</span>
       <h2>{{ t.settings_section_tags }}</h2>
     </div>
     <p class="section-hint">{{ t.settings_tags_hint }}</p>
-    <p class="muted">{{ t.settings_tags_empty }}</p>
-    <p class="callout">{{ t.settings_tags_next_note }}</p>
+
+    <div id="tags-list">
+      <p class="muted">{{ t.settings_tags_loading }}</p>
+    </div>
+
+    <div class="inline-form toolbar">
+      <input type="text" id="tags-new-label" placeholder="{{ t.settings_tags_label_placeholder }}" maxlength="60">
+      <input type="color" id="tags-new-color" value="#8a8a8a" title="{{ t.settings_tags_color_label }}" aria-label="{{ t.settings_tags_color_label }}">
+      <button type="button" id="tags-add-btn" class="btn btn-primary">{{ t.settings_tags_add }}</button>
+    </div>
+    <p id="tags-msg" class="muted" role="status"></p>
   </section>
+{% endblock %}
+
+{% block scripts %}
+  <script src="/static/js/settings.js?v={{ version }}-tags"></script>
+  <script src="/static/js/tags.js?v={{ version }}-tags"></script>
 {% endblock %}

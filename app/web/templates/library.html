@@ -12,6 +12,9 @@
   </div>
   <div class="toolbar-group toolbar-right">
     <input type="search" id="library-filter" class="toolbar-input" placeholder="{{ t.toolbar_filter }}" aria-label="{{ t.toolbar_filter }}">
+    <select id="library-tag-filter" class="toolbar-select" aria-label="{{ t.library_tag_filter_label }}">
+      <option value="">{{ t.library_tag_filter_all }}</option>
+    </select>
     <select id="library-sort" class="toolbar-select" aria-label="{{ t.toolbar_sort }}">
       <option value="title">{{ t.toolbar_sort_title }}</option>
       <option value="author">{{ t.toolbar_sort_author }}</option>
@@ -99,5 +102,5 @@
 {% endblock %}
 
 {% block scripts %}
-  <script src="/static/js/library.js?v={{ version }}-librarycards"></script>
+  <script src="/static/js/library.js?v={{ version }}-tags"></script>
 {% endblock %}
