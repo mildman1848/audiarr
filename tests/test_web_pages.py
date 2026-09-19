@@ -109,6 +109,27 @@ def test_connections_and_settings_pages_render(
 
 
 @pytest.mark.parametrize(
+    ("language", "toggle_marker", "help_marker"),
+    [
+        ("en", "Only show profile-fitting releases", "hides releases that are below cutoff"),
+        ("de", "Nur passende Releases anzeigen", "werden Releases ausgeblendet"),
+    ],
+)
+def test_search_page_has_quality_fit_toggle(app_client, language, toggle_marker, help_marker):
+    """Issue #22: the Releases page ships an optional, default-off toggle
+    that hides non-fitting releases, with translated label/help text in
+    both UI languages."""
+    _set_ui_language(app_client, language)
+
+    page = app_client.get("/search")
+    assert page.status_code == 200
+    assert 'id="rs-quality-fit-only"' in page.text
+    assert 'type="checkbox" id="rs-quality-fit-only"' in page.text
+    assert toggle_marker in page.text
+    assert help_marker in page.text
+
+
+@pytest.mark.parametrize(
     ("language", "downloadclients_marker", "indexers_marker"),
     [
         ("en", "Download Clients", "Indexers"),

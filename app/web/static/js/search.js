@@ -10,6 +10,15 @@ const T = window.AUDIARR_I18N || {};
 // Cache the last result set so per-row Grab buttons can look up their source
 // row by index without re-parsing the DOM.
 let lastReleases = [];
+let lastSearchMeta = { indexer: "—", total_results: null };
+
+// localStorage key for the "only profile-fitting releases" toggle (issue #22).
+// Namespaced and page-specific so it doesn't collide with other per-page
+// UI prefs stored the same way.
+const QUALITY_FIT_STORAGE_KEY = "audiarr.releaseSearch.onlyQualityFit";
+
+// Statuses considered a profile fit when the toggle is on.
+const QUALITY_FIT_STATUSES = new Set(["preferred", "accepted"]);
 
 // Follows settings.js escapeHtml: escape every value interpolated into innerHTML.
 function esc(value) {
@@ -98,8 +107,37 @@ function qualityCompact(r) {
   return bits.join(" · ");
 }
 
+// Missing/unrecognized quality_status (e.g. an older/stubbed response row)
+// is always normalized to "unknown".
+function qualityStatusOf(r) {
+  return String(r.quality_status || "unknown");
+}
+
+// Whether a row counts as "profile-fitting" for the optional releases-page
+// filter: preferred/accepted pass, below_cutoff/rejected/unknown do not.
+function isQualityFit(r) {
+  return QUALITY_FIT_STATUSES.has(qualityStatusOf(r));
+}
+
+function loadQualityFitOnly() {
+  try {
+    return localStorage.getItem(QUALITY_FIT_STORAGE_KEY) === "true";
+  } catch {
+    return false;
+  }
+}
+
+function saveQualityFitOnly(value) {
+  try {
+    localStorage.setItem(QUALITY_FIT_STORAGE_KEY, value ? "true" : "false");
+  } catch {
+    // Storage unavailable (private browsing, disabled storage, etc.) — the
+    // toggle still works for the current page load.
+  }
+}
+
 function qualityBadge(r) {
-  const status = String(r.quality_status || "unknown");
+  const status = qualityStatusOf(r);
   const cls = QUALITY_STATUS_CLASSES[status] || "";
   const label = T[QUALITY_STATUS_KEYS[status]] || T.search_quality_unknown || status;
   const tooltip = qualityTooltip(r);
@@ -139,38 +177,61 @@ async function runSearch(event) {
     const data = await resp.json();
 
     lastReleases = data.releases || [];
+    lastSearchMeta = { indexer: data.indexer, total_results: data.total_results };
     console.debug("release search: %d result(s)", lastReleases.length);
-    if (!lastReleases.length) {
-      container.innerHTML = `<p class="muted">${esc(T.search_results_empty)}</p>`;
-      return;
-    }
-
-    const rows = lastReleases.map((r, i) => renderRow(r, i)).join("");
-    container.innerHTML = `
-      <p class="muted">${esc(T.search_indexer_used)}: ${esc(data.indexer || "—")}
-        · ${esc(T.search_total_results)}: ${data.total_results ?? "—"}</p>
-      <table class="table">
-        <thead>
-          <tr>
-            <th>${esc(T.search_col_protocol)}</th>
-            <th>${esc(T.search_col_title)}</th>
-            <th>${esc(T.search_col_quality)}</th>
-            <th>${esc(T.search_col_indexer)}</th>
-            <th>${esc(T.search_col_size)}</th>
-            <th>${esc(T.search_col_age)}</th>
-            <th>${esc(T.search_col_seeders)}</th>
-            <th>${esc(T.search_col_actions)}</th>
-          </tr>
-        </thead>
-        <tbody>${rows}</tbody>
-      </table>`;
-
-    container.querySelectorAll("button[data-index]").forEach((btn) => {
-      btn.addEventListener("click", () => grabRelease(Number(btn.dataset.index), btn));
-    });
+    renderResults();
   } catch (err) {
     container.innerHTML = `<p class="muted">${esc(T.search_results_error)} (${esc(err.message)})</p>`;
   }
+}
+
+function isQualityFitOnlyEnabled() {
+  const toggle = document.getElementById("rs-quality-fit-only");
+  return toggle ? toggle.checked : false;
+}
+
+// Renders lastReleases into #release-results, applying the "only
+// profile-fitting releases" toggle if enabled. Re-run (without re-fetching)
+// whenever the toggle changes so Grab buttons stay bound to visible rows only.
+function renderResults() {
+  const container = document.getElementById("release-results");
+  if (!lastReleases.length) {
+    container.innerHTML = `<p class="muted">${esc(T.search_results_empty)}</p>`;
+    return;
+  }
+
+  const onlyFit = isQualityFitOnlyEnabled();
+  const indexed = lastReleases.map((r, i) => ({ r, i }));
+  const visible = onlyFit ? indexed.filter(({ r }) => isQualityFit(r)) : indexed;
+  const hiddenCount = lastReleases.length - visible.length;
+  const rows = visible.map(({ r, i }) => renderRow(r, i)).join("");
+  const hiddenNotice = hiddenCount > 0
+    ? `<p class="muted" id="rs-quality-fit-hidden-count">${esc(T.search_quality_fit_hidden_count)}: ${hiddenCount}</p>`
+    : "";
+
+  container.innerHTML = `
+    <p class="muted">${esc(T.search_indexer_used)}: ${esc(lastSearchMeta.indexer || "—")}
+      · ${esc(T.search_total_results)}: ${lastSearchMeta.total_results ?? "—"}</p>
+    ${hiddenNotice}
+    <table class="table">
+      <thead>
+        <tr>
+          <th>${esc(T.search_col_protocol)}</th>
+          <th>${esc(T.search_col_title)}</th>
+          <th>${esc(T.search_col_quality)}</th>
+          <th>${esc(T.search_col_indexer)}</th>
+          <th>${esc(T.search_col_size)}</th>
+          <th>${esc(T.search_col_age)}</th>
+          <th>${esc(T.search_col_seeders)}</th>
+          <th>${esc(T.search_col_actions)}</th>
+        </tr>
+      </thead>
+      <tbody>${rows}</tbody>
+    </table>`;
+
+  container.querySelectorAll("button[data-index]").forEach((btn) => {
+    btn.addEventListener("click", () => grabRelease(Number(btn.dataset.index), btn));
+  });
 }
 
 function renderRow(r, i) {
@@ -246,4 +307,13 @@ async function grabRelease(index, btn) {
 
 document.addEventListener("DOMContentLoaded", () => {
   document.getElementById("release-search-form").addEventListener("submit", runSearch);
+
+  const qualityFitToggle = document.getElementById("rs-quality-fit-only");
+  if (qualityFitToggle) {
+    qualityFitToggle.checked = loadQualityFitOnly();
+    qualityFitToggle.addEventListener("change", () => {
+      saveQualityFitOnly(qualityFitToggle.checked);
+      renderResults();
+    });
+  }
 });
