@@ -77,6 +77,18 @@ function historyStatusBadge(status) {
   return `<span class="${cls}">${esc(status || "—")}</span>`;
 }
 
+// import_status/import_reason are only present once the auto-import poller
+// (issue #25) has processed a history row; older/untouched rows show "—".
+function importStatusBadge(importStatus, importReason) {
+  if (!importStatus) return `<span class="muted">—</span>`;
+  let cls = "badge";
+  if (importStatus === "imported") cls = "badge badge-completed";
+  else if (importStatus === "failed") cls = "badge badge-failed";
+  const label = T[`activity_import_status_${importStatus}`] || importStatus;
+  const title = importReason ? ` title="${esc(importReason)}"` : "";
+  return `<span class="${cls}"${title}>${esc(label)}</span>`;
+}
+
 // 503: SABnzbd not configured. Rendered as the same empty-state pattern as
 // the queue/history "nothing here" cases (with a Settings CTA) rather than
 // a standalone error card, so the section still reads as Queue/History.
@@ -169,6 +181,7 @@ async function refreshHistory() {
           <td>${esc(s.category || "—")}</td>
           <td>${esc(humanSize(s.size))}</td>
           <td>${esc(humanTime(s.completed_at))}</td>
+          <td>${importStatusBadge(s.import_status, s.import_reason)}</td>
         </tr>`
       )
       .join("");
@@ -183,6 +196,7 @@ async function refreshHistory() {
               <th>${esc(T.activity_col_category)}</th>
               <th>${esc(T.activity_col_size)}</th>
               <th>${esc(T.activity_col_completed_at)}</th>
+              <th>${esc(T.activity_col_import)}</th>
             </tr>
           </thead>
           <tbody>${rows}</tbody>

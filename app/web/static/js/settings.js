@@ -372,6 +372,9 @@ function populate(s) {
   setChecked("media-delete-empty-folders", s.media_management.delete_empty_folders);
   setValue("media-scan-interval", s.media_management.import_scan_interval_minutes ?? 0);
   setText("media-scan-last-run", s.media_management.last_scheduled_scan_at || "—");
+  setChecked("media-sab-import-enabled", s.media_management.sab_auto_import_enabled);
+  setValue("media-sab-import-category", s.media_management.sab_auto_import_category || "");
+  setValue("media-sab-import-interval", s.media_management.sab_auto_import_interval_minutes ?? 5);
   if ($("quality-definitions")) {
     renderQualityDefinitionsEditor(s.quality_definitions);
     bindQualityDefinitionsEvents();
@@ -439,6 +442,17 @@ async function saveSettings(event) {
       const interval = Number(getValue("media-scan-interval"));
       doc.media_management.import_scan_interval_minutes =
         Number.isFinite(interval) && interval >= 0 ? Math.trunc(interval) : 0;
+    }
+    if ($("media-sab-import-enabled")) {
+      doc.media_management.sab_auto_import_enabled = getChecked("media-sab-import-enabled");
+    }
+    if ($("media-sab-import-category")) {
+      doc.media_management.sab_auto_import_category = getValue("media-sab-import-category").trim();
+    }
+    if ($("media-sab-import-interval")) {
+      const sabInterval = Number(getValue("media-sab-import-interval"));
+      doc.media_management.sab_auto_import_interval_minutes =
+        Number.isFinite(sabInterval) && sabInterval >= 1 ? Math.trunc(sabInterval) : 5;
     }
     if ($("metadata-locale")) doc.metadata.audible_locale = getValue("metadata-locale");
     if ($("conversion-backend")) doc.conversion.backend = getValue("conversion-backend");

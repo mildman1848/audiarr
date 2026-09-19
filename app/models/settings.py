@@ -73,6 +73,17 @@ class MediaManagementSettings(BaseModel):
     # UTC timestamp ("%Y-%m-%d %H:%M:%S") of the last scheduled scan tick
     # that ran to completion; empty until the scheduler has run once.
     last_scheduled_scan_at: str = ""
+    # Auto-import completed SABnzbd downloads (issue #25). Disabled by
+    # default; app.main's lifespan only starts the poller when this is true
+    # AND an enabled SABnzbd download client is configured.
+    sab_auto_import_enabled: bool = False
+    # Category filter for the poller. Empty string means "use the enabled
+    # SABnzbd download client's own category" (see app.sab_auto_import),
+    # which keeps this in sync with DownloadClient.category by default.
+    sab_auto_import_category: str = ""
+    # How often (minutes) the poller checks SABnzbd history for newly
+    # completed downloads.
+    sab_auto_import_interval_minutes: int = Field(default=5, ge=1)
 
 
 ChapterExpectation = Literal["required", "preferred", "not_required"]

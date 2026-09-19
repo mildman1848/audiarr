@@ -166,6 +166,13 @@ class SABnzbdClient:
                     "size": s.get("size"),
                     "category": s.get("category"),
                     "completed_at": s.get("completed"),
+                    # "storage" is SABnzbd's full path to the completed
+                    # download folder/file; older SAB versions only send the
+                    # deprecated "path" alias. Used by the auto-import
+                    # poller (see app/sab_auto_import.py) to locate the
+                    # folder on disk; never populated by the queue.
+                    "storage": s.get("storage") or s.get("path") or "",
+                    "fail_message": s.get("fail_message") or "",
                 }
                 for s in slots
                 if isinstance(s, dict)

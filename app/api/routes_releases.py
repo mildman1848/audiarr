@@ -16,11 +16,12 @@ yields a 503 so the UI can prompt the user to finish setup.
 from __future__ import annotations
 
 import logging
+import sqlite3
 
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
 
-from app.config import load_settings
+from app.config import get_db_path, load_settings
 from app.connections.prowlarr import ProwlarrClient
 from app.connections.sabnzbd import SABnzbdClient
 from app.models.settings import DownloadClient, Indexer, QualityDefinition, QualityProfile
@@ -215,9 +216,40 @@ async def activity_queue() -> QueueResponse:
     return QueueResponse(slots=await client.queue())
 
 
+def _attach_import_state(slots: list[dict]) -> None:
+    """Merge auto-import status/reason (see app.sab_auto_import) onto history slots.
+
+    Deferred import to avoid a module-load cycle (app.sab_auto_import
+    imports from this module). Adds ``import_status``/``import_reason``
+    keys, defaulting to None/"" for history rows the poller hasn't touched
+    (e.g. auto-import disabled, or the item predates it) — existing clients
+    that ignore unknown keys are unaffected.
+    """
+    if not slots:
+        return
+    from app.db import migrate
+    from app.sab_auto_import import history_item_key
+
+    migrate()
+    conn = sqlite3.connect(get_db_path())
+    conn.row_factory = sqlite3.Row
+    try:
+        for slot in slots:
+            row = conn.execute(
+                "SELECT status, reason FROM sab_import_state WHERE nzo_key = ?",
+                (history_item_key(slot),),
+            ).fetchone()
+            slot["import_status"] = row["status"] if row else None
+            slot["import_reason"] = row["reason"] if row else ""
+    finally:
+        conn.close()
+
+
 @router.get("/api/v1/activity/history", response_model=HistoryResponse)
 async def activity_history(limit: int = 50) -> HistoryResponse:
-    """Recent SABnzbd download history."""
+    """Recent SABnzbd download history, annotated with auto-import status."""
     sab = _require_sabnzbd()
     client = SABnzbdClient(base_url=sab.base_url(), api_key=sab.api_key or None)
-    return HistoryResponse(slots=await client.history(limit=limit))
+    slots = await client.history(limit=limit)
+    _attach_import_state(slots)
+    return HistoryResponse(slots=slots)
