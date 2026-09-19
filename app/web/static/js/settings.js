@@ -370,6 +370,8 @@ function populate(s) {
   setChecked("media-rename-files", s.media_management.rename_files);
   setValue("media-file-name-pattern", s.media_management.file_name_pattern || "");
   setChecked("media-delete-empty-folders", s.media_management.delete_empty_folders);
+  setValue("media-scan-interval", s.media_management.import_scan_interval_minutes ?? 0);
+  setText("media-scan-last-run", s.media_management.last_scheduled_scan_at || "—");
   if ($("quality-definitions")) {
     renderQualityDefinitionsEditor(s.quality_definitions);
     bindQualityDefinitionsEvents();
@@ -432,6 +434,11 @@ async function saveSettings(event) {
     }
     if ($("media-delete-empty-folders")) {
       doc.media_management.delete_empty_folders = getChecked("media-delete-empty-folders");
+    }
+    if ($("media-scan-interval")) {
+      const interval = Number(getValue("media-scan-interval"));
+      doc.media_management.import_scan_interval_minutes =
+        Number.isFinite(interval) && interval >= 0 ? Math.trunc(interval) : 0;
     }
     if ($("metadata-locale")) doc.metadata.audible_locale = getValue("metadata-locale");
     if ($("conversion-backend")) doc.conversion.backend = getValue("conversion-backend");

@@ -137,12 +137,30 @@ async def lifespan(app: FastAPI):
     if settings.metadata.backfill_on_start:
         backfill_task = asyncio.create_task(_run_startup_backfill())
 
+    # Periodic root-folder import scan (issue #24): only runs when a
+    # positive interval is configured; 0 (the default) disables it.
+    import_scan_stop_event = asyncio.Event()
+    import_scan_task = None
+    scan_interval_minutes = settings.media_management.import_scan_interval_minutes
+    if scan_interval_minutes > 0:
+        from app.import_scheduler import ImportScheduler, scheduler_loop
+
+        import_scan_task = asyncio.create_task(
+            scheduler_loop(ImportScheduler(), scan_interval_minutes, import_scan_stop_event)
+        )
+        log.info("import scheduler enabled (interval=%d minute(s))", scan_interval_minutes)
+
     yield
 
     if worker_task is not None:
         stop_event.set()
         with contextlib.suppress(asyncio.CancelledError):
             await asyncio.wait_for(worker_task, timeout=5)
+
+    if import_scan_task is not None:
+        import_scan_stop_event.set()
+        with contextlib.suppress(asyncio.CancelledError):
+            await asyncio.wait_for(import_scan_task, timeout=5)
 
     if backfill_task is not None:
         with contextlib.suppress(asyncio.CancelledError, TimeoutError):

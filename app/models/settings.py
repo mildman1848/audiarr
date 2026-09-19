@@ -66,6 +66,13 @@ class MediaManagementSettings(BaseModel):
     rename_files: bool = False
     file_name_pattern: str = "{author}/{series}/{title} ({year})"
     delete_empty_folders: bool = True
+    # Periodic root-folder import scan (issue #24). 0 = disabled (default);
+    # a positive value is the interval in minutes between scheduled scans.
+    # See app/import_scheduler.py.
+    import_scan_interval_minutes: int = Field(default=0, ge=0)
+    # UTC timestamp ("%Y-%m-%d %H:%M:%S") of the last scheduled scan tick
+    # that ran to completion; empty until the scheduler has run once.
+    last_scheduled_scan_at: str = ""
 
 
 ChapterExpectation = Literal["required", "preferred", "not_required"]
