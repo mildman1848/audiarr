@@ -5,14 +5,15 @@
 - Productize public wording: Audiarr is described as a pre-1.0 audiobook manager, not a scaffold.
 - Align web navigation labels around Arr-style Add New and Releases workflows.
 - Mark planned Settings sections explicitly instead of showing misleading save controls.
+- Adopt Audiarr-native roadmap versioning (`0.<phase>.<completed item within that phase>`) and stop using the old household/fork `mldm<N>` suffix.
 
-## 0.1.0-mldm2
+## 0.1.1
 
 - Update FastAPI, Starlette, Pydantic, Uvicorn, and Jinja2 pins for security.
 - Remove pip, setuptools, wheel, and system Python build helpers from the runtime image after dependency installation.
 - Keep the image LSIO/s6-compatible while reducing runtime scanner noise and attack surface.
 
-## 0.1.0-mldm1
+## 0.1.0
 
 - Initial Audiarr application foundation.
 - FastAPI backend, settings API, metadata provider chain, Audiobookshelf and m4b-convertarr clients.

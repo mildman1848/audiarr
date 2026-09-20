@@ -1,9 +1,10 @@
 #!/usr/bin/env bash
 set -euo pipefail
 fail=0
+PYTHON="${PYTHON:-python3}"
 
-python3 -m compileall -q app tests || fail=1
-python3 -m ruff check app tests || fail=1
+"${PYTHON}" -m compileall -q app tests || fail=1
+"${PYTHON}" -m ruff check app tests || fail=1
 
 while IFS= read -r -d '' file; do
   case "$file" in

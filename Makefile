@@ -2,10 +2,11 @@
 SHELL := /bin/bash
 .SHELLFLAGS := -euo pipefail -c
 
+PYTHON ?= $(if $(wildcard .venv/bin/python),.venv/bin/python,python3)
 IMAGE_NAME ?= audiarr
-APP_VERSION ?= 0.1.0
-IMAGE_REVISION ?= mldm2
-VERSION ?= $(APP_VERSION)-$(IMAGE_REVISION)
+APP_VERSION ?= 0.3.2
+IMAGE_REVISION ?= release
+VERSION ?= $(APP_VERSION)
 IMAGE_TAG ?= $(VERSION)
 REGISTRY ?= ghcr.io/mildman1848
 IMAGE_REF ?= $(REGISTRY)/$(IMAGE_NAME):$(IMAGE_TAG)
@@ -29,13 +30,13 @@ info: ## Print image/build metadata.
 	@printf 'LOCAL_IMAGE=%s\n' '$(LOCAL_IMAGE)'
 
 lint: ## Run static checks.
-	@scripts/lint-static.sh
+	@PYTHON='$(PYTHON)' scripts/lint-static.sh
 
 test: ## Run pytest.
-	@python3 -m pytest
+	@$(PYTHON) -m pytest
 
 validate: lint test ## Run all non-Docker validation.
-	@[[ '$(VERSION)' == '$(APP_VERSION)-$(IMAGE_REVISION)' ]] || { echo 'ERROR: VERSION mismatch' >&2; exit 2; }
+	@[[ '$(VERSION)' == '$(APP_VERSION)' ]] || { echo 'ERROR: VERSION mismatch' >&2; exit 2; }
 	@if command -v actionlint >/dev/null 2>&1; then actionlint; else echo 'WARN: actionlint missing; skipped'; fi
 	@echo 'OK: validation passed'
 

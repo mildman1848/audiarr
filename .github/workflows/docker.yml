@@ -36,11 +36,14 @@ jobs:
         shell: bash
         run: |
           # Single source of truth: the ARG defaults in the Dockerfile.
-          # Bumping the revision there is enough for CI to tag correctly.
+          # Audiarr uses project-native versions (`0.<phase>.<phase-item>`),
+          # not the old household/fork `mldm<N>` revision suffix.
           VERSION="$(sed -n 's/^ARG VERSION=//p' Dockerfile | tail -1 | tr -d '"')"
-          APP_VERSION="${VERSION%%-*}"
-          IMAGE_REVISION="${VERSION#*-}"
-          if [[ -z "$VERSION" || "$VERSION" == "$APP_VERSION" || -z "$IMAGE_REVISION" ]]; then
+          APP_VERSION="$(sed -n 's/^ARG APP_VERSION=//p' Dockerfile | tail -1 | tr -d '"')"
+          IMAGE_REVISION="$(sed -n 's/^ARG IMAGE_REVISION=//p' Dockerfile | tail -1 | tr -d '"')"
+          APP_VERSION="${APP_VERSION:-$VERSION}"
+          IMAGE_REVISION="${IMAGE_REVISION:-release}"
+          if [[ -z "$VERSION" || -z "$APP_VERSION" || -z "$IMAGE_REVISION" ]]; then
             echo "Could not parse VERSION=$VERSION from Dockerfile" >&2
             exit 1
           fi

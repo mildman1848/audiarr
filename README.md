@@ -72,8 +72,8 @@ If Docker is unavailable, `make validate` still verifies Python, tests, static c
 
 ## Image targets
 
-- `ghcr.io/mildman1848/audiarr:0.1.0-mldm8`
-- `docker.io/mildman1848/audiarr:0.1.0-mldm8`
+- `ghcr.io/mildman1848/audiarr:0.3.2`
+- `docker.io/mildman1848/audiarr:0.3.2`
 
 Optional GitLab/Codeberg container registry targets are supported by CI secrets, but should only be enabled after the first GHCR/Docker Hub build is verified.
 
@@ -91,7 +91,15 @@ Important defaults:
 | Audible locale | `us` |
 | UI language | `en`, with `de` available |
 | Optional translation backend | `none` by default; LibreTranslate-compatible backend optional |
-| Version | `0.1.0-mldm8` |
+| Version | `0.3.2` |
+
+Versioning follows the Audiarr roadmap, not the household/fork `mldm<N>` suffix:
+
+```text
+0.<phase>.<completed item within that phase>
+```
+
+Example: after the second item in Phase 3 is complete, the image version is `0.3.2`.
 
 ## Publishing policy
 
