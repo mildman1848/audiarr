@@ -105,10 +105,10 @@ Phased plan; each phase lands as small verified slices (issue → branch → PR 
 - Auto-import after SABnzbd completes a download. **Done**
 - Metadata refresh / wanted-search scheduler. **Done**
 
-### Phase 3 — Tags and Connect
+### Phase 3 — Tags and Connect — Done
 
 - Tags data model and tagging UI for books and root folders. **Done**
-- Connect editor: webhooks/notifications for grab/import/health events. **Next**
+- Connect editor: webhooks/notifications for grab/import/health events. **Done**
 
 ### Phase 4 — Media management
 
