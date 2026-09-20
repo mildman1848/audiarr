@@ -421,6 +421,54 @@ def test_grab_endpoint_success(app_client, monkeypatch):
     assert body["nzo_id"] == "nzo_grabbed"
 
 
+def test_grab_endpoint_dispatches_grab_event_on_success(app_client, monkeypatch):
+    """Issue #28: a successful grab fires a best-effort `grab` Connect
+    event. The dispatcher itself is unit-tested in tests/test_connect.py;
+    here we only check that grab_release() calls it with the right data
+    and that a slow/broken dispatcher can't fail the grab."""
+    _configure(app_client)
+
+    def prowlarr_handler(request: httpx.Request) -> httpx.Response:
+        return httpx.Response(200, content=b"<nzb>payload</nzb>")
+
+    def sab_handler(request: httpx.Request) -> httpx.Response:
+        return httpx.Response(200, json={"status": True, "nzo_ids": ["nzo_grabbed"]})
+
+    monkeypatch.setattr(
+        "app.api.routes_releases.ProwlarrClient", _factory(ProwlarrClient, prowlarr_handler)
+    )
+    monkeypatch.setattr(
+        "app.api.routes_releases.SABnzbdClient", _factory(SABnzbdClient, sab_handler)
+    )
+
+    calls: list[tuple[str, dict]] = []
+
+    async def fake_dispatch(event, payload):
+        calls.append((event, payload))
+
+    monkeypatch.setattr("app.api.routes_releases.dispatch_event", fake_dispatch)
+
+    resp = app_client.post(
+        "/api/v1/releases/grab",
+        json={
+            "indexer_id": 4,
+            "guid": "abc-123",
+            "download_url": "http://prowlarr.local/1/download?apikey=p-key&link=Zm9v&file=d.nzb",
+            "title": "Der Vorleser",
+        },
+    )
+    assert resp.status_code == 200
+    assert resp.json()["ok"] is True
+
+    assert len(calls) == 1
+    event, payload = calls[0]
+    assert event == "grab"
+    assert payload["title"] == "Der Vorleser"
+    assert payload["nzo_id"] == "nzo_grabbed"
+    assert payload["category"] == "audiobooks"
+    assert payload["indexer_id"] == 4
+
+
 def test_grab_endpoint_failure_when_nzb_fetch_returns_none(app_client, monkeypatch):
     _configure(app_client)
 

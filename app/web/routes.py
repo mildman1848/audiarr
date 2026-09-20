@@ -68,7 +68,6 @@ SETTINGS_SECTIONS: list[dict[str, str]] = [
         "template": "settings/connect.html",
         "label_key": "settings_section_connect",
         "desc_key": "settings_overview_connect_desc",
-        "status": "planned",
     },
     {
         "slug": "metadata",

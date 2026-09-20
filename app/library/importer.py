@@ -22,6 +22,7 @@ from pathlib import Path
 from typing import Any
 
 from app.config import load_settings
+from app.connect import dispatch_event
 from app.library import BookCreate
 from app.library import create_book as library_create_book
 from app.library.matcher import MatchResult, match_candidate_to_hits
@@ -259,6 +260,10 @@ async def _import_one(
 
     base.status = "matched"
     base.matched_book_id = book_id
+    await dispatch_event(
+        "import",
+        {"book_id": book_id, "title": hit.title, "source_path": candidate.folder_path, "status": "matched"},
+    )
     return base
 
 
@@ -348,6 +353,15 @@ async def import_single_folder(
     result.status = "matched"
     result.matched_book_id = book_id
     _record_import_job(conn, result)
+    await dispatch_event(
+        "import",
+        {
+            "book_id": book_id,
+            "title": hit.title,
+            "source_path": candidate.folder_path,
+            "status": "matched",
+        },
+    )
     return result
 
 

@@ -139,6 +139,52 @@ async def test_run_import_persists_book_and_files(tmp_path, db, chain):
     assert prov["provider_id"] == "B004UWRY6M"
 
 
+async def test_run_import_dispatches_import_event_on_match(tmp_path, db, chain, monkeypatch):
+    """Issue #28: a matched (non-dry-run) import fires a best-effort
+    `import` Connect event carrying book_id/title/source_path."""
+    root = _make_tree(tmp_path)
+    folder_id = db.execute(
+        "INSERT INTO root_folders (path) VALUES (?)", (str(root),)
+    ).lastrowid
+    db.commit()
+
+    calls: list[tuple[str, dict]] = []
+
+    async def fake_dispatch(event, payload):
+        calls.append((event, payload))
+
+    monkeypatch.setattr("app.library.importer.dispatch_event", fake_dispatch)
+
+    summary = await run_import(conn=db, chain=chain, root_folder_id=folder_id, dry_run=False, locale="de")
+
+    assert summary.matched == 1
+    assert len(calls) == 1
+    event, payload = calls[0]
+    assert event == "import"
+    assert payload["title"] == "Der Vorleser"
+    assert payload["status"] == "matched"
+    assert payload["source_path"] == str(root / "Bernhard Schlink - Der Vorleser [B004UWRY6M]")
+
+
+async def test_run_import_dry_run_does_not_dispatch(tmp_path, db, chain, monkeypatch):
+    root = _make_tree(tmp_path)
+    folder_id = db.execute(
+        "INSERT INTO root_folders (path) VALUES (?)", (str(root),)
+    ).lastrowid
+    db.commit()
+
+    calls: list[tuple[str, dict]] = []
+
+    async def fake_dispatch(event, payload):
+        calls.append((event, payload))
+
+    monkeypatch.setattr("app.library.importer.dispatch_event", fake_dispatch)
+
+    await run_import(conn=db, chain=chain, root_folder_id=folder_id, dry_run=True, locale="de")
+
+    assert calls == []
+
+
 async def test_run_import_duplicate_provider_id_skips(tmp_path, db, chain):
     root = _make_tree(tmp_path)
     folder_id = db.execute(

@@ -394,7 +394,9 @@ function populate(s) {
     renderProfilesEditor(s.quality_profiles, s.quality_definitions);
     bindProfilesEvents();
   }
-  setText("connect-summary", (s.connect || []).length);
+  if ($("connect-list") && window.AudiarrConnect) {
+    window.AudiarrConnect.populate(s.connect);
+  }
   setText("ui-theme-summary", s.ui.theme || "—");
   setText("ui-date-format-summary", s.ui.date_format || "—");
   setValue("conversion-backend", s.conversion.backend || "disabled");
@@ -542,6 +544,10 @@ async function saveSettings(event) {
       prowlarr.url = getValue("prowlarr-url").trim();
       const prowlarrKey = getValue("prowlarr-api-key");
       if (prowlarrKey) prowlarr.api_key = prowlarrKey;
+    }
+
+    if ($("connect-list") && window.AudiarrConnect) {
+      doc.connect = window.AudiarrConnect.collectForSave(doc.connect);
     }
 
     await putSettings(doc);

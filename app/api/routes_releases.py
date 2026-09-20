@@ -22,6 +22,7 @@ from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
 
 from app.config import get_db_path, load_settings
+from app.connect import dispatch_event
 from app.connections.prowlarr import ProwlarrClient
 from app.connections.sabnzbd import SABnzbdClient
 from app.models.settings import DownloadClient, Indexer, QualityDefinition, QualityProfile
@@ -200,6 +201,16 @@ async def grab_release(request: GrabRequest) -> GrabResponse:
 
     log.info(
         "Grab %r -> SABnzbd nzo_id %s (category=%s)", request.title, nzo_id, sab.category
+    )
+    await dispatch_event(
+        "grab",
+        {
+            "title": request.title,
+            "nzo_id": nzo_id,
+            "category": sab.category,
+            "indexer_id": request.indexer_id,
+            "download_client": sab.name,
+        },
     )
     return GrabResponse(
         ok=True,
