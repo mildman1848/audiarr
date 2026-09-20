@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- Add explicit preview/apply file organization for a book's imported files, with pattern rendering, conflict checks, and best-effort rollback; bump project version to `0.4.1` for Phase 4 item 1.
 - Productize public wording: Audiarr is described as a pre-1.0 audiobook manager, not a scaffold.
 - Align web navigation labels around Arr-style Add New and Releases workflows.
 - Mark planned Settings sections explicitly instead of showing misleading save controls.
