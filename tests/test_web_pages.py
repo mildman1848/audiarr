@@ -577,7 +577,8 @@ def test_settings_page_has_media_management_and_summary_fields(app_client, langu
 
     connect = app_client.get("/settings/connect")
     assert connect.status_code == 200
-    assert 'id="connect-summary"' in connect.text
+    assert 'id="connect-list"' in connect.text
+    assert 'id="connect-add-btn"' in connect.text
 
     tags = app_client.get("/settings/tags")
     assert tags.status_code == 200
@@ -587,39 +588,16 @@ def test_settings_page_has_media_management_and_summary_fields(app_client, langu
     assert "placeholder-card" not in tags.text
 
 
-@pytest.mark.parametrize(
-    ("language", "planned_label"),
-    [
-        ("en", "Planned"),
-        ("de", "Geplant"),
-    ],
-)
-def test_settings_overview_marks_planned_sections(app_client, language, planned_label):
-    """Connect is still read-only/placeholder this slice; Profiles, Quality
-    (issue #13), and now Tags (issue #27) have a real, saveable editor, so
-    the overview must badge exactly that one remaining section as planned."""
+@pytest.mark.parametrize("language", ["en", "de"])
+def test_settings_overview_has_no_planned_sections(app_client, language):
+    """Connect was the last read-only/placeholder section; issue #28 gives
+    it a real, saveable editor, so no section should badge itself as
+    planned anymore."""
     _set_ui_language(app_client, language)
 
     settings = app_client.get("/settings")
     assert settings.status_code == 200
-    badge = f'<span class="badge badge-planned">{planned_label}</span>'
-    assert settings.text.count(badge) == 1
-
-
-@pytest.mark.parametrize(
-    "path",
-    ("/settings/connect",),
-)
-def test_planned_settings_pages_have_no_save_bar(app_client, path):
-    """Placeholder-only settings pages must not render the Arr-style
-    No changes / Save changes bar — there is nothing real to save."""
-    _set_ui_language(app_client, "en")
-
-    page = app_client.get(path)
-    assert page.status_code == 200
-    assert 'id="settings-save-bar"' not in page.text
-    assert 'id="settings-advanced-toggle"' not in page.text
-    assert "badge-planned" in page.text
+    assert "badge-planned" not in settings.text
 
 
 @pytest.mark.parametrize(
@@ -630,6 +608,7 @@ def test_planned_settings_pages_have_no_save_bar(app_client, path):
         "/settings/quality",
         "/settings/indexers",
         "/settings/download-clients",
+        "/settings/connect",
         "/settings/metadata",
         "/settings/tags",
         "/settings/general",
@@ -649,6 +628,36 @@ def test_active_settings_pages_keep_save_bar(app_client, path):
     assert "badge-planned" not in page.text
 
 
+def test_connect_js_never_populates_header_value_from_settings():
+    """Issue #28: a stored header_value must never be written into a
+    visible input's value -- only a masked placeholder when one exists."""
+    script = (Path(__file__).parents[1] / "app/web/static/js/connect.js").read_text()
+
+    assert "header_value: \"\"," in script
+    assert "_hasHeaderValue: Boolean(c.header_value)" in script
+    assert "placeholder=\"${row._hasHeaderValue ? MASK : \"\"}\"" in script
+
+
+def test_connect_js_keeps_stored_header_value_when_field_left_blank():
+    """A blank header_value field on save must keep the stored secret, not
+    overwrite it with an empty string (same pattern as sab-api-key /
+    prowlarr-api-key in settings.js)."""
+    script = (Path(__file__).parents[1] / "app/web/static/js/connect.js").read_text()
+
+    assert "row.header_value ? row.header_value : stored ? stored.header_value : \"\"" in script
+
+
+def test_connect_js_is_wrapped_in_an_iife():
+    """The Connect page loads both settings.js and connect.js; both declare
+    a top-level `const T`, so connect.js must be IIFE-wrapped (the same fix
+    already applied to tags.js) to avoid an 'Identifier T has already been
+    declared' crash."""
+    script = (Path(__file__).parents[1] / "app/web/static/js/connect.js").read_text()
+
+    assert "(() => {" in script
+    assert script.strip().endswith("})();")
+
+
 def test_settings_js_logs_in_after_enabling_forms_auth():
     script = (Path(__file__).parents[1] / "app/web/static/js/settings.js").read_text()
 
@@ -656,6 +665,16 @@ def test_settings_js_logs_in_after_enabling_forms_auth():
     assert 'fetch("/api/v1/auth/login"' in script
     assert 'if (doc.auth.method === "forms" && password)' in script
     assert "await loginAfterAuthChange(doc.auth.username, password)" in script
+
+
+def test_settings_js_delegates_connect_editor_to_connect_js():
+    """settings.js owns the single GET/PUT save flow; it must hand the
+    Connect list off to window.AudiarrConnect (defined in connect.js)
+    rather than reimplementing per-row rendering itself."""
+    script = (Path(__file__).parents[1] / "app/web/static/js/settings.js").read_text()
+
+    assert 'window.AudiarrConnect.populate(s.connect)' in script
+    assert "doc.connect = window.AudiarrConnect.collectForSave(doc.connect)" in script
 
 
 def test_common_js_has_mobile_sidebar_drawer_logic():

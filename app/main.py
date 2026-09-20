@@ -23,6 +23,7 @@ from app import __version__
 from app.api import (
     routes_auth,
     routes_calendar,
+    routes_connect,
     routes_connections,
     routes_conversion,
     routes_import,
@@ -265,6 +266,7 @@ def create_app() -> FastAPI:
     app.include_router(routes_auth.router)
     app.include_router(routes_metadata.router)
     app.include_router(routes_connections.router)
+    app.include_router(routes_connect.router)
     app.include_router(routes_releases.router)
     app.include_router(routes_library.router)
     app.include_router(routes_tags.router)

@@ -127,6 +127,63 @@ def test_sabnzbd_test_endpoint_uses_stored_api_key_when_blank(app_client, monkey
     assert seen["apikey"] == "stored-sab-key"
 
 
+def test_sabnzbd_test_failure_dispatches_health_issue_without_api_key(app_client, monkeypatch):
+    """Issue #28: a failed connection test fires a best-effort
+    `health_issue` Connect event that names the integration/url/message but
+    never includes the api_key used to probe it."""
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        return httpx.Response(500)
+
+    monkeypatch.setattr(
+        "app.api.routes_connections.SABnzbdClient", _factory(SABnzbdClient, handler)
+    )
+
+    calls: list[tuple[str, dict]] = []
+
+    async def fake_dispatch(event, payload):
+        calls.append((event, payload))
+
+    monkeypatch.setattr("app.api.routes_connections.dispatch_event", fake_dispatch)
+
+    response = app_client.post(
+        "/api/v1/connections/sabnzbd/test",
+        json={"url": "http://sab.local", "api_key": "top-secret-key"},
+    )
+    assert response.status_code == 200
+    assert response.json()["ok"] is False
+
+    assert len(calls) == 1
+    event, payload = calls[0]
+    assert event == "health_issue"
+    assert payload["integration"] == "SABnzbd"
+    assert payload["url"] == "http://sab.local"
+    assert "top-secret-key" not in str(payload)
+
+
+def test_sabnzbd_test_success_does_not_dispatch_health_issue(app_client, monkeypatch):
+    def handler(request: httpx.Request) -> httpx.Response:
+        return httpx.Response(200, json={"version": "4.3.2"})
+
+    monkeypatch.setattr(
+        "app.api.routes_connections.SABnzbdClient", _factory(SABnzbdClient, handler)
+    )
+
+    calls: list[tuple[str, dict]] = []
+
+    async def fake_dispatch(event, payload):
+        calls.append((event, payload))
+
+    monkeypatch.setattr("app.api.routes_connections.dispatch_event", fake_dispatch)
+
+    response = app_client.post(
+        "/api/v1/connections/sabnzbd/test", json={"url": "http://sab.local", "api_key": "x"}
+    )
+    assert response.status_code == 200
+    assert response.json()["ok"] is True
+    assert calls == []
+
+
 def test_prowlarr_test_endpoint_uses_stored_api_key_when_blank(app_client, monkeypatch):
     settings = app_client.get("/api/v1/settings").json()
     settings["indexers"] = [

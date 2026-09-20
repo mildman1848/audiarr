@@ -241,12 +241,34 @@ class Indexer(BaseModel):
 
 
 class ConnectNotification(BaseModel):
-    """Stub outbound notification, mirrors Radarr/Sonarr's "Connect" tab."""
+    """Outbound webhook notification, mirrors Radarr/Sonarr's "Connect" tab.
 
+    ``header_value`` is a secret (e.g. a bearer token or API key some
+    receivers require). Like DownloadClient.api_key/Indexer.api_key, it is
+    NOT excluded from the raw settings API response (see routes_settings.py)
+    -- only the UI is responsible for never rendering it back into the page
+    (a stored value shows as a masked placeholder; see connect.js). ``id``
+    is a stable key generated client-side so the Connect test endpoint
+    (app/api/routes_connect.py) and delivery dispatcher (app/connect.py)
+    can address one entry without relying on name/index, which can be
+    duplicated or reordered.
+    """
+
+    id: str = ""
     name: str
-    type: str = "webhook"
+    type: Literal["webhook"] = "webhook"
     url: str = ""
     enabled: bool = False
+    on_grab: bool = True
+    on_import: bool = True
+    on_health_issue: bool = False
+    header_name: str = ""
+    header_value: str = ""
+    last_event: str = ""
+    last_status: str = ""  # "delivered" | "failed" | "tested" | ""
+    last_status_code: int | None = None
+    last_error: str = ""
+    last_delivered_at: str = ""
 
 
 class MetadataSettings(BaseModel):

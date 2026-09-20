@@ -8,6 +8,7 @@ from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
 
 from app.config import load_settings
+from app.connect import dispatch_event
 from app.connections.audiobookshelf import AudiobookshelfClient
 from app.connections.m4b_convertarr import M4BConvertarrClient
 from app.connections.prowlarr import ProwlarrClient
@@ -33,10 +34,13 @@ async def test_audiobookshelf(request: ConnectionTestRequest) -> ConnectionTestR
     client = AudiobookshelfClient(base_url=request.url, api_key=request.api_key)
     ok = await client.health()
     log.info("Audiobookshelf connection test to %s -> %s", request.url, ok)
-    return ConnectionTestResponse(
-        ok=ok,
-        message="Audiobookshelf reachable" if ok else "Could not reach Audiobookshelf",
-    )
+    message = "Audiobookshelf reachable" if ok else "Could not reach Audiobookshelf"
+    if not ok:
+        await dispatch_event(
+            "health_issue",
+            {"integration": "Audiobookshelf", "url": request.url, "message": message},
+        )
+    return ConnectionTestResponse(ok=ok, message=message)
 
 
 @router.post("/api/v1/connections/audiobookshelf/scan", response_model=ConnectionTestResponse)
@@ -71,10 +75,13 @@ async def test_m4b_convertarr(request: ConnectionTestRequest) -> ConnectionTestR
     client = M4BConvertarrClient(base_url=request.url, api_key=request.api_key)
     ok = await client.health()
     log.info("m4b-convertarr connection test to %s -> %s", request.url, ok)
-    return ConnectionTestResponse(
-        ok=ok,
-        message="m4b-convertarr reachable" if ok else "Could not reach m4b-convertarr",
-    )
+    message = "m4b-convertarr reachable" if ok else "Could not reach m4b-convertarr"
+    if not ok:
+        await dispatch_event(
+            "health_issue",
+            {"integration": "m4b-convertarr", "url": request.url, "message": message},
+        )
+    return ConnectionTestResponse(ok=ok, message=message)
 
 
 def _stored_sabnzbd_values(url: str, api_key: str | None) -> tuple[str, str | None]:
@@ -116,10 +123,12 @@ async def test_sabnzbd(request: ConnectionTestRequest) -> ConnectionTestResponse
     version = await client.version()
     ok = version is not None
     log.info("SABnzbd connection test to %s -> %s", url, ok)
-    return ConnectionTestResponse(
-        ok=ok,
-        message=f"SABnzbd {version}" if ok else "Could not reach SABnzbd",
-    )
+    message = f"SABnzbd {version}" if ok else "Could not reach SABnzbd"
+    if not ok:
+        await dispatch_event(
+            "health_issue", {"integration": "SABnzbd", "url": url, "message": message}
+        )
+    return ConnectionTestResponse(ok=ok, message=message)
 
 
 @router.post("/api/v1/connections/prowlarr/test", response_model=ConnectionTestResponse)
@@ -131,7 +140,9 @@ async def test_prowlarr(request: ConnectionTestRequest) -> ConnectionTestRespons
     ok = status is not None
     version = (status or {}).get("version")
     log.info("Prowlarr connection test to %s -> %s", url, ok)
-    return ConnectionTestResponse(
-        ok=ok,
-        message=(f"Prowlarr {version}".strip() if ok else "Could not reach Prowlarr"),
-    )
+    message = f"Prowlarr {version}".strip() if ok else "Could not reach Prowlarr"
+    if not ok:
+        await dispatch_event(
+            "health_issue", {"integration": "Prowlarr", "url": url, "message": message}
+        )
+    return ConnectionTestResponse(ok=ok, message=message)
