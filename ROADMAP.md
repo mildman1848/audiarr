@@ -73,13 +73,13 @@ but with real gaps; **Next** — not started.
 - English UI is complete; German translation is present and kept in parity (`tests/test_i18n_parity.py`).
 - No private household names or homelab internals appear in public UI/docs.
 
-### 9. Profiles, Quality, Tags, Connect (notifications) — Partial
+### 9. Profiles, Quality, Tags, Connect (notifications) — Done
 
 - Profiles: audiobook-specific semantics modeled and editable — an ordered, best-first list of quality tiers plus an upgrade cutoff (see `docs/design/quality-profiles.md`). Wired into release-search quality fit, conversion enqueue, per-book assignments, Wanted cutoff upgrades, and optional Releases filtering.
 - Quality: real, editable quality definitions (container/codec/bitrate band/lossless/chapter expectations), not a copy of video quality definitions. Used by the same decision paths as Profiles (see `docs/design/quality-profiles.md`, "Wired behavior"). Phase 1 quality routing is complete.
-- Tags: not modeled beyond the settings document shape; placeholder page.
-- Connect (outbound webhooks/notifications): not implemented; placeholder page that links to the working Audiobookshelf/m4b-convertarr connections instead.
-- Tags and Connect are explicitly marked "Planned" in the Settings overview and their own pages; Profiles and Quality are active, editable sections.
+- Tags: modeled as first-class labels with book/root-folder assignments, Settings CRUD UI, Library filtering, and Book Detail editing.
+- Connect (outbound webhooks/notifications): implemented as configurable webhooks for grab/import/health/test events, with secret masking in the UI.
+- Profiles, Quality, Tags, and Connect are active, editable sections.
 
 ### 10. Release hardening — Partial
 
@@ -110,9 +110,9 @@ Phased plan; each phase lands as small verified slices (issue → branch → PR 
 - Tags data model and tagging UI for books and root folders. **Done**
 - Connect editor: webhooks/notifications for grab/import/health events. **Done**
 
-### Phase 4 — Media management
+### Phase 4 — Media management — In progress
 
-- Rename/organize imports per `file_name_pattern` — explicit opt-in only; the import pipeline itself never moves files today. **Next**
+- Rename/organize imports per `file_name_pattern` — explicit opt-in only; preview/apply runs per book and never deletes originals. **Done**
 - Hardlink/copy import strategies. **Next**
 - Root folder free-space and permissions view. **Next**
 
