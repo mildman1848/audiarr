@@ -214,6 +214,33 @@ def test_book_detail_page_has_toolbar_and_root_marker(app_client):
     assert 'id="book-detail"' in page.text
 
 
+def test_book_detail_page_has_organize_controls(app_client):
+    """Organize (issue #29) ships its own preview/apply buttons and result
+    panel, outside the JS-populated #book-detail root."""
+    _set_ui_language(app_client, "en")
+
+    page = app_client.get("/library/books/1")
+    assert page.status_code == 200
+    assert 'id="book-detail-organize-preview-btn"' in page.text
+    assert 'id="book-detail-organize-apply-btn"' in page.text
+    assert 'id="book-detail-organize-result"' in page.text
+    assert "Organize Files" in page.text
+
+
+@pytest.mark.parametrize(
+    ("language", "marker"),
+    [
+        ("en", "Preview first"),
+        ("de", "Erst Vorschau"),
+    ],
+)
+def test_book_detail_page_organize_warning_i18n_parity(app_client, language, marker):
+    _set_ui_language(app_client, language)
+
+    page = app_client.get("/library/books/1")
+    assert marker in page.text
+
+
 def test_library_page_has_grid_container_and_view_controls(app_client):
     """Library page ships the container the JS grid/table render into, plus
     the grid/table toggle, filter, and sort controls (client-rendered)."""

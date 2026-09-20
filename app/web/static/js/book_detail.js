@@ -300,6 +300,117 @@ function refreshBookView() {
   wireTagsEditor(currentBook.id);
 }
 
+// -- organize (issue #29: preview/apply pattern-driven file moves) ----------
+
+let organizePreviewSafe = false;
+
+const ORGANIZE_STATUS_LABELS = {
+  ready: "book_detail_organize_status_ready",
+  unchanged: "book_detail_organize_status_unchanged",
+  missing: "book_detail_organize_status_missing",
+  conflict: "book_detail_organize_status_conflict",
+  outside_root: "book_detail_organize_status_outside_root",
+  error: "book_detail_organize_status_error",
+  moved: "book_detail_organize_status_moved",
+};
+
+function organizeStatusLabel(status) {
+  return T[ORGANIZE_STATUS_LABELS[status]] || status;
+}
+
+function renderOrganizeItems(heading, items) {
+  const container = document.getElementById("book-detail-organize-result");
+  if (!container) return;
+  const rows = (items || [])
+    .map(
+      (i) => `
+      <tr>
+        <td><code>${esc(i.source_path)}</code></td>
+        <td><code>${esc(i.target_path)}</code></td>
+        <td>${esc(organizeStatusLabel(i.status))}</td>
+        <td>${esc(i.reason || "—")}</td>
+      </tr>`
+    )
+    .join("");
+  container.innerHTML = `
+    <p class="muted">${esc(heading)}</p>
+    <div class="table-scroll"><table class="table">
+      <thead>
+        <tr>
+          <th>${esc(T.book_detail_organize_col_source)}</th>
+          <th>${esc(T.book_detail_organize_col_target)}</th>
+          <th>${esc(T.book_detail_organize_col_status)}</th>
+          <th>${esc(T.book_detail_organize_col_reason)}</th>
+        </tr>
+      </thead>
+      <tbody>${rows || `<tr><td colspan="4" class="muted">${esc(T.book_detail_organize_empty)}</td></tr>`}</tbody>
+    </table></div>`;
+}
+
+// Always a read-only, no-filesystem-write call: safe to run as often as the
+// user likes before ever touching apply.
+async function previewOrganize(bookId) {
+  const applyBtn = document.getElementById("book-detail-organize-apply-btn");
+  if (applyBtn) applyBtn.disabled = true;
+  organizePreviewSafe = false;
+  try {
+    const resp = await fetch(`/api/v1/library/books/${bookId}/organize/preview`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({}),
+    });
+    if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+    const preview = await resp.json();
+    organizePreviewSafe = preview.safe_to_apply;
+    renderOrganizeItems(
+      preview.safe_to_apply
+        ? T.book_detail_organize_preview_safe
+        : T.book_detail_organize_preview_unsafe,
+      preview.items
+    );
+    if (applyBtn) applyBtn.disabled = !organizePreviewSafe;
+    if (window.AudiarrToast) window.AudiarrToast.success(T.book_detail_organize_preview_done);
+  } catch (err) {
+    if (window.AudiarrToast) {
+      window.AudiarrToast.error(`${T.book_detail_organize_preview_error} (${err.message})`);
+    }
+  }
+}
+
+// Moves files on disk -- only reachable once a fresh preview reported
+// safe_to_apply, and only after the user confirms; never deletes originals.
+async function applyOrganize(bookId) {
+  if (!organizePreviewSafe) return;
+  if (!window.confirm(T.book_detail_organize_apply_confirm)) return;
+  const applyBtn = document.getElementById("book-detail-organize-apply-btn");
+  if (applyBtn) applyBtn.disabled = true;
+  try {
+    const resp = await fetch(`/api/v1/library/books/${bookId}/organize/apply`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({}),
+    });
+    const body = await resp.json().catch(() => ({}));
+    if (!resp.ok) {
+      const detail =
+        typeof body.detail === "string"
+          ? body.detail
+          : (body.detail && body.detail.message) || `HTTP ${resp.status}`;
+      throw new Error(detail);
+    }
+    organizePreviewSafe = false;
+    renderOrganizeItems(T.book_detail_organize_apply_done, body.items);
+    if (window.AudiarrToast) window.AudiarrToast.success(T.book_detail_organize_apply_success);
+    await loadBook();
+  } catch (err) {
+    if (window.AudiarrToast) {
+      window.AudiarrToast.error(`${T.book_detail_organize_apply_error} (${err.message})`);
+    }
+  } finally {
+    if (applyBtn) applyBtn.disabled = !organizePreviewSafe;
+  }
+}
+
 async function loadBook() {
   const container = document.getElementById("book-detail");
   const bookId = container.dataset.bookId;
@@ -321,6 +432,8 @@ async function loadBook() {
     refreshBookView();
     const deleteBtn = document.getElementById("book-detail-delete-btn");
     if (deleteBtn) deleteBtn.disabled = false;
+    const organizePreviewBtn = document.getElementById("book-detail-organize-preview-btn");
+    if (organizePreviewBtn) organizePreviewBtn.disabled = false;
   } catch (err) {
     container.innerHTML = `<p class="muted">${esc(T.book_detail_error)} (${esc(err.message)})</p>`;
   }
@@ -332,6 +445,18 @@ document.addEventListener("DOMContentLoaded", () => {
   if (deleteBtn) {
     deleteBtn.addEventListener("click", () => {
       if (currentBook) deleteBook(currentBook.id, currentBook.title);
+    });
+  }
+  const organizePreviewBtn = document.getElementById("book-detail-organize-preview-btn");
+  if (organizePreviewBtn) {
+    organizePreviewBtn.addEventListener("click", () => {
+      if (currentBook) previewOrganize(currentBook.id);
+    });
+  }
+  const organizeApplyBtn = document.getElementById("book-detail-organize-apply-btn");
+  if (organizeApplyBtn) {
+    organizeApplyBtn.addEventListener("click", () => {
+      if (currentBook) applyOrganize(currentBook.id);
     });
   }
 });

@@ -25,6 +25,7 @@ from app.library import (
     list_root_folders,
     update_book,
 )
+from app.library.organizer import apply_preview, build_preview
 
 log = logging.getLogger("audiarr.api.library")
 
@@ -132,6 +133,35 @@ class LibraryFileOut(BaseModel):
     mtime: str | None
     format: str
     added_at: str
+
+
+class OrganizeIn(BaseModel):
+    root_folder_id: int | None = None
+    pattern: str | None = None
+
+
+class OrganizeItemOut(BaseModel):
+    file_id: int
+    source_path: str
+    target_path: str
+    status: str
+    reason: str = ""
+
+
+class OrganizePreviewOut(BaseModel):
+    book_id: int
+    root_folder: str
+    pattern: str
+    safe_to_apply: bool
+    items: list[OrganizeItemOut]
+
+
+class OrganizeApplyOut(BaseModel):
+    book_id: int
+    root_folder: str
+    pattern: str
+    moved_count: int
+    items: list[OrganizeItemOut]
 
 
 class LibraryStatsOut(BaseModel):
@@ -446,6 +476,101 @@ async def get_book_files(book_id: int) -> list[LibraryFileOut]:
             (book_id,),
         ).fetchall()
     return [LibraryFileOut(**dict(r)) for r in rows]
+
+
+def _resolve_organize_root_and_pattern(conn: Any, data: OrganizeIn) -> tuple[str, str]:
+    """Resolve the (root folder path, pattern) an organize request runs against.
+
+    ``root_folder_id`` picks a specific configured root folder; otherwise
+    the first one by path order (see list_root_folders) is used, matching
+    the MVP root-folder-selection rule in issue #29.
+    """
+    pattern = data.pattern or load_settings().media_management.file_name_pattern
+    if data.root_folder_id is not None:
+        row = get_root_folder(conn, data.root_folder_id)
+        if row is None:
+            raise HTTPException(422, f"Root folder {data.root_folder_id} not found")
+        return row["path"], pattern
+    rows = list_root_folders(conn)
+    if not rows:
+        raise HTTPException(
+            422, "No root folder configured; add one under Settings > Media Management first"
+        )
+    return rows[0]["path"], pattern
+
+
+def _organize_items_out(items: Any) -> list[OrganizeItemOut]:
+    return [
+        OrganizeItemOut(
+            file_id=i.file_id, source_path=i.source_path, target_path=i.target_path,
+            status=i.status, reason=i.reason,
+        )
+        for i in items
+    ]
+
+
+@router.post(
+    "/api/v1/library/books/{book_id}/organize/preview", response_model=OrganizePreviewOut
+)
+async def post_organize_preview(book_id: int, data: OrganizeIn) -> OrganizePreviewOut:
+    """Preview a rename/organize run: never touches the filesystem beyond
+    existence checks, never writes to the DB. See app/library/organizer.py."""
+    _ensure_schema()
+    with get_conn() as conn:
+        if get_book(conn, book_id) is None:
+            raise HTTPException(404, "Book not found")
+        root_path, pattern = _resolve_organize_root_and_pattern(conn, data)
+        preview = build_preview(conn, book_id, root_path, pattern)
+    return OrganizePreviewOut(
+        book_id=preview.book_id,
+        root_folder=preview.root_folder,
+        pattern=preview.pattern,
+        safe_to_apply=preview.safe_to_apply,
+        items=_organize_items_out(preview.items),
+    )
+
+
+@router.post("/api/v1/library/books/{book_id}/organize/apply", response_model=OrganizeApplyOut)
+async def post_organize_apply(book_id: int, data: OrganizeIn) -> OrganizeApplyOut:
+    """Apply a rename/organize run: only moves files when a fresh preview is
+    entirely safe (every item ready/unchanged); rolls back best-effort on a
+    partial failure. Requires media_management.rename_files to be enabled
+    (opt-in MVP, see issue #29)."""
+    _ensure_schema()
+    if not load_settings().media_management.rename_files:
+        raise HTTPException(
+            400,
+            "File organizing is disabled; enable Media Management > Rename files in Settings first",
+        )
+    with get_conn() as conn:
+        if get_book(conn, book_id) is None:
+            raise HTTPException(404, "Book not found")
+        root_path, pattern = _resolve_organize_root_and_pattern(conn, data)
+        preview = build_preview(conn, book_id, root_path, pattern)
+        if not preview.safe_to_apply:
+            raise HTTPException(
+                409, "Preview is not safe to apply; resolve conflicts or missing files first"
+            )
+        result = apply_preview(conn, preview)
+        if not result.success:
+            raise HTTPException(500, {"message": result.error, "rollback": result.rollback})
+        items_out = [
+            OrganizeItemOut(
+                file_id=i.file_id,
+                source_path=i.source_path,
+                target_path=i.target_path,
+                status="moved" if i.status == "ready" else i.status,
+                reason=i.reason,
+            )
+            for i in result.items
+        ]
+    return OrganizeApplyOut(
+        book_id=book_id,
+        root_folder=preview.root_folder,
+        pattern=preview.pattern,
+        moved_count=len(result.moved),
+        items=items_out,
+    )
 
 
 def _validate_quality_profile(name: str) -> None:
