@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import logging
-from typing import Any
+from typing import Any, Literal
 
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel, Field
@@ -24,8 +24,12 @@ from app.library import (
     list_books,
     list_root_folders,
     update_book,
+    update_root_folder_strategy,
 )
+from app.library.import_strategy import DEFAULT_STRATEGY
 from app.library.organizer import apply_preview, build_preview
+
+ImportStrategyLiteral = Literal["move", "copy", "hardlink"]
 
 log = logging.getLogger("audiarr.api.library")
 
@@ -46,16 +50,22 @@ class TagRef(BaseModel):
 class RootFolderIn(BaseModel):
     path: str
     label: str = ""
+    import_strategy: ImportStrategyLiteral = DEFAULT_STRATEGY
 
 
 class RootFolderTagsIn(BaseModel):
     tags: list[str] = Field(default_factory=list)
 
 
+class RootFolderStrategyIn(BaseModel):
+    import_strategy: ImportStrategyLiteral
+
+
 class RootFolderOut(BaseModel):
     id: int
     path: str
     label: str
+    import_strategy: str
     created_at: str
     updated_at: str
     tags: list[TagRef]
@@ -281,6 +291,19 @@ async def put_root_folder_tags(folder_id: int, data: RootFolderTagsIn) -> list[T
         _sync_entity_tags(conn, "root_folder_tags", "root_folder_id", folder_id, data.tags)
         tags = _get_entity_tags(conn, "root_folder_tags", "root_folder_id", folder_id)
     return tags
+
+
+@router.put("/api/v1/library/root-folders/{folder_id}/strategy", response_model=RootFolderOut)
+async def put_root_folder_strategy(folder_id: int, data: RootFolderStrategyIn) -> RootFolderOut:
+    """Change a root folder's import strategy (move/copy/hardlink, see #30)."""
+    _ensure_schema()
+    with get_conn() as conn:
+        if not update_root_folder_strategy(conn, folder_id, data.import_strategy):
+            raise HTTPException(404, "Root folder not found")
+        row = get_root_folder(conn, folder_id)
+        assert row is not None
+        tags = _get_entity_tags(conn, "root_folder_tags", "root_folder_id", folder_id)
+    return RootFolderOut(**dict(row), tags=tags)
 
 
 # -- books ------------------------------------------------------------------------

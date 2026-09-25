@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- Add per-root-folder import strategies (`copy`, `hardlink`, `move`) with free-space checks before copy/move, hardlink fallback to copy on cross-device or unsupported filesystems, and per-file import-method tracking; a real import now places matched media files according to the root folder's strategy while dry-run stays strictly read-only; bump project version to `0.4.2` for Phase 4 item 2 (#30).
 - Add explicit preview/apply file organization for a book's imported files, with pattern rendering, conflict checks, and best-effort rollback; bump project version to `0.4.1` for Phase 4 item 1.
 - Productize public wording: Audiarr is described as a pre-1.0 audiobook manager, not a scaffold.
 - Align web navigation labels around Arr-style Add New and Releases workflows.

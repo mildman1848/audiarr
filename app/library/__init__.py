@@ -12,6 +12,7 @@ from dataclasses import dataclass, field
 from typing import Any
 
 from app.db import get_conn as get_conn  # re-export for callers
+from app.library.import_strategy import DEFAULT_STRATEGY
 
 
 @dataclass
@@ -40,6 +41,7 @@ class BookCreate:
 class RootFolderCreate:
     path: str
     label: str = ""
+    import_strategy: str = DEFAULT_STRATEGY
 
 
 # -- root folders ------------------------------------------------------------
@@ -47,8 +49,8 @@ class RootFolderCreate:
 
 def create_root_folder(conn: sqlite3.Connection, data: RootFolderCreate) -> int:
     cur = conn.execute(
-        "INSERT INTO root_folders (path, label) VALUES (?, ?)",
-        (data.path, data.label),
+        "INSERT INTO root_folders (path, label, import_strategy) VALUES (?, ?, ?)",
+        (data.path, data.label, data.import_strategy),
     )
     assert cur.lastrowid is not None
     return int(cur.lastrowid)
@@ -56,19 +58,29 @@ def create_root_folder(conn: sqlite3.Connection, data: RootFolderCreate) -> int:
 
 def list_root_folders(conn: sqlite3.Connection) -> list[sqlite3.Row]:
     return conn.execute(
-        "SELECT id, path, label, created_at, updated_at FROM root_folders ORDER BY path"
+        "SELECT id, path, label, import_strategy, created_at, updated_at "
+        "FROM root_folders ORDER BY path"
     ).fetchall()
 
 
 def get_root_folder(conn: sqlite3.Connection, folder_id: int) -> sqlite3.Row | None:
     return conn.execute(
-        "SELECT id, path, label, created_at, updated_at FROM root_folders WHERE id = ?",
+        "SELECT id, path, label, import_strategy, created_at, updated_at "
+        "FROM root_folders WHERE id = ?",
         (folder_id,),
     ).fetchone()
 
 
 def delete_root_folder(conn: sqlite3.Connection, folder_id: int) -> bool:
     cur = conn.execute("DELETE FROM root_folders WHERE id = ?", (folder_id,))
+    return cur.rowcount > 0
+
+
+def update_root_folder_strategy(conn: sqlite3.Connection, folder_id: int, strategy: str) -> bool:
+    cur = conn.execute(
+        "UPDATE root_folders SET import_strategy = ?, updated_at = datetime('now') WHERE id = ?",
+        (strategy, folder_id),
+    )
     return cur.rowcount > 0
 
 
