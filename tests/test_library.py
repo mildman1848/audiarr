@@ -10,6 +10,8 @@ from app.library import (
     create_root_folder,
     find_book_by_provider_id,
     get_book,
+    get_root_folder,
+    list_root_folders,
     provider_id_exists,
     update_book,
 )
@@ -153,6 +155,40 @@ def test_root_folder_crud(tmp_path):
         set_db_path_override(None)
 
 
+def test_root_folder_import_strategy_defaults_to_copy(tmp_path):
+    from app.db import set_db_path_override
+
+    set_db_path_override(tmp_path / "lib.db")
+    migrate(tmp_path / "lib.db")
+    try:
+        with get_conn() as conn:
+            folder_id = create_root_folder(
+                conn, RootFolderCreate(path="/data/audiobooks")
+            )
+            row = get_root_folder(conn, folder_id)
+        assert row["import_strategy"] == "copy"
+    finally:
+        set_db_path_override(None)
+
+
+def test_root_folder_import_strategy_explicit_value_persists(tmp_path):
+    from app.db import set_db_path_override
+
+    set_db_path_override(tmp_path / "lib.db")
+    migrate(tmp_path / "lib.db")
+    try:
+        with get_conn() as conn:
+            folder_id = create_root_folder(
+                conn, RootFolderCreate(path="/data/audiobooks", import_strategy="move")
+            )
+            row = get_root_folder(conn, folder_id)
+            folders = list_root_folders(conn)
+        assert row["import_strategy"] == "move"
+        assert folders[0]["import_strategy"] == "move"
+    finally:
+        set_db_path_override(None)
+
+
 # -- API endpoints -----------------------------------------------------------
 
 
@@ -165,6 +201,8 @@ def test_api_root_folder_lifecycle(app_client):
     assert resp.status_code == 201
     folder = resp.json()
     assert folder["path"] == "/data/audiobooks"
+    # No import_strategy given -> defaults to "copy" (#30).
+    assert folder["import_strategy"] == "copy"
 
     # Duplicate -> 409
     dup = app_client.post(
@@ -176,11 +214,60 @@ def test_api_root_folder_lifecycle(app_client):
     listing = app_client.get("/api/v1/library/root-folders")
     assert listing.status_code == 200
     assert len(listing.json()) == 1
+    assert listing.json()[0]["import_strategy"] == "copy"
 
     # Delete
     gone = app_client.delete(f"/api/v1/library/root-folders/{folder['id']}")
     assert gone.status_code == 204
     assert app_client.get("/api/v1/library/root-folders").json() == []
+
+
+def test_api_root_folder_accepts_explicit_import_strategy(app_client):
+    resp = app_client.post(
+        "/api/v1/library/root-folders",
+        json={"path": "/data/audiobooks", "label": "Main", "import_strategy": "hardlink"},
+    )
+    assert resp.status_code == 201
+    folder = resp.json()
+    assert folder["import_strategy"] == "hardlink"
+
+    single = app_client.get("/api/v1/library/root-folders").json()[0]
+    assert single["import_strategy"] == "hardlink"
+
+
+def test_api_root_folder_rejects_invalid_import_strategy(app_client):
+    resp = app_client.post(
+        "/api/v1/library/root-folders",
+        json={"path": "/data/audiobooks", "import_strategy": "delete"},
+    )
+    assert resp.status_code == 422
+    assert app_client.get("/api/v1/library/root-folders").json() == []
+
+
+def test_api_root_folder_strategy_update_roundtrip(app_client):
+    created = app_client.post(
+        "/api/v1/library/root-folders", json={"path": "/data/audiobooks"}
+    ).json()
+    assert created["import_strategy"] == "copy"
+
+    updated = app_client.put(
+        f"/api/v1/library/root-folders/{created['id']}/strategy",
+        json={"import_strategy": "move"},
+    )
+    assert updated.status_code == 200
+    assert updated.json()["import_strategy"] == "move"
+
+    invalid = app_client.put(
+        f"/api/v1/library/root-folders/{created['id']}/strategy",
+        json={"import_strategy": "not-a-strategy"},
+    )
+    assert invalid.status_code == 422
+
+    missing = app_client.put(
+        "/api/v1/library/root-folders/9999/strategy",
+        json={"import_strategy": "move"},
+    )
+    assert missing.status_code == 404
 
 
 def test_api_book_lifecycle_with_provider_attribution(app_client):

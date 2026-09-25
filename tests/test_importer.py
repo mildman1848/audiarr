@@ -199,6 +199,145 @@ async def test_run_import_duplicate_provider_id_skips(tmp_path, db, chain):
     assert db.execute("SELECT COUNT(*) FROM books").fetchone()[0] == 1
 
 
+# ---------------------------------------------------------------------------
+# Import strategies (#30): move/copy/hardlink materialization on import
+# ---------------------------------------------------------------------------
+
+
+def _make_nested_tree(tmp_path: Path) -> tuple[Path, Path]:
+    """Build a root folder with the book's audio files loose at the root itself.
+
+    scan_folder groups top-level loose audio files (no book subfolder) as one
+    candidate for the root itself (see scan_folder's docstring), whose
+    candidate_folder_name is the root's own directory name. resolve_target_path
+    then lands files under root/<root name>/file -- a genuinely different
+    final path from the loose source files directly in root -- letting these
+    tests exercise real copy/move/hardlink placement (as opposed to the
+    "already in place" no-op case covered by tests/test_import_strategy.py).
+    """
+    root = tmp_path / "Der Vorleser [B004UWRY6M]"
+    root.mkdir(parents=True)
+    (root / "01 - Kapitel 1.mp3").write_bytes(b"\x00" * 1024)
+    (root / "02 - Kapitel 2.mp3").write_bytes(b"\x00" * 2048)
+    return root, root
+
+
+async def test_run_import_copy_strategy_persists_final_absolute_paths(tmp_path, db, chain):
+    root, source_book = _make_nested_tree(tmp_path)
+    folder_id = db.execute(
+        "INSERT INTO root_folders (path, import_strategy) VALUES (?, 'copy')",
+        (str(root),),
+    ).lastrowid
+    db.commit()
+
+    summary = await run_import(
+        conn=db, chain=chain, root_folder_id=folder_id, dry_run=False, locale="de"
+    )
+
+    assert summary.matched == 1
+    paths = [
+        r["path"] for r in db.execute("SELECT path FROM library_files").fetchall()
+    ]
+    assert len(paths) == 2
+    for p in paths:
+        assert Path(p).is_absolute()
+        assert Path(p).exists()
+        # Flattened one level up from the nested "Author/Book" source layout.
+        assert Path(p).parent == root / "Der Vorleser [B004UWRY6M]"
+    # Source files are untouched by a copy strategy.
+    assert (source_book / "01 - Kapitel 1.mp3").exists()
+    assert (source_book / "02 - Kapitel 2.mp3").exists()
+
+
+async def test_run_import_hardlink_falls_back_to_copy_on_exdev(tmp_path, db, chain, monkeypatch):
+    root, source_book = _make_nested_tree(tmp_path)
+    folder_id = db.execute(
+        "INSERT INTO root_folders (path, import_strategy) VALUES (?, 'hardlink')",
+        (str(root),),
+    ).lastrowid
+    db.commit()
+
+    import os
+
+    def fake_link(source, target):
+        raise OSError(getattr(os, "EXDEV", 18), "Invalid cross-device link")
+
+    monkeypatch.setattr(os, "link", fake_link)
+
+    summary = await run_import(
+        conn=db, chain=chain, root_folder_id=folder_id, dry_run=False, locale="de"
+    )
+
+    assert summary.matched == 1
+    paths = [
+        r["path"] for r in db.execute("SELECT path FROM library_files").fetchall()
+    ]
+    assert len(paths) == 2
+    for p in paths:
+        assert Path(p).exists()
+        assert Path(p).parent == root / "Der Vorleser [B004UWRY6M]"
+    # Source untouched -- copy fallback never deletes the original.
+    assert (source_book / "01 - Kapitel 1.mp3").exists()
+    assert (source_book / "02 - Kapitel 2.mp3").exists()
+
+
+async def test_run_import_space_check_failure_aborts_candidate_as_error(
+    tmp_path, db, chain, monkeypatch
+):
+    root, source_book = _make_nested_tree(tmp_path)
+    folder_id = db.execute(
+        "INSERT INTO root_folders (path, import_strategy) VALUES (?, 'copy')",
+        (str(root),),
+    ).lastrowid
+    db.commit()
+
+    import shutil as shutil_module
+
+    class FakeUsage:
+        free = 1
+
+    monkeypatch.setattr(shutil_module, "disk_usage", lambda path: FakeUsage())
+
+    summary = await run_import(
+        conn=db, chain=chain, root_folder_id=folder_id, dry_run=False, locale="de"
+    )
+
+    assert summary.errors == 1
+    assert summary.matched == 0
+    assert summary.results[0].status == "error"
+    assert db.execute("SELECT COUNT(*) FROM books").fetchone()[0] == 0
+    assert db.execute("SELECT COUNT(*) FROM library_files").fetchone()[0] == 0
+    assert not (root / "Der Vorleser [B004UWRY6M]").exists()
+    # Source untouched.
+    assert (source_book / "01 - Kapitel 1.mp3").exists()
+    jobs = db.execute("SELECT status, error FROM import_jobs").fetchall()
+    assert jobs[0]["status"] == "failed"
+    assert jobs[0]["error"] == "error"
+
+
+async def test_run_import_dry_run_with_move_strategy_makes_no_fs_writes(
+    tmp_path, db, chain
+):
+    root, source_book = _make_nested_tree(tmp_path)
+    folder_id = db.execute(
+        "INSERT INTO root_folders (path, import_strategy) VALUES (?, 'move')",
+        (str(root),),
+    ).lastrowid
+    db.commit()
+
+    summary = await run_import(
+        conn=db, chain=chain, root_folder_id=folder_id, dry_run=True, locale="de"
+    )
+
+    assert summary.matched == 1
+    # A "move" strategy dry-run must never touch the source or write a target.
+    assert (source_book / "01 - Kapitel 1.mp3").exists()
+    assert (source_book / "02 - Kapitel 2.mp3").exists()
+    assert not (root / "Der Vorleser [B004UWRY6M]").exists()
+    assert db.execute("SELECT COUNT(*) FROM books").fetchone()[0] == 0
+    assert db.execute("SELECT COUNT(*) FROM library_files").fetchone()[0] == 0
+
+
 async def test_run_import_unmatched_reports_failure(tmp_path, db, chain):
     root = tmp_path / "audiobooks"
     (root / "Unknown Author - Unknown Title").mkdir(parents=True)

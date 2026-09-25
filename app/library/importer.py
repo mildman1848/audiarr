@@ -6,12 +6,14 @@ store. A `run_import` call processes one root folder end-to-end:
   1. scan_folder() collects filesystem candidates
   2. for each candidate: search providers (ASIN first, then fuzzy via
      guessed title/author), score hits, pick the best match
-  3. matched candidates become books (via store.upsert_* functions);
-     unmatched ones are recorded as import_jobs with status 'failed'
-     for later retry/manual matching.
+  3. a matched candidate's files are placed on disk per the root folder's
+     configured import_strategy (move/copy/hardlink, see #30 and
+     app.library.import_strategy) and the book is persisted with the
+     files' actual final paths; unmatched candidates are recorded as
+     import_jobs with status 'failed' for later retry/manual matching.
 
-No file is ever moved, renamed, or deleted — the import only records
-what exists. File moves/renames are a separate workflow (future issue).
+Dry-run never touches the filesystem or the DB -- see the `if dry_run`
+guard in `_import_one`, which returns before any strategy/persist call.
 """
 
 from __future__ import annotations
@@ -25,6 +27,7 @@ from app.config import load_settings
 from app.connect import dispatch_event
 from app.library import BookCreate
 from app.library import create_book as library_create_book
+from app.library.import_strategy import ImportStrategyError, PlacedFile, place_candidate_files
 from app.library.matcher import MatchResult, match_candidate_to_hits
 from app.library.scanner import BookCandidate, scan_folder
 from app.models.settings import QualityProfile, Settings
@@ -147,11 +150,12 @@ async def run_import(
     # need api.audible.de), mirroring how the metadata search route does it.
     chain.config.audible_locale = locale
     row = conn.execute(
-        "SELECT path FROM root_folders WHERE id = ?", (root_folder_id,)
+        "SELECT path, import_strategy FROM root_folders WHERE id = ?", (root_folder_id,)
     ).fetchone()
     if row is None:
         raise ValueError(f"root folder {root_folder_id} not found")
-    root_path = row[0]
+    root_path = row["path"]
+    strategy = row["import_strategy"]
 
     summary = ImportSummary(
         root_folder_id=root_folder_id, root_path=root_path, dry_run=dry_run
@@ -183,7 +187,7 @@ async def run_import(
             summary.ignored += 1
             continue
 
-        result = await _import_one(conn, chain, candidate, dry_run, locale)
+        result = await _import_one(conn, chain, candidate, dry_run, locale, root_path, strategy)
         summary.results.append(result)
         if result.status == "matched":
             summary.matched += 1
@@ -210,6 +214,8 @@ async def _import_one(
     candidate: BookCandidate,
     dry_run: bool,
     locale: str,
+    root_path: str,
+    strategy: str,
 ) -> ImportCandidateResult:
     """Process a single candidate: search, match, persist book + files."""
     base = ImportCandidateResult(folder_path=candidate.folder_path, status="unmatched")
@@ -249,14 +255,26 @@ async def _import_one(
         base.detail = "would create book + files"
         return base
 
-    # Persist book via library store.
+    try:
+        placed_files = _place_files(candidate, root_path, strategy)
+    except ImportStrategyError as exc:
+        log.error(
+            "import strategy %r failed for %r: %s", strategy, candidate.folder_path, exc
+        )
+        base.status = "error"
+        base.detail = str(exc)
+        return base
+
+    # Persist book via library store, with the files' actual final paths.
     book_id = _persist_book(conn, hit, locale)
-    _persist_files(conn, book_id, candidate, locale)
+    _persist_files(conn, book_id, placed_files, candidate.dominant_format, locale)
 
     # Offer the candidate to the conversion backend if the quality profile
     # wants it (no-op when conversion is disabled; the backend owns file
-    # movement).
-    await _maybe_enqueue_conversion(conn, book_id, candidate)
+    # movement). Uses the files' final folder, not the original scan
+    # location, since a "move" strategy may have relocated them.
+    final_folder = _final_folder(placed_files, candidate.folder_path)
+    await _maybe_enqueue_conversion(conn, book_id, candidate, source_path=final_folder)
 
     base.status = "matched"
     base.matched_book_id = book_id
@@ -265,6 +283,38 @@ async def _import_one(
         {"book_id": book_id, "title": hit.title, "source_path": candidate.folder_path, "status": "matched"},
     )
     return base
+
+
+def _final_folder(placed_files: list[PlacedFile], fallback: str) -> str:
+    """Return the folder that now holds a candidate's placed files.
+
+    All of a candidate's files share one target folder (see
+    place_candidate_files), so any placed file's parent directory works;
+    falls back to the original scan location for an empty list (a
+    candidate with zero files, which never reaches this path in practice).
+    """
+    if not placed_files:
+        return fallback
+    return str(Path(placed_files[0].final_path).parent)
+
+
+def _place_files(candidate: BookCandidate, root_path: str, strategy: str) -> list[PlacedFile]:
+    """Resolve + apply the strategy for every file of one candidate.
+
+    Every scanned file is a direct child of the candidate's own folder (see
+    scan_folder), so its source path is simply candidate.folder_path joined
+    with the file's basename.
+    """
+    files = [
+        (
+            str(Path(candidate.folder_path) / Path(f.path).name),
+            Path(f.path).name,
+            f.size_bytes,
+            f.format,
+        )
+        for f in candidate.files
+    ]
+    return place_candidate_files(files, root_path, candidate.folder_name, strategy)
 
 
 async def import_single_folder(
@@ -345,10 +395,32 @@ async def import_single_folder(
         _record_import_job(conn, result)
         return result
 
-    book_id = _persist_book(conn, hit, locale)
-    _persist_files(conn, book_id, candidate, locale)
+    # If a configured root folder governs this folder's location, place the
+    # files per its import_strategy; otherwise (e.g. a folder matched from a
+    # download-client directory that isn't itself a configured root folder)
+    # fall back to recording the scanner's paths as-is, unchanged.
+    root_row = _find_root_folder_for_path(conn, candidate.folder_path)
+    if root_row is not None:
+        try:
+            placed_files = _place_files(candidate, root_row["path"], root_row["import_strategy"])
+        except ImportStrategyError as exc:
+            log.error(
+                "import strategy %r failed for %r: %s",
+                root_row["import_strategy"], candidate.folder_path, exc,
+            )
+            result.status = "error"
+            result.detail = str(exc)
+            _record_import_job(conn, result)
+            return result
+        final_folder = _final_folder(placed_files, candidate.folder_path)
+    else:
+        placed_files = _unplaced_files(candidate)
+        final_folder = candidate.folder_path
 
-    await _maybe_enqueue_conversion(conn, book_id, candidate)
+    book_id = _persist_book(conn, hit, locale)
+    _persist_files(conn, book_id, placed_files, candidate.dominant_format, locale)
+
+    await _maybe_enqueue_conversion(conn, book_id, candidate, source_path=final_folder)
 
     result.status = "matched"
     result.matched_book_id = book_id
@@ -383,19 +455,55 @@ def _persist_book(conn: Any, hit: BookQuickInfo, locale: str) -> int:
     return library_create_book(conn, data)
 
 
-def _persist_files(conn: Any, book_id: int, candidate: BookCandidate, locale: str) -> None:
-    """Record the candidate's audio files against the book's edition."""
+def _persist_files(
+    conn: Any, book_id: int, placed_files: list[PlacedFile], dominant_format: str, locale: str
+) -> None:
+    """Record a candidate's files against the book's edition.
+
+    ``placed_files`` carries each file's actual final filesystem path (see
+    _place_files/_unplaced_files) so library_files.path is always openable
+    later, never a stale scanner-relative fragment.
+    """
     cur = conn.execute(
         """INSERT INTO editions (book_id, format, locale) VALUES (?, ?, ?)""",
-        (book_id, candidate.dominant_format, locale),
+        (book_id, dominant_format, locale),
     )
     edition_id = cur.lastrowid
-    for f in candidate.files:
+    for pf in placed_files:
         conn.execute(
             """INSERT INTO library_files
                (edition_id, path, size_bytes, format) VALUES (?, ?, ?, ?)""",
-            (edition_id, f.path, f.size_bytes, f.format),
+            (edition_id, pf.final_path, pf.size_bytes, pf.format),
         )
+
+
+def _find_root_folder_for_path(conn: Any, folder_path: str) -> Any:
+    """Return the root_folders row whose configured path contains ``folder_path``.
+
+    Same containment rule as app.sab_auto_import.SabAutoImportScheduler.
+    _find_root_folder (kept local rather than shared to avoid coupling this
+    module to the SAB poller).
+    """
+    rows = conn.execute("SELECT id, path, import_strategy FROM root_folders").fetchall()
+    for row in rows:
+        root = row["path"].rstrip("/")
+        if folder_path == root or folder_path.startswith(root + "/"):
+            return row
+    return None
+
+
+def _unplaced_files(candidate: BookCandidate) -> list[PlacedFile]:
+    """PlacedFile list for a candidate with no governing root folder.
+
+    Nothing is moved/copied/hardlinked -- files are recorded at their
+    current scanner-relative path exactly like before #30, since there is
+    no configured root folder to resolve a strategy or a safe target
+    against.
+    """
+    return [
+        PlacedFile(f.path, f.path, f.size_bytes, f.format, "unchanged")
+        for f in candidate.files
+    ]
 
 
 def _resolve_quality_profile(
@@ -420,7 +528,9 @@ def _resolve_quality_profile(
     return settings.quality_profiles[0]
 
 
-async def _maybe_enqueue_conversion(conn: Any, book_id: int, candidate: BookCandidate) -> None:
+async def _maybe_enqueue_conversion(
+    conn: Any, book_id: int, candidate: BookCandidate, source_path: str | None = None
+) -> None:
     """Offer a candidate to the conversion backend if the quality profile wants it.
 
     Profile-aware replacement for the old hardcoded "mp3/m4a always enqueue"
@@ -429,6 +539,11 @@ async def _maybe_enqueue_conversion(conn: Any, book_id: int, candidate: BookCand
     converting toward, given its target quality tier, falling back to the
     first configured profile when the book has none set (see #20). Never
     blocks the import itself -- only the conversion enqueue decision.
+
+    ``source_path`` defaults to the candidate's original scan location;
+    callers pass the files' actual final folder when an import strategy
+    (#30) may have relocated them, so the conversion backend looks in the
+    right place.
     """
     settings = load_settings()
     profile = _resolve_quality_profile(conn, book_id, settings)
@@ -439,7 +554,7 @@ async def _maybe_enqueue_conversion(conn: Any, book_id: int, candidate: BookCand
     try:
         from app.conversion.worker import enqueue_for_book
 
-        await enqueue_for_book(conn, book_id, candidate.folder_path, output_path="")
+        await enqueue_for_book(conn, book_id, source_path or candidate.folder_path, output_path="")
     except Exception:  # noqa: BLE001 — conversion must never break imports
         log.warning("auto-enqueue conversion failed for book %d", book_id, exc_info=True)
 

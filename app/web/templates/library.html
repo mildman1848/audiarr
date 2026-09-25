@@ -68,6 +68,13 @@
       <form id="root-folder-form" class="stack-form">
         <input type="text" id="rf-path" name="path" placeholder="{{ t.library_root_folder_path }}" required>
         <input type="text" id="rf-label" name="label" placeholder="{{ t.library_root_folder_label }}">
+        <label>{{ t.library_root_folder_strategy_label }}
+          <select id="rf-import-strategy" name="import_strategy">
+            <option value="copy" selected>{{ t.library_root_folder_strategy_copy }}</option>
+            <option value="hardlink">{{ t.library_root_folder_strategy_hardlink }}</option>
+            <option value="move">{{ t.library_root_folder_strategy_move }}</option>
+          </select>
+        </label>
         <button type="submit" class="btn btn-primary">{{ t.library_root_folder_add }}</button>
       </form>
       <p id="root-folder-msg" class="muted" role="status"></p>
@@ -102,5 +109,5 @@
 {% endblock %}
 
 {% block scripts %}
-  <script src="/static/js/library.js?v={{ version }}-tags"></script>
+  <script src="/static/js/library.js?v={{ version }}-strategies"></script>
 {% endblock %}

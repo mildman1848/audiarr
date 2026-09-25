@@ -304,7 +304,17 @@ function renderRootFoldersList() {
           <button type="button" class="btn btn-danger" data-delete-folder="${f.id}">${esc(T.library_root_folder_delete)}</button>
         </div>
         <div class="library-badge-row" style="margin-top:0.35rem;">
+          <span class="badge">${esc(T.library_root_folder_strategy_label)}: ${esc(T[`library_root_folder_strategy_${f.import_strategy}`] || f.import_strategy || "copy")}</span>
           ${folderTagChipsHtml(f)}
+        </div>
+        <div class="inline-form" style="margin-top:0.35rem;">
+          <label>${esc(T.library_root_folder_strategy_label)}
+            <select data-folder-strategy="${f.id}">
+              <option value="copy" ${f.import_strategy === "copy" ? "selected" : ""}>${esc(T.library_root_folder_strategy_copy)}</option>
+              <option value="hardlink" ${f.import_strategy === "hardlink" ? "selected" : ""}>${esc(T.library_root_folder_strategy_hardlink)}</option>
+              <option value="move" ${f.import_strategy === "move" ? "selected" : ""}>${esc(T.library_root_folder_strategy_move)}</option>
+            </select>
+          </label>
           <input type="text" data-folder-tag-input="${f.id}" placeholder="${esc(T.library_root_folder_tags_add_placeholder)}">
         </div>
       </li>`
@@ -317,6 +327,11 @@ function renderRootFoldersList() {
   container.querySelectorAll("[data-remove-folder-tag]").forEach((el) => {
     el.addEventListener("click", () =>
       removeRootFolderTag(Number(el.dataset.folderId), Number(el.dataset.removeFolderTag))
+    );
+  });
+  container.querySelectorAll("[data-folder-strategy]").forEach((select) => {
+    select.addEventListener("change", () =>
+      updateRootFolderStrategy(Number(select.dataset.folderStrategy), select.value)
     );
   });
   container.querySelectorAll("[data-folder-tag-input]").forEach((input) => {
@@ -338,6 +353,25 @@ async function putRootFolderTags(folderId, labels) {
   });
   if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
   return resp.json();
+}
+
+async function updateRootFolderStrategy(folderId, importStrategy) {
+  try {
+    const resp = await fetch(`/api/v1/library/root-folders/${folderId}/strategy`, {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ import_strategy: importStrategy }),
+    });
+    if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+    const updated = await resp.json();
+    const index = rootFolders.findIndex((f) => f.id === folderId);
+    if (index >= 0) rootFolders[index] = updated;
+    renderRootFoldersList();
+    if (window.AudiarrToast) window.AudiarrToast.success(T.library_root_folder_strategy_updated);
+  } catch (err) {
+    if (window.AudiarrToast) window.AudiarrToast.error(`${T.library_root_folder_strategy_error} (${err.message})`);
+    await loadRootFolders();
+  }
 }
 
 async function addRootFolderTag(folderId, label) {
@@ -391,13 +425,14 @@ async function addRootFolder(event) {
   const msg = document.getElementById("root-folder-msg");
   const path = document.getElementById("rf-path").value.trim();
   const label = document.getElementById("rf-label").value.trim();
+  const importStrategy = document.getElementById("rf-import-strategy").value;
   if (!path) return;
 
   try {
     const resp = await fetch("/api/v1/library/root-folders", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ path, label }),
+      body: JSON.stringify({ path, label, import_strategy: importStrategy }),
     });
     if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
     msg.textContent = "";
@@ -484,8 +519,9 @@ async function runImport(dryRun) {
     results.innerHTML = "";
     return;
   }
-  // Real imports write matched books/files to the Audiarr DB; confirm first.
-  // Media files are never moved, copied, or deleted by this action.
+  // Real imports write matched books/files to the Audiarr DB and may copy,
+  // hardlink, or move media files according to the selected root folder's
+  // import strategy. Confirm before touching data on disk.
   if (!dryRun && !window.confirm(T.library_import_run_confirm)) return;
 
   summary.innerHTML = `<p class="muted">${esc(T.library_import_running)}</p>`;
