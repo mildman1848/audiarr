@@ -126,6 +126,8 @@ Phased plan; each phase lands as small verified slices (issue → branch → PR 
 
 ### Phase 6 — Starr UI/UX parity for 1.0
 
+Gap matrix and priorities: [`docs/design/starr-ui-parity.md`](docs/design/starr-ui-parity.md) (audit #48).
+
 Audiarr should feel like a deliberate member of the Starr UI family, not a forked movie app with labels changed. Keep Radarr/Sonarr/Lidarr interaction patterns wherever they make sense, while preserving audiobook-specific entities and workflow semantics.
 
 - Starr UI parity audit and gap matrix (#48). **Next**
