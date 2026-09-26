@@ -1,5 +1,10 @@
 # Changelog
 
+## 1.1.0
+
+- Add Liberatarr (Libation) as an optional read-only Wanted source (#64): configure base URL/token in Connections, test reachability, proxy the library, and idempotently create monitored books from Not Liberated Audible purchases. The client matches Liberatarr's real API shape (`{"books": [...]}`, `product_id` ASINs, integer status enum, `language` locale) and keeps defensive fallbacks.
+- Refresh README for the 1.0/post-release state with Streamyfin-style sections, clearer install/development/security/roadmap guidance, and public-safe wording around optional Liberatarr sync.
+
 ## 1.0.0
 
 Audiarr 1.0.0 ships as the first complete release: Phases 1-6 of the roadmap are done.
