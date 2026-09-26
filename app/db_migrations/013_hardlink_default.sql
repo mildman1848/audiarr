@@ -1,0 +1,11 @@
+-- Schema version 13: flip the import strategy default from 'copy' to
+-- 'hardlink' (zero extra disk usage, instant) with copy as the automatic
+-- fallback whenever the OS refuses the link (see app/library/import_strategy.py).
+--
+-- Flipping existing 'copy' rows here is safe: every such row inherited the
+-- old conservative default rather than an explicit user choice (no other
+-- option existed before this change), and hardlink transparently falls
+-- back to copy whenever linking is impossible -- so behavior only ever
+-- gets faster/cheaper, never riskier. Rows already set to 'move' or
+-- explicitly to 'hardlink' are left untouched.
+UPDATE root_folders SET import_strategy = 'hardlink' WHERE import_strategy = 'copy';

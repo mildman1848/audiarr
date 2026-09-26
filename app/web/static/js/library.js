@@ -327,8 +327,8 @@ function renderRootFoldersList() {
         <div class="inline-form" style="margin-top:0.35rem;">
           <label>${esc(T.library_root_folder_strategy_label)}
             <select data-folder-strategy="${f.id}">
-              <option value="copy" ${f.import_strategy === "copy" ? "selected" : ""}>${esc(T.library_root_folder_strategy_copy)}</option>
               <option value="hardlink" ${f.import_strategy === "hardlink" ? "selected" : ""}>${esc(T.library_root_folder_strategy_hardlink)}</option>
+              <option value="copy" ${f.import_strategy === "copy" ? "selected" : ""}>${esc(T.library_root_folder_strategy_copy)}</option>
               <option value="move" ${f.import_strategy === "move" ? "selected" : ""}>${esc(T.library_root_folder_strategy_move)}</option>
             </select>
           </label>
