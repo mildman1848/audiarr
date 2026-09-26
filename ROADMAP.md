@@ -132,7 +132,7 @@ Audiarr should feel like a deliberate member of the Starr UI family, not a forke
 
 - Starr UI parity audit and gap matrix (#48). **Done**
 - Shell and navigation Starr parity pass (#49). **Done**
-- Primary data pages Starr parity pass (#50). **Next**
+- Primary data pages Starr parity pass (#50). **Done**
 - Settings Starr parity pass (#51). **Next**
 - Final Starr-style release polish pass (#52). **Next**
 

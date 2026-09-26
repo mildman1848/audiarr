@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import app.api.routes_library as routes_library
 from app.db import get_conn, migrate
 from app.library import (
     BookCreate,
@@ -15,6 +16,41 @@ from app.library import (
     provider_id_exists,
     update_book,
 )
+from app.providers.base import (
+    BaseMetadataProvider,
+    BookDetailInfo,
+    BrowseResponse,
+    SearchResponse,
+)
+from app.providers.chain import ProviderChain, ProviderChainConfig
+
+
+class _StubProvider(BaseMetadataProvider):
+    """Offline provider: resolves a single canned detail record, never searches."""
+
+    provider_name = "stub"
+
+    def __init__(self, detail: BookDetailInfo | None = None, **kwargs: object) -> None:
+        super().__init__(**kwargs)
+        self.detail = detail
+
+    async def search(self, query: str, **kwargs: object) -> SearchResponse:
+        return SearchResponse(results=[], query_used=query)
+
+    async def get_detail(self, external_id: str, **kwargs: object) -> BookDetailInfo | None:
+        if self.detail is not None and self.detail.provider_external_id == external_id:
+            return self.detail
+        return None
+
+    async def browse(self, **kwargs: object) -> BrowseResponse:
+        return BrowseResponse(results=[])
+
+
+def _stub_chain(detail: BookDetailInfo | None) -> ProviderChain:
+    return ProviderChain(
+        config=ProviderChainConfig(provider_order=["stub"]),
+        provider_overrides={"stub": _StubProvider(detail=detail)},
+    )
 
 
 def _make_book(**overrides: object) -> BookCreate:
@@ -426,6 +462,163 @@ def test_api_book_quality_profile_validation(app_client):
     assert cleared.json()["quality_profile"] == ""
 
 
+def test_api_book_root_folder_id_validation(app_client, tmp_path):
+    payload = {
+        "title": "Der Vorleser",
+        "authors": ["Bernhard Schlink"],
+        "provider": "audible",
+        "provider_id": "B004UWRY6M",
+        "locale": "de",
+    }
+    resp = app_client.post("/api/v1/library/books", json=payload)
+    assert resp.status_code == 201
+    book = resp.json()
+    # Manual creation without a root_folder_id still leaves "no preference"
+    # (the Add wizard requires one at the UI level, but the API itself may
+    # omit it, #50 review).
+    assert book["root_folder_id"] is None
+
+    # Unknown id -> 422.
+    invalid = app_client.patch(
+        f"/api/v1/library/books/{book['id']}", json={"root_folder_id": 999999}
+    )
+    assert invalid.status_code == 422
+
+    folder_resp = app_client.post(
+        "/api/v1/library/root-folders", json={"path": str(tmp_path / "audiobooks")}
+    )
+    assert folder_resp.status_code == 201
+    folder_id = folder_resp.json()["id"]
+
+    # A configured root folder id -> ok and round-trips.
+    valid = app_client.patch(
+        f"/api/v1/library/books/{book['id']}", json={"root_folder_id": folder_id}
+    )
+    assert valid.status_code == 200
+    assert valid.json()["root_folder_id"] == folder_id
+
+    single = app_client.get(f"/api/v1/library/books/{book['id']}")
+    assert single.json()["root_folder_id"] == folder_id
+
+
+def test_api_book_root_folder_id_can_be_cleared(app_client, tmp_path):
+    """PATCH {"root_folder_id": null} clears a previously-set preference back
+    to NULL ("no preference") instead of being silently ignored (#50 review:
+    the data model always allowed NULL, the API just didn't expose clearing
+    it)."""
+    folder_resp = app_client.post(
+        "/api/v1/library/root-folders", json={"path": str(tmp_path / "audiobooks")}
+    )
+    folder_id = folder_resp.json()["id"]
+
+    created = app_client.post(
+        "/api/v1/library/books",
+        json={"title": "Der Vorleser", "root_folder_id": folder_id},
+    )
+    assert created.status_code == 201
+    book = created.json()
+    assert book["root_folder_id"] == folder_id
+
+    cleared = app_client.patch(
+        f"/api/v1/library/books/{book['id']}", json={"root_folder_id": None}
+    )
+    assert cleared.status_code == 200
+    assert cleared.json()["root_folder_id"] is None
+
+    single = app_client.get(f"/api/v1/library/books/{book['id']}")
+    assert single.json()["root_folder_id"] is None
+
+
+def test_api_book_create_with_root_folder_and_quality_profile(app_client, tmp_path):
+    """The Add wizard sends root_folder_id/quality_profile as part of the
+    create payload (#50 review: avoids a create-then-PATCH window where a
+    failed PATCH would leave a half-configured book)."""
+    folder_resp = app_client.post(
+        "/api/v1/library/root-folders", json={"path": str(tmp_path / "audiobooks")}
+    )
+    folder_id = folder_resp.json()["id"]
+
+    resp = app_client.post(
+        "/api/v1/library/books",
+        json={
+            "title": "Der Vorleser",
+            "authors": ["Bernhard Schlink"],
+            "provider": "audible",
+            "provider_id": "B004UWRY6M",
+            "locale": "de",
+            "root_folder_id": folder_id,
+            "quality_profile": "Standard",
+        },
+    )
+    assert resp.status_code == 201
+    book = resp.json()
+    assert book["root_folder_id"] == folder_id
+    assert book["quality_profile"] == "Standard"
+
+    single = app_client.get(f"/api/v1/library/books/{book['id']}")
+    assert single.json()["root_folder_id"] == folder_id
+    assert single.json()["quality_profile"] == "Standard"
+
+
+def test_api_book_create_with_invalid_root_folder_returns_422_and_creates_nothing(app_client):
+    before = app_client.get("/api/v1/library/stats").json()["book_count"]
+
+    resp = app_client.post(
+        "/api/v1/library/books",
+        json={"title": "Der Vorleser", "root_folder_id": 999999},
+    )
+    assert resp.status_code == 422
+
+    after = app_client.get("/api/v1/library/stats").json()["book_count"]
+    assert after == before
+    assert app_client.get("/api/v1/library/books").json() == []
+
+
+def test_api_book_create_with_invalid_quality_profile_returns_422_and_creates_nothing(app_client):
+    before = app_client.get("/api/v1/library/stats").json()["book_count"]
+
+    resp = app_client.post(
+        "/api/v1/library/books",
+        json={"title": "Der Vorleser", "quality_profile": "Does Not Exist"},
+    )
+    assert resp.status_code == 422
+
+    after = app_client.get("/api/v1/library/stats").json()["book_count"]
+    assert after == before
+    assert app_client.get("/api/v1/library/books").json() == []
+
+
+def test_api_book_organize_falls_back_to_book_root_folder_preference(app_client, tmp_path):
+    """Organize preview picks the book's own root_folder_id (set at add
+    time, #50) over the "first configured folder" default when the request
+    doesn't specify one explicitly."""
+    first = app_client.post(
+        "/api/v1/library/root-folders", json={"path": str(tmp_path / "first")}
+    )
+    preferred = app_client.post(
+        "/api/v1/library/root-folders", json={"path": str(tmp_path / "preferred")}
+    )
+    assert first.status_code == 201 and preferred.status_code == 201
+    preferred_id = preferred.json()["id"]
+
+    book_resp = app_client.post(
+        "/api/v1/library/books",
+        json={
+            "title": "Der Vorleser",
+            "authors": ["Bernhard Schlink"],
+            "provider": "audible",
+            "provider_id": "B004UWRY6M",
+            "locale": "de",
+        },
+    )
+    book_id = book_resp.json()["id"]
+    app_client.patch(f"/api/v1/library/books/{book_id}", json={"root_folder_id": preferred_id})
+
+    preview = app_client.post(f"/api/v1/library/books/{book_id}/organize/preview", json={})
+    assert preview.status_code == 200
+    assert preview.json()["root_folder"] == str(tmp_path / "preferred")
+
+
 def test_book_endpoints_include_file_stats(app_client):
     payload = {
         "title": "Der Vorleser",
@@ -522,3 +715,76 @@ def test_api_library_stats(app_client):
     assert stats["narrator_count"] == 1
     assert stats["series_count"] == 1
     assert stats["root_folder_count"] == 1
+
+
+def test_api_book_refresh_updates_fields_from_provider(app_client, monkeypatch):
+    """Book detail "Refresh" toolbar action (#50): re-fetches metadata from
+    the book's own linked provider id and persists the fresh fields."""
+    resp = app_client.post(
+        "/api/v1/library/books",
+        json={
+            "title": "Der Vorleser (old title)",
+            "authors": ["Bernhard Schlink"],
+            "provider": "stub",
+            "provider_id": "STUB1",
+            "locale": "de",
+        },
+    )
+    assert resp.status_code == 201
+    book = resp.json()
+
+    detail = BookDetailInfo(
+        provider_uid="STUB1",
+        provider_name="stub",
+        provider_external_id="STUB1",
+        title="Der Vorleser",
+        subtitle="Roman",
+        description="Updated description",
+        release_date="1995-09-01",
+        language="de",
+        duration_seconds=17880,
+        cover_url="https://example.invalid/cover.jpg",
+        publishers=["Diogenes"],
+    )
+    monkeypatch.setattr(routes_library, "build_provider_chain", lambda: _stub_chain(detail))
+
+    refreshed = app_client.post(f"/api/v1/library/books/{book['id']}/refresh")
+    assert refreshed.status_code == 200
+    body = refreshed.json()
+    assert body["title"] == "Der Vorleser"
+    assert body["subtitle"] == "Roman"
+    assert body["description"] == "Updated description"
+    assert body["release_date"] == "1995-09-01"
+    assert body["cover_url"] == "https://example.invalid/cover.jpg"
+    assert body["publisher"] == "Diogenes"
+
+
+def test_api_book_refresh_without_linked_provider_returns_422(app_client):
+    resp = app_client.post("/api/v1/library/books", json={"title": "Manually added book"})
+    assert resp.status_code == 201
+    book = resp.json()
+
+    refreshed = app_client.post(f"/api/v1/library/books/{book['id']}/refresh")
+    assert refreshed.status_code == 422
+
+
+def test_api_book_refresh_provider_miss_returns_502(app_client, monkeypatch):
+    resp = app_client.post(
+        "/api/v1/library/books",
+        json={
+            "title": "Der Vorleser",
+            "provider": "stub",
+            "provider_id": "STUB1",
+            "locale": "de",
+        },
+    )
+    book = resp.json()
+    monkeypatch.setattr(routes_library, "build_provider_chain", lambda: _stub_chain(None))
+
+    refreshed = app_client.post(f"/api/v1/library/books/{book['id']}/refresh")
+    assert refreshed.status_code == 502
+
+
+def test_api_book_refresh_missing_book_returns_404(app_client):
+    resp = app_client.post("/api/v1/library/books/9999/refresh")
+    assert resp.status_code == 404

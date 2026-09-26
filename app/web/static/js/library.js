@@ -10,7 +10,41 @@ let allBooks = [];
 let rootFolders = [];
 let currentView = "grid";
 let currentSort = "title";
+let currentDir = "asc";
 let currentTagFilter = "";
+
+// Starr-style sortable column headers (issue #50): one accessor per sort
+// key, shared by the table's clickable <th> buttons and the accessible
+// toolbar <select> fallback so both controls always agree.
+const SORT_ACCESSORS = {
+  title: (b) => (b.title || "").toLowerCase(),
+  author: (b) => ((b.authors && b.authors[0]) || "").toLowerCase(),
+  narrator: (b) => ((b.narrators && b.narrators[0]) || "").toLowerCase(),
+  series: (b) => (b.series || "").toLowerCase(),
+  duration: (b) => b.duration_seconds || 0,
+  files: (b) => b.file_count || 0,
+  size: (b) => b.size_bytes || 0,
+  added: (b) => b.added_at || "",
+};
+
+// Reads ?sort=&dir= from the current URL so a reloaded/shared link keeps
+// its sort state (issue #50); falls back to the title/asc default.
+function readSortFromUrl() {
+  const params = new URLSearchParams(window.location.search);
+  const sort = params.get("sort");
+  const dir = params.get("dir");
+  if (sort && SORT_ACCESSORS[sort]) currentSort = sort;
+  if (dir === "asc" || dir === "desc") currentDir = dir;
+}
+
+// Mirrors the current sort/dir into the URL (no navigation/reload) so the
+// state survives a reload or gets shared via a copied link.
+function writeSortToUrl() {
+  const params = new URLSearchParams(window.location.search);
+  params.set("sort", currentSort);
+  params.set("dir", currentDir);
+  window.history.replaceState(null, "", `${window.location.pathname}?${params.toString()}`);
+}
 
 function esc(value) {
   return String(value ?? "").replace(/[&<>"']/g, (c) => ({
@@ -42,6 +76,26 @@ function humanSize(bytes) {
   }
   const rounded = value >= 100 || unit === 0 ? Math.round(value) : value.toFixed(1);
   return `${rounded} ${units[unit]}`;
+}
+
+// Initials for a monogram avatar, e.g. "Bernhard Schlink" -> "BS". Starr
+// shows a poster-fallback avatar for people without a photo; Audiarr has no
+// author/narrator photos at all, so this is the fallback for every row.
+function initials(name) {
+  const parts = String(name || "").trim().split(/\s+/).filter(Boolean);
+  if (!parts.length) return "?";
+  if (parts.length === 1) return parts[0].slice(0, 2).toUpperCase();
+  return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase();
+}
+
+// Deterministic background hue from the name so the same person always
+// gets the same color, without a real avatar image to hash instead.
+function monogramHtml(name) {
+  if (!name) return "";
+  let hash = 0;
+  for (let i = 0; i < name.length; i += 1) hash = (hash * 31 + name.charCodeAt(i)) >>> 0;
+  const hue = hash % 360;
+  return `<span class="avatar-monogram" style="background:hsl(${hue},45%,32%);" title="${esc(name)}">${esc(initials(name))}</span>`;
 }
 
 function chipStyleAttr(color) {
@@ -134,15 +188,60 @@ function populateTagFilterOptions() {
 }
 
 // Client-side only: sorts a copy of the already-filtered list, leaving
-// allBooks untouched.
+// allBooks untouched. Falls back to title if currentSort names an unknown
+// key (e.g. an old bookmarked ?sort= value).
 function sortedBooks(books) {
+  const accessor = SORT_ACCESSORS[currentSort] || SORT_ACCESSORS.title;
+  const dirMultiplier = currentDir === "desc" ? -1 : 1;
   const sorted = [...books];
-  if (currentSort === "author") {
-    sorted.sort((a, b) => (a.authors?.[0] || "").localeCompare(b.authors?.[0] || ""));
-  } else {
-    sorted.sort((a, b) => (a.title || "").localeCompare(b.title || ""));
-  }
+  sorted.sort((a, b) => {
+    const av = accessor(a);
+    const bv = accessor(b);
+    if (typeof av === "number" && typeof bv === "number") return (av - bv) * dirMultiplier;
+    return String(av).localeCompare(String(bv)) * dirMultiplier;
+  });
   return sorted;
+}
+
+// Sets the active sort key/direction (toggling direction on a repeat click
+// of the same key, like Starr's clickable column headers), re-renders, and
+// keeps the toolbar <select> + URL state in sync.
+function setSort(key) {
+  if (!SORT_ACCESSORS[key]) return;
+  if (currentSort === key) {
+    currentDir = currentDir === "asc" ? "desc" : "asc";
+  } else {
+    currentSort = key;
+    currentDir = "asc";
+  }
+  const select = document.getElementById("library-sort");
+  if (select) select.value = currentSort;
+  updateSortDirButton();
+  writeSortToUrl();
+  renderBooks();
+}
+
+// Keeps the accessible toolbar direction-toggle button's icon/label in sync
+// with currentDir, for the grid view (which has no clickable headers).
+function updateSortDirButton() {
+  const btn = document.getElementById("library-sort-dir");
+  if (!btn) return;
+  btn.textContent = currentDir === "desc" ? "▾" : "▴";
+  btn.setAttribute(
+    "aria-label",
+    currentDir === "desc" ? T.library_sort_dir_desc : T.library_sort_dir_asc
+  );
+  btn.title = btn.getAttribute("aria-label");
+}
+
+function sortIndicator(key) {
+  if (key !== currentSort) return "";
+  return currentDir === "desc" ? " ▾" : " ▴";
+}
+
+function sortHeaderHtml(key, label) {
+  const active = key === currentSort ? " is-sorted" : "";
+  return `<th class="sortable-col${active}"><button type="button" class="sortable-col-btn" data-sort-key="${key}" aria-sort="${key === currentSort ? (currentDir === "desc" ? "descending" : "ascending") : "none"}">${esc(label)}${sortIndicator(key)}</button></th>`;
 }
 
 function renderBooks() {
@@ -179,7 +278,7 @@ function renderGrid(books) {
         <div class="library-cover">${coverHtml(b)}</div>
         <div class="library-card-body">
           <h3 class="library-card-title" title="${esc(b.title)}">${esc(b.title)}</h3>
-          <p class="library-card-author" title="${esc((b.authors || []).join(", "))}">${esc((b.authors || []).join(", ")) || "—"}</p>
+          <p class="library-card-author" title="${esc((b.authors || []).join(", "))}">${monogramHtml((b.authors || [])[0])}${esc((b.authors || []).join(", ")) || "—"}</p>
           ${badgeRowHtml(b)}
           ${(b.tags || []).length ? `<div class="library-badge-row">${tagChipsHtml(b.tags)}</div>` : ""}
           ${bookActionsHtml(b)}
@@ -195,30 +294,30 @@ function renderTable(books) {
     .map(
       (b) => `
       <tr>
-        <td>${esc(b.title)}</td>
-        <td>${esc((b.authors || []).join(", ")) || "—"}</td>
-        <td>${esc((b.narrators || []).join(", ")) || "—"}</td>
-        <td>${b.series ? esc(seriesLabel(b)) : "—"}</td>
-        <td>${esc(formatDuration(b.duration_seconds))}</td>
-        <td>${b.file_count}</td>
-        <td>${esc(humanSize(b.size_bytes))}</td>
+        <td class="nowrap">${esc(b.title)}</td>
+        <td class="nowrap">${monogramHtml((b.authors || [])[0])}${esc((b.authors || []).join(", ")) || "—"}</td>
+        <td class="nowrap">${monogramHtml((b.narrators || [])[0])}${esc((b.narrators || []).join(", ")) || "—"}</td>
+        <td class="nowrap">${b.series ? esc(seriesLabel(b)) : "—"}</td>
+        <td class="nowrap">${esc(formatDuration(b.duration_seconds))}</td>
+        <td class="nowrap">${b.file_count}</td>
+        <td class="nowrap">${esc(humanSize(b.size_bytes))}</td>
         <td>${tagChipsHtml(b.tags) || "—"}</td>
-        <td>${bookActionsHtml(b)}</td>
+        <td class="nowrap">${bookActionsHtml(b)}</td>
       </tr>`
     )
     .join("");
   return `
     <div class="table-scroll">
-      <table class="table">
+      <table class="table table-compact">
         <thead>
           <tr>
-            <th>${esc(T.library_col_title)}</th>
-            <th>${esc(T.library_col_authors)}</th>
-            <th>${esc(T.library_col_narrators)}</th>
-            <th>${esc(T.library_col_series)}</th>
-            <th>${esc(T.library_col_duration)}</th>
-            <th>${esc(T.library_col_files)}</th>
-            <th>${esc(T.library_col_size)}</th>
+            ${sortHeaderHtml("title", T.library_col_title)}
+            ${sortHeaderHtml("author", T.library_col_authors)}
+            ${sortHeaderHtml("narrator", T.library_col_narrators)}
+            ${sortHeaderHtml("series", T.library_col_series)}
+            ${sortHeaderHtml("duration", T.library_col_duration)}
+            ${sortHeaderHtml("files", T.library_col_files)}
+            ${sortHeaderHtml("size", T.library_col_size)}
             <th>${esc(T.library_col_tags)}</th>
             <th>${esc(T.library_col_actions)}</th>
           </tr>
@@ -231,6 +330,9 @@ function renderTable(books) {
 function wireBookActions(container) {
   container.querySelectorAll("[data-delete-book]").forEach((btn) => {
     btn.addEventListener("click", () => deleteBook(btn.dataset.deleteBook, btn.dataset.bookTitle));
+  });
+  container.querySelectorAll("[data-sort-key]").forEach((btn) => {
+    btn.addEventListener("click", () => setSort(btn.dataset.sortKey));
   });
 }
 
@@ -569,6 +671,10 @@ async function refreshAll() {
 }
 
 document.addEventListener("DOMContentLoaded", () => {
+  readSortFromUrl();
+  const sortSelect = document.getElementById("library-sort");
+  if (sortSelect) sortSelect.value = currentSort;
+  updateSortDirButton();
   highlightViewButtons();
   refreshAll();
 
@@ -580,6 +686,15 @@ document.addEventListener("DOMContentLoaded", () => {
   });
   document.getElementById("library-sort").addEventListener("change", (event) => {
     currentSort = event.target.value;
+    currentDir = "asc";
+    updateSortDirButton();
+    writeSortToUrl();
+    renderBooks();
+  });
+  document.getElementById("library-sort-dir").addEventListener("click", () => {
+    currentDir = currentDir === "asc" ? "desc" : "asc";
+    updateSortDirButton();
+    writeSortToUrl();
     renderBooks();
   });
   document.getElementById("view-grid-btn").addEventListener("click", () => setView("grid"));

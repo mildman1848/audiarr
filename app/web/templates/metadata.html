@@ -7,7 +7,7 @@
 {% block content %}
   <p class="section-hint">{{ t.metadata_subtitle }}</p>
 
-  <section class="panel">
+  <section class="panel sticky-toolbar">
     <div class="section-head">
       <span class="eyebrow">{{ t.metadata_eyebrow }}</span>
       <h2>{{ t.metadata_search_button }}</h2>
@@ -34,8 +34,43 @@
   <div id="metadata-results" class="card">
     <p class="muted">{{ t.metadata_results_hint }}</p>
   </div>
+
+  <div id="add-book-overlay" class="import-overlay" hidden>
+    <div class="card" style="width:min(560px, 92vw);max-height:85vh;overflow-y:auto;">
+      <div class="section-head">
+        <span class="eyebrow">{{ t.metadata_eyebrow }}</span>
+        <h2>{{ t.add_book_modal_title }}</h2>
+      </div>
+      <div id="add-book-summary"></div>
+      <div class="inline-form toolbar" style="margin-top:0.5rem;">
+        <label style="flex:1 1 100%;">{{ t.add_book_authors_label }}
+          <div id="add-book-authors-chips" class="library-badge-row"></div>
+          <input type="text" id="add-book-author-input" placeholder="{{ t.add_book_add_placeholder }}">
+        </label>
+        <label style="flex:1 1 100%;">{{ t.add_book_narrators_label }}
+          <div id="add-book-narrators-chips" class="library-badge-row"></div>
+          <input type="text" id="add-book-narrator-input" placeholder="{{ t.add_book_add_placeholder }}">
+        </label>
+        <label>{{ t.add_book_root_folder_label }}
+          <select id="add-book-root-folder" required></select>
+        </label>
+        <label>{{ t.book_detail_quality_profile_label }}
+          <select id="add-book-quality-profile"></select>
+        </label>
+        <label class="inline-check">
+          <input type="checkbox" id="add-book-monitored" checked>
+          {{ t.add_book_monitored_label }}
+        </label>
+      </div>
+      <p id="add-book-msg" class="muted small" role="status"></p>
+      <div class="button-row">
+        <button type="button" id="add-book-confirm" class="btn btn-primary">{{ t.add_book_confirm }}</button>
+        <button type="button" id="add-book-cancel" class="btn btn-secondary">{{ t.import_match_close }}</button>
+      </div>
+    </div>
+  </div>
 {% endblock %}
 
 {% block scripts %}
-  <script src="/static/js/metadata.js?v={{ version }}"></script>
+  <script src="/static/js/metadata.js?v={{ version }}-addwizard"></script>
 {% endblock %}

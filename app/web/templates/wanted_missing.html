@@ -10,6 +10,14 @@
   </div>
   <div class="toolbar-group toolbar-right">
     <input type="search" id="wanted-filter" class="toolbar-input" placeholder="{{ t.wanted_filter_placeholder }}" aria-label="{{ t.wanted_filter_placeholder }}">
+    <select id="wanted-reason-filter" class="toolbar-select" aria-label="{{ t.wanted_reason_filter_label }}">
+      <option value="">{{ t.wanted_reason_filter_all }}</option>
+    </select>
+    <select id="wanted-sort" class="toolbar-select" aria-label="{{ t.toolbar_sort }}">
+      <option value="title">{{ t.toolbar_sort_title }}</option>
+      <option value="author">{{ t.toolbar_sort_author }}</option>
+      <option value="release_date">{{ t.wanted_col_release_date }}</option>
+    </select>
   </div>
 {% endblock %}
 
@@ -44,5 +52,5 @@
 {% endblock %}
 
 {% block scripts %}
-  <script src="/static/js/wanted.js?v={{ version }}-wantedmissing"></script>
+  <script src="/static/js/wanted.js?v={{ version }}-filtersort"></script>
 {% endblock %}

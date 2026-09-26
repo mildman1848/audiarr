@@ -26,6 +26,7 @@
   --z-topbar: 5;
   --z-sidebar-backdrop: 45;
   --z-sidebar: 50;
+  --topbar-height: 60px;
 }
 
 * {
@@ -235,12 +236,25 @@ body {
   display: flex;
   align-items: center;
   gap: 1rem;
+  min-height: var(--topbar-height);
   padding: 0.85rem 2rem;
   background: var(--bg-topbar);
   border-bottom: 1px solid var(--border-color);
   position: sticky;
   top: 0;
   z-index: var(--z-topbar);
+}
+
+/* Sticky search/filter toolbar (Starr parity, issue #50): pins just below
+   the topbar so a long result list can scroll under it. Opt-in per page
+   via this class rather than a global .page-toolbar change. */
+.sticky-toolbar {
+  position: sticky;
+  top: var(--topbar-height);
+  z-index: 4;
+  background: var(--bg-body);
+  padding-top: 0.5rem;
+  margin-top: -0.5rem;
 }
 
 .topbar-heading {
@@ -633,6 +647,66 @@ body {
 
 .table tbody tr:last-child td {
   border-bottom: none;
+}
+
+/* Compact density (Starr-style dense rows, issue #50): tighter padding and
+   no wrapping in identity columns so rows stay scannable at a glance. */
+.table-compact th,
+.table-compact td {
+  padding: 0.32rem 0.6rem;
+}
+
+.table td.nowrap,
+.table th.nowrap {
+  white-space: nowrap;
+}
+
+/* Clickable sortable column headers (issue #50, Starr parity). */
+.sortable-col {
+  padding: 0;
+}
+
+.sortable-col-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.15rem;
+  width: 100%;
+  padding: 0.45rem 0.6rem;
+  background: transparent;
+  border: none;
+  color: inherit;
+  font: inherit;
+  text-transform: inherit;
+  letter-spacing: inherit;
+  cursor: pointer;
+  text-align: left;
+}
+
+.sortable-col-btn:hover,
+.sortable-col-btn:focus-visible {
+  color: var(--audiarr-accent);
+  outline: none;
+}
+
+.sortable-col.is-sorted {
+  color: var(--audiarr-accent);
+}
+
+/* Monogram avatar fallback for authors/narrators without a photo (issue
+   #50) -- every person in Audiarr today, so this is always the fallback. */
+.avatar-monogram {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 1.3rem;
+  height: 1.3rem;
+  border-radius: 50%;
+  margin-right: 0.35rem;
+  font-size: 0.62rem;
+  font-weight: 700;
+  color: #fff;
+  vertical-align: middle;
+  flex-shrink: 0;
 }
 
 .plain-list {

@@ -57,6 +57,7 @@ function renderUnmatched(rows) {
         <td>${r.exists ? "" : `<span class="badge badge-error">${esc(T.import_missing)}</span>`}</td>
         <td>
           <div class="button-row">
+            <button type="button" class="btn btn-secondary" data-retry-folder="${esc(r.folder_path)}" data-retry-title="${esc(r.guessed_title)}" data-retry-author="${esc(r.guessed_author)}">${esc(T.import_action_retry)}</button>
             <button type="button" class="btn btn-primary" data-match-folder="${esc(r.folder_path)}">${esc(T.import_action_match)}</button>
             <button type="button" class="btn btn-danger" data-ignore-folder="${esc(r.folder_path)}">${esc(T.import_action_ignore)}</button>
           </div>
@@ -84,6 +85,11 @@ function renderUnmatched(rows) {
   });
   container.querySelectorAll("[data-ignore-folder]").forEach((btn) => {
     btn.addEventListener("click", () => ignoreFolder(btn.dataset.ignoreFolder));
+  });
+  container.querySelectorAll("[data-retry-folder]").forEach((btn) => {
+    btn.addEventListener("click", () =>
+      retryMatch(btn.dataset.retryFolder, btn.dataset.retryTitle, btn.dataset.retryAuthor)
+    );
   });
 }
 
@@ -169,6 +175,18 @@ function closeMatchModal() {
   document.getElementById("import-match-overlay").hidden = true;
   matchFolderPath = "";
   lastMatchResults = [];
+}
+
+// Per-row "Retry" action (#50): opens the same match modal as "Match", but
+// pre-fills the query from the folder-name guess and searches immediately
+// instead of waiting for the user to type/submit — reuses the existing
+// /api/v1/metadata/search call behind runMatchSearch, no new endpoint.
+function retryMatch(folderPath, guessedTitle, guessedAuthor) {
+  openMatchModal(folderPath);
+  const query = [guessedTitle, guessedAuthor].filter(Boolean).join(" ").trim();
+  if (!query) return;
+  document.getElementById("import-match-query").value = query;
+  runMatchSearch(new Event("submit"));
 }
 
 async function runMatchSearch(event) {

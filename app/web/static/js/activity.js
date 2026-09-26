@@ -129,11 +129,13 @@ async function refreshQueue() {
           <td>${progressBar(s.progress_percent)}</td>
           <td>${esc(humanSize(s.size_left))}</td>
           <td>${esc(s.time_left || "—")}</td>
+          <td>${queueControlsHtml()}</td>
         </tr>`
       )
       .join("");
 
     container.innerHTML = `
+      <p class="muted small">${esc(T.activity_queue_controls_unavailable)}</p>
       <div class="table-scroll">
         <table class="table">
           <thead>
@@ -144,6 +146,7 @@ async function refreshQueue() {
               <th>${esc(T.activity_col_progress)}</th>
               <th>${esc(T.activity_col_size_left)}</th>
               <th>${esc(T.activity_col_time_left)}</th>
+              <th>${esc(T.library_col_actions)}</th>
             </tr>
           </thead>
           <tbody>${rows}</tbody>
@@ -152,6 +155,20 @@ async function refreshQueue() {
   } catch (err) {
     container.innerHTML = `<p class="muted">${esc(T.activity_queue_error)} (${esc(err.message)})</p>`;
   }
+}
+
+// Starr-style per-row pause/remove controls (issue #50) -- rendered
+// disabled with an explanatory tooltip, since Audiarr's SABnzbdClient (see
+// app/connections/sabnzbd.py) only implements queue()/history()/add_nzb(),
+// not pause/resume/remove/priority. Do not wire these up without a real
+// backend control endpoint behind them.
+function queueControlsHtml() {
+  const title = esc(T.activity_queue_controls_unavailable);
+  return `
+    <div class="button-row">
+      <button type="button" class="btn btn-secondary" disabled title="${title}" aria-label="${esc(T.activity_queue_pause)}">⏸</button>
+      <button type="button" class="btn btn-danger" disabled title="${title}" aria-label="${esc(T.activity_queue_remove)}">✕</button>
+    </div>`;
 }
 
 async function refreshHistory() {

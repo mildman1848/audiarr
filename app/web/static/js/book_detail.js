@@ -59,6 +59,36 @@ function qualityProfileOptionsHtml(selected, profiles) {
   return options.join("");
 }
 
+function rootFolderOptionsHtml(selectedId, rootFolders) {
+  const options = [
+    `<option value="" ${selectedId ? "" : "selected"}>${esc(T.book_detail_root_folder_none)}</option>`,
+  ];
+  for (const f of rootFolders) {
+    const label = f.label ? `${f.label} — ${f.path}` : f.path;
+    options.push(
+      `<option value="${f.id}" ${selectedId === f.id ? "selected" : ""}>${esc(label)}</option>`
+    );
+  }
+  return options.join("");
+}
+
+// Initials for a monogram avatar fallback (Audiarr has no author/narrator
+// photos at all, so this is always the fallback), same helper as library.js.
+function initials(name) {
+  const parts = String(name || "").trim().split(/\s+/).filter(Boolean);
+  if (!parts.length) return "?";
+  if (parts.length === 1) return parts[0].slice(0, 2).toUpperCase();
+  return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase();
+}
+
+function monogramHtml(name) {
+  if (!name) return "";
+  let hash = 0;
+  for (let i = 0; i < name.length; i += 1) hash = (hash * 31 + name.charCodeAt(i)) >>> 0;
+  const hue = hash % 360;
+  return `<span class="avatar-monogram" style="background:hsl(${hue},45%,32%);" title="${esc(name)}">${esc(initials(name))}</span>`;
+}
+
 function chipStyleAttr(color) {
   return color ? ` style="background:${esc(color)};color:#fff;border-color:transparent;"` : "";
 }
@@ -84,12 +114,17 @@ function tagsEditorHtml(tags) {
     </div>`;
 }
 
-function renderBook(book, files, profiles) {
+function renderBook(book, files, profiles, rootFolders) {
   const container = document.getElementById("book-detail");
 
-  const authorsChips = (book.authors || []).map((a) => `<span class="badge">${esc(a)}</span>`).join(" ") || "—";
+  const authorsChips =
+    (book.authors || [])
+      .map((a) => `<span class="badge">${monogramHtml(a)}${esc(a)}</span>`)
+      .join(" ") || "—";
   const narratorsChips =
-    (book.narrators || []).map((n) => `<span class="badge">${esc(n)}</span>`).join(" ") || "—";
+    (book.narrators || [])
+      .map((n) => `<span class="badge">${monogramHtml(n)}${esc(n)}</span>`)
+      .join(" ") || "—";
   const seriesBadge = book.series
     ? `<span class="badge">${esc(book.series_position ? `${book.series} #${book.series_position}` : book.series)}</span>`
     : "";
@@ -129,6 +164,10 @@ function renderBook(book, files, profiles) {
         <p class="book-hero-line">
           <span class="book-hero-line-label">${esc(T.book_detail_quality_profile_label)}</span>
           <select id="book-detail-quality-profile-select">${qualityProfileOptionsHtml(book.quality_profile, profiles)}</select>
+        </p>
+        <p class="book-hero-line">
+          <span class="book-hero-line-label">${esc(T.book_detail_root_folder_label)}</span>
+          <select id="book-detail-root-folder-select">${rootFolderOptionsHtml(book.root_folder_id, rootFolders)}</select>
         </p>
         <p class="book-hero-meta-heading">${esc(T.book_detail_meta_heading)}</p>
         <div class="book-hero-stats">
@@ -230,6 +269,35 @@ function wireQualityProfileSelect(bookId) {
   select.addEventListener("change", () => updateQualityProfile(bookId, select.value, select));
 }
 
+// Saves the book's root-folder preference (set at Add time or here, #50)
+// via the existing book PATCH endpoint; selecting "No preference" clears it
+// back to NULL server-side.
+async function updateRootFolder(bookId, value, select) {
+  select.disabled = true;
+  try {
+    const resp = await fetch(`/api/v1/library/books/${bookId}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ root_folder_id: value ? Number(value) : null }),
+    });
+    if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+    currentBook = await resp.json();
+    if (window.AudiarrToast) window.AudiarrToast.success(T.book_detail_root_folder_updated);
+  } catch (err) {
+    if (window.AudiarrToast) {
+      window.AudiarrToast.error(`${T.book_detail_root_folder_error} (${err.message})`);
+    }
+  } finally {
+    select.disabled = false;
+  }
+}
+
+function wireRootFolderSelect(bookId) {
+  const select = document.getElementById("book-detail-root-folder-select");
+  if (!select) return;
+  select.addEventListener("change", () => updateRootFolder(bookId, select.value, select));
+}
+
 // Saves the book's full tag list via the PATCH endpoint (create-on-the-fly
 // by label), then re-renders the hero card in place from the server's
 // response so the chip list always reflects what actually got saved.
@@ -291,13 +359,48 @@ function wireTagsEditor(bookId) {
 
 let currentFiles = [];
 let currentProfiles = [];
+let currentRootFolders = [];
 
 // Re-renders the hero/detail card from currentBook (e.g. after a tag edit)
 // and re-wires the event listeners the fresh markup needs.
 function refreshBookView() {
-  renderBook(currentBook, currentFiles, currentProfiles);
+  renderBook(currentBook, currentFiles, currentProfiles, currentRootFolders);
   wireQualityProfileSelect(currentBook.id);
+  wireRootFolderSelect(currentBook.id);
   wireTagsEditor(currentBook.id);
+}
+
+// Re-fetches this book's metadata from its linked provider (toolbar
+// "Refresh" action, #50) and re-renders in place.
+async function refreshBookMetadata(bookId, btn) {
+  const originalLabel = btn.textContent;
+  btn.disabled = true;
+  btn.textContent = T.book_detail_refreshing;
+  try {
+    const resp = await fetch(`/api/v1/library/books/${bookId}/refresh`, { method: "POST" });
+    const body = await resp.json().catch(() => ({}));
+    if (!resp.ok) {
+      const detail = typeof body.detail === "string" ? body.detail : `HTTP ${resp.status}`;
+      throw new Error(detail);
+    }
+    currentBook = body;
+    refreshBookView();
+    if (window.AudiarrToast) window.AudiarrToast.success(T.book_detail_refresh_success);
+  } catch (err) {
+    if (window.AudiarrToast) window.AudiarrToast.error(`${T.book_detail_refresh_error} (${err.message})`);
+  } finally {
+    btn.disabled = false;
+    btn.textContent = originalLabel;
+  }
+}
+
+// Toolbar "Search" action (#50): jumps to the interactive release Search
+// page, prefilled with this book's title + authors, and triggers a search
+// there -- reuses the existing /search page/endpoint rather than adding a
+// new backend search trigger.
+function searchForBook(book) {
+  const query = [book.title, ...(book.authors || [])].filter(Boolean).join(" ");
+  window.location.href = `/search?q=${encodeURIComponent(query)}`;
 }
 
 // -- organize (issue #29: preview/apply pattern-driven file moves) ----------
@@ -415,10 +518,11 @@ async function loadBook() {
   const container = document.getElementById("book-detail");
   const bookId = container.dataset.bookId;
   try {
-    const [bookResp, filesResp, settingsResp] = await Promise.all([
+    const [bookResp, filesResp, settingsResp, rootFoldersResp] = await Promise.all([
       fetch(`/api/v1/library/books/${bookId}`),
       fetch(`/api/v1/library/books/${bookId}/files`),
       fetch("/api/v1/settings"),
+      fetch("/api/v1/library/root-folders"),
     ]);
     if (bookResp.status === 404) {
       container.innerHTML = `<p class="muted">${esc(T.book_detail_not_found)}</p>`;
@@ -429,9 +533,14 @@ async function loadBook() {
     currentFiles = filesResp.ok ? await filesResp.json() : [];
     const settings = settingsResp.ok ? await settingsResp.json() : {};
     currentProfiles = settings.quality_profiles || [];
+    currentRootFolders = rootFoldersResp.ok ? await rootFoldersResp.json() : [];
     refreshBookView();
     const deleteBtn = document.getElementById("book-detail-delete-btn");
     if (deleteBtn) deleteBtn.disabled = false;
+    const refreshBtn = document.getElementById("book-detail-refresh-btn");
+    if (refreshBtn) refreshBtn.disabled = false;
+    const searchBtn = document.getElementById("book-detail-search-btn");
+    if (searchBtn) searchBtn.disabled = false;
     const organizePreviewBtn = document.getElementById("book-detail-organize-preview-btn");
     if (organizePreviewBtn) organizePreviewBtn.disabled = false;
   } catch (err) {
@@ -445,6 +554,18 @@ document.addEventListener("DOMContentLoaded", () => {
   if (deleteBtn) {
     deleteBtn.addEventListener("click", () => {
       if (currentBook) deleteBook(currentBook.id, currentBook.title);
+    });
+  }
+  const refreshBtn = document.getElementById("book-detail-refresh-btn");
+  if (refreshBtn) {
+    refreshBtn.addEventListener("click", () => {
+      if (currentBook) refreshBookMetadata(currentBook.id, refreshBtn);
+    });
+  }
+  const searchBtn = document.getElementById("book-detail-search-btn");
+  if (searchBtn) {
+    searchBtn.addEventListener("click", () => {
+      if (currentBook) searchForBook(currentBook);
     });
   }
   const organizePreviewBtn = document.getElementById("book-detail-organize-preview-btn");

@@ -316,4 +316,13 @@ document.addEventListener("DOMContentLoaded", () => {
       renderResults();
     });
   }
+
+  // Deep-link from Book detail's "Search" toolbar action (#50): ?q=<query>
+  // prefills and immediately runs the search, same query box a manual
+  // search would use.
+  const prefill = new URLSearchParams(window.location.search).get("q");
+  if (prefill) {
+    document.getElementById("rs-query").value = prefill;
+    runSearch(new Event("submit"));
+  }
 });

@@ -9,9 +9,17 @@ const T = window.AUDIARR_I18N || {};
 // Cache of the last fetched list so the filter field can re-render without
 // refetching, same pattern as library.js.
 let allMissing = [];
+let currentReasonFilter = "";
+let currentSort = "title";
 
 // Cache of the last fetched cutoff-unmet list.
 let allCutoff = [];
+
+const MISSING_SORT_ACCESSORS = {
+  title: (b) => (b.title || "").toLowerCase(),
+  author: (b) => ((b.authors && b.authors[0]) || "").toLowerCase(),
+  release_date: (b) => b.release_date || "",
+};
 
 function esc(value) {
   return String(value ?? "").replace(/[&<>"']/g, (c) => ({
@@ -21,6 +29,23 @@ function esc(value) {
     '"': "&quot;",
     "'": "&#39;",
   }[c]));
+}
+
+// Initials for a monogram avatar fallback (Audiarr has no author photos),
+// same helper as library.js/book_detail.js/metadata.js.
+function initials(name) {
+  const parts = String(name || "").trim().split(/\s+/).filter(Boolean);
+  if (!parts.length) return "?";
+  if (parts.length === 1) return parts[0].slice(0, 2).toUpperCase();
+  return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase();
+}
+
+function monogramHtml(name) {
+  if (!name) return "";
+  let hash = 0;
+  for (let i = 0; i < name.length; i += 1) hash = (hash * 31 + name.charCodeAt(i)) >>> 0;
+  const hue = hash % 360;
+  return `<span class="avatar-monogram" style="background:hsl(${hue},45%,32%);" title="${esc(name)}">${esc(initials(name))}</span>`;
 }
 
 function reasonLabel(reason) {
@@ -37,11 +62,43 @@ function coverHtml(b) {
 
 function filteredMissing() {
   const query = (document.getElementById("wanted-filter").value || "").trim().toLowerCase();
-  if (!query) return allMissing;
-  return allMissing.filter((b) => {
-    const haystack = [b.title, ...(b.authors || []), b.series].join(" ").toLowerCase();
-    return haystack.includes(query);
-  });
+  let books = allMissing;
+  if (currentReasonFilter) {
+    books = books.filter((b) => b.reason === currentReasonFilter);
+  }
+  if (query) {
+    books = books.filter((b) => {
+      const haystack = [b.title, ...(b.authors || []), b.series].join(" ").toLowerCase();
+      return haystack.includes(query);
+    });
+  }
+  return books;
+}
+
+// Client-side only sort, same pattern as library.js's sortedBooks.
+function sortedMissing(books) {
+  const accessor = MISSING_SORT_ACCESSORS[currentSort] || MISSING_SORT_ACCESSORS.title;
+  const sorted = [...books];
+  sorted.sort((a, b) => String(accessor(a)).localeCompare(String(accessor(b))));
+  return sorted;
+}
+
+// Rebuilds the reason-filter dropdown from the reasons actually present in
+// the currently loaded list (only "missingFiles" today, extensible),
+// keeping the current selection if it still exists -- same pattern as
+// library.js's populateTagFilterOptions.
+function populateReasonFilterOptions() {
+  const select = document.getElementById("wanted-reason-filter");
+  if (!select) return;
+  const reasons = [...new Set(allMissing.map((b) => b.reason))].filter(Boolean);
+  select.innerHTML =
+    `<option value="">${esc(T.wanted_reason_filter_all)}</option>` +
+    reasons.map((r) => `<option value="${esc(r)}">${esc(reasonLabel(r))}</option>`).join("");
+  if (reasons.includes(currentReasonFilter)) {
+    select.value = currentReasonFilter;
+  } else {
+    currentReasonFilter = "";
+  }
 }
 
 function renderRow(b) {
@@ -49,7 +106,7 @@ function renderRow(b) {
     <tr>
       <td><div class="library-cover small">${coverHtml(b)}</div></td>
       <td>${esc(b.title)}</td>
-      <td>${esc((b.authors || []).join(", ")) || "—"}</td>
+      <td>${monogramHtml((b.authors || [])[0])}${esc((b.authors || []).join(", ")) || "—"}</td>
       <td>${esc(b.release_date) || "—"}</td>
       <td>${esc(b.language) || "—"}</td>
       <td><span class="badge">${esc(reasonLabel(b.reason))}</span></td>
@@ -65,7 +122,7 @@ function renderMissing() {
     return;
   }
 
-  const books = filteredMissing();
+  const books = sortedMissing(filteredMissing());
   if (!books.length) {
     container.innerHTML = window.AudiarrUI.emptyState({ icon: "⌕", title: T.toolbar_search_no_results });
     return;
@@ -96,6 +153,7 @@ async function loadMissing() {
     const resp = await fetch("/api/v1/wanted/missing");
     if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
     allMissing = await resp.json();
+    populateReasonFilterOptions();
     renderMissing();
   } catch (err) {
     allMissing = [];
@@ -116,7 +174,7 @@ function renderCutoffRow(b) {
   return `
     <tr>
       <td>${esc(b.title)}</td>
-      <td>${esc((b.authors || []).join(", ")) || "—"}</td>
+      <td>${monogramHtml((b.authors || [])[0])}${esc((b.authors || []).join(", ")) || "—"}</td>
       <td>${esc(cutoffQualitySummary(b))}</td>
       <td>${esc(b.profile_name)} / ${esc(b.cutoff_name)}</td>
       <td><button type="button" class="btn btn-primary" data-book-id="${b.id}">${esc(T.wanted_cutoff_search)}</button></td>
@@ -207,4 +265,12 @@ document.addEventListener("DOMContentLoaded", () => {
     loadCutoff();
   });
   document.getElementById("wanted-filter").addEventListener("input", renderMissing);
+  document.getElementById("wanted-reason-filter").addEventListener("change", (event) => {
+    currentReasonFilter = event.target.value;
+    renderMissing();
+  });
+  document.getElementById("wanted-sort").addEventListener("change", (event) => {
+    currentSort = event.target.value;
+    renderMissing();
+  });
 });
