@@ -13,6 +13,10 @@
 {% block content %}
   <p class="section-hint">{{ t.dashboard_welcome }}</p>
 
+  <div id="dashboard-health-banner" class="health-banner muted" hidden>
+    <span id="dashboard-health-banner-text">{{ t.activity_loading }}</span>
+  </div>
+
   <section class="panel">
     <div class="section-head">
       <span class="eyebrow">{{ t.dashboard_eyebrow }}</span>
@@ -91,4 +95,5 @@
 
 {% block scripts %}
   <script src="/static/js/app.js?v={{ version }}"></script>
+  <script src="/static/js/index.js?v={{ version }}-starrtabs"></script>
 {% endblock %}

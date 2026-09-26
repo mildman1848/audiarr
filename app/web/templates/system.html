@@ -14,89 +14,152 @@
   <div id="system-status-root">
     <p class="section-hint">{{ t.system_subtitle }}</p>
 
-    <div class="card-grid wide system-status-grid">
-      <section class="card system-health-card" id="system-health-section">
-        <div class="section-head">
-          <span class="eyebrow">{{ t.system_eyebrow }}</span>
-          <h2>{{ t.system_health }}</h2>
-        </div>
-        <p id="system-health-status" class="muted">{{ t.activity_loading }}</p>
-      </section>
+    <!-- Starr-style Status/Tasks/Events tab bar (issue #49): client-side only,
+         active tab persisted via ?tab= so it stays deep-linkable/bookmarkable
+         and reloadable directly by browser smoke tests. -->
+    <div class="section-tabs system-tabs" role="tablist" aria-label="{{ t.system_tabs_label }}">
+      <button type="button" id="system-tab-status" class="system-tab active" role="tab" aria-selected="true" aria-controls="system-panel-status" data-system-tab="status" tabindex="0">{{ t.system_tab_status }}</button>
+      <button type="button" id="system-tab-tasks" class="system-tab" role="tab" aria-selected="false" aria-controls="system-panel-tasks" data-system-tab="tasks" tabindex="-1">{{ t.system_tab_tasks }}</button>
+      <button type="button" id="system-tab-events" class="system-tab" role="tab" aria-selected="false" aria-controls="system-panel-events" data-system-tab="events" tabindex="-1">{{ t.system_tab_events }}</button>
+    </div>
 
-      <section class="card" id="system-about-section">
-        <div class="section-head">
-          <span class="eyebrow">{{ t.system_eyebrow }}</span>
-          <h2>{{ t.system_title }}</h2>
-        </div>
-        <dl class="system-info-list">
-          <dt>{{ t.system_app_name }}</dt>
-          <dd id="system-app-name">—</dd>
-          <dt>{{ t.system_version }}</dt>
-          <dd id="system-version">—</dd>
-          <dt>{{ t.system_python_version }}</dt>
-          <dd id="system-python-version">—</dd>
-          <dt>{{ t.system_os_name }}</dt>
-          <dd id="system-os-name">—</dd>
-        </dl>
-      </section>
+    <div id="system-panel-status" class="system-tab-panel" role="tabpanel" aria-labelledby="system-tab-status" tabindex="0">
+      <div class="card-grid wide system-status-grid">
+        <section class="card system-health-card" id="system-health-section">
+          <div class="section-head">
+            <span class="eyebrow">{{ t.system_eyebrow }}</span>
+            <h2>{{ t.system_health }}</h2>
+          </div>
+          <p id="system-health-status" class="muted">{{ t.activity_loading }}</p>
+        </section>
 
-      <section class="card" id="system-updates-section">
+        <section class="card" id="system-about-section">
+          <div class="section-head">
+            <span class="eyebrow">{{ t.system_eyebrow }}</span>
+            <h2>{{ t.system_title }}</h2>
+          </div>
+          <dl class="system-info-list">
+            <dt>{{ t.system_app_name }}</dt>
+            <dd id="system-app-name">—</dd>
+            <dt>{{ t.system_version }}</dt>
+            <dd id="system-version">—</dd>
+            <dt>{{ t.system_python_version }}</dt>
+            <dd id="system-python-version">—</dd>
+            <dt>{{ t.system_os_name }}</dt>
+            <dd id="system-os-name">—</dd>
+          </dl>
+        </section>
+
+        <section class="card" id="system-updates-section">
+          <div class="section-head">
+            <span class="eyebrow">{{ t.system_eyebrow }}</span>
+            <h2>{{ t.system_updates_heading }}</h2>
+          </div>
+          <p id="system-update-banner" class="update-banner" hidden></p>
+          <dl class="system-info-list">
+            <dt>{{ t.system_updates_branch }}</dt>
+            <dd id="system-updates-branch">—</dd>
+            <dt>{{ t.system_updates_automatic }}</dt>
+            <dd id="system-updates-automatic">—</dd>
+            <dt>{{ t.system_updates_check_enabled }}</dt>
+            <dd id="system-updates-check-enabled">—</dd>
+            <dt>{{ t.system_updates_latest_version }}</dt>
+            <dd id="system-updates-latest-version">—</dd>
+            <dt>{{ t.system_updates_last_checked }}</dt>
+            <dd id="system-updates-last-checked">—</dd>
+            <dt>{{ t.system_updates_last_error }}</dt>
+            <dd id="system-updates-last-error">—</dd>
+          </dl>
+          <div class="button-row">
+            <button type="button" id="system-update-check-btn" class="btn btn-secondary">{{ t.system_update_check_now }}</button>
+          </div>
+          <p class="muted small" id="system-update-check-msg" hidden></p>
+        </section>
+
+        <section class="card" id="system-backup-section">
+          <div class="section-head">
+            <span class="eyebrow">{{ t.system_eyebrow }}</span>
+            <h2>{{ t.system_backup_heading }}</h2>
+          </div>
+          <dl class="system-info-list">
+            <dt>{{ t.system_backup_folder }}</dt>
+            <dd id="system-backup-folder">—</dd>
+            <dt>{{ t.system_backup_interval }}</dt>
+            <dd id="system-backup-interval">—</dd>
+            <dt>{{ t.system_backup_retention }}</dt>
+            <dd id="system-backup-retention">—</dd>
+          </dl>
+        </section>
+
+        <section class="card" id="system-logging-section">
+          <div class="section-head">
+            <span class="eyebrow">{{ t.system_eyebrow }}</span>
+            <h2>{{ t.system_logging_heading }}</h2>
+          </div>
+          <dl class="system-info-list">
+            <dt>{{ t.system_logging_level }}</dt>
+            <dd id="system-logging-level">—</dd>
+            <dt>{{ t.system_logging_retention }}</dt>
+            <dd id="system-logging-retention">—</dd>
+          </dl>
+        </section>
+      </div>
+    </div>
+
+    <div id="system-panel-tasks" class="system-tab-panel" role="tabpanel" aria-labelledby="system-tab-tasks" tabindex="0" hidden>
+      <section class="card" id="system-tasks-section">
         <div class="section-head">
           <span class="eyebrow">{{ t.system_eyebrow }}</span>
-          <h2>{{ t.system_updates_heading }}</h2>
+          <h2>{{ t.tasks_heading }}</h2>
         </div>
-        <p id="system-update-banner" class="update-banner" hidden></p>
-        <dl class="system-info-list">
-          <dt>{{ t.system_updates_branch }}</dt>
-          <dd id="system-updates-branch">—</dd>
-          <dt>{{ t.system_updates_automatic }}</dt>
-          <dd id="system-updates-automatic">—</dd>
-          <dt>{{ t.system_updates_check_enabled }}</dt>
-          <dd id="system-updates-check-enabled">—</dd>
-          <dt>{{ t.system_updates_latest_version }}</dt>
-          <dd id="system-updates-latest-version">—</dd>
-          <dt>{{ t.system_updates_last_checked }}</dt>
-          <dd id="system-updates-last-checked">—</dd>
-          <dt>{{ t.system_updates_last_error }}</dt>
-          <dd id="system-updates-last-error">—</dd>
-        </dl>
+        <p class="section-hint">{{ t.tasks_subtitle }}</p>
+        <div class="table-scroll">
+          <table class="table" id="system-tasks-table">
+            <thead>
+              <tr>
+                <th>{{ t.tasks_col_name }}</th>
+                <th>{{ t.tasks_col_interval }}</th>
+                <th>{{ t.tasks_col_last_run }}</th>
+              </tr>
+            </thead>
+            <tbody id="system-tasks-tbody">
+              <tr><td colspan="3" class="muted">{{ t.activity_loading }}</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </section>
+    </div>
+
+    <div id="system-panel-events" class="system-tab-panel" role="tabpanel" aria-labelledby="system-tab-events" tabindex="0" hidden>
+      <section class="card" id="system-events-section">
+        <div class="section-head">
+          <span class="eyebrow">{{ t.system_eyebrow }}</span>
+          <h2>{{ t.events_heading }}</h2>
+        </div>
+        <p class="section-hint">{{ t.events_subtitle }}</p>
         <div class="button-row">
-          <button type="button" id="system-update-check-btn" class="btn btn-secondary">{{ t.system_update_check_now }}</button>
+          <button type="button" id="system-events-refresh-btn" class="btn btn-secondary">{{ t.events_refresh }}</button>
         </div>
-        <p class="muted small" id="system-update-check-msg" hidden></p>
-      </section>
-
-      <section class="card" id="system-backup-section">
-        <div class="section-head">
-          <span class="eyebrow">{{ t.system_eyebrow }}</span>
-          <h2>{{ t.system_backup_heading }}</h2>
+        <div class="table-scroll">
+          <table class="table" id="system-events-table">
+            <thead>
+              <tr>
+                <th>{{ t.events_col_time }}</th>
+                <th>{{ t.events_col_source }}</th>
+                <th>{{ t.events_col_status }}</th>
+                <th>{{ t.events_col_title }}</th>
+              </tr>
+            </thead>
+            <tbody id="system-events-tbody">
+              <tr><td colspan="4" class="muted">{{ t.activity_loading }}</td></tr>
+            </tbody>
+          </table>
         </div>
-        <dl class="system-info-list">
-          <dt>{{ t.system_backup_folder }}</dt>
-          <dd id="system-backup-folder">—</dd>
-          <dt>{{ t.system_backup_interval }}</dt>
-          <dd id="system-backup-interval">—</dd>
-          <dt>{{ t.system_backup_retention }}</dt>
-          <dd id="system-backup-retention">—</dd>
-        </dl>
-      </section>
-
-      <section class="card" id="system-logging-section">
-        <div class="section-head">
-          <span class="eyebrow">{{ t.system_eyebrow }}</span>
-          <h2>{{ t.system_logging_heading }}</h2>
-        </div>
-        <dl class="system-info-list">
-          <dt>{{ t.system_logging_level }}</dt>
-          <dd id="system-logging-level">—</dd>
-          <dt>{{ t.system_logging_retention }}</dt>
-          <dd id="system-logging-retention">—</dd>
-        </dl>
       </section>
     </div>
   </div>
 {% endblock %}
 
 {% block scripts %}
-  <script src="/static/js/system.js?v={{ version }}-systemstatus"></script>
+  <script src="/static/js/system.js?v={{ version }}-starrtabs"></script>
 {% endblock %}

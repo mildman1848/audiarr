@@ -150,6 +150,13 @@ body {
   color: var(--audiarr-accent);
 }
 
+/* Library stays visually primary (bolder label) even when not the active
+   route, since Dashboard occupies the first nav slot as a deliberate
+   deviation from the Starr library-first landing page (issue #49). */
+.side-nav .nav-item-primary .nav-label {
+  font-weight: 700;
+}
+
 /* ---------------------------------------------------------- Mobile toggle */
 
 .sidebar-toggle {
@@ -1242,6 +1249,37 @@ button:disabled,
   font-weight: 600;
 }
 
+/* System/Status page Status/Tasks/Events tab bar (issue #49): same pill
+   look as .section-tabs, but real <button role="tab"> elements instead of
+   links, since switching is client-side only. */
+.system-tab {
+  padding: 0.3rem 0.7rem;
+  background: var(--bg-panel);
+  border: 1px solid var(--border-color);
+  border-radius: 999px;
+  color: var(--text-main);
+  font-size: 0.8rem;
+  font-family: inherit;
+  cursor: pointer;
+}
+
+.system-tab:hover {
+  border-color: var(--audiarr-accent);
+  color: var(--audiarr-accent);
+}
+
+.system-tab:focus-visible {
+  outline: 2px solid var(--audiarr-accent);
+  outline-offset: 1px;
+}
+
+.system-tab.active {
+  background: var(--audiarr-accent-soft);
+  border-color: var(--audiarr-accent);
+  color: var(--audiarr-accent);
+  font-weight: 600;
+}
+
 .card a,
 .panel a {
   color: var(--audiarr-accent);
@@ -1319,6 +1357,23 @@ button:disabled,
 
 .update-banner a {
   color: inherit;
+  font-weight: 600;
+}
+
+/* Dashboard health banner (issue #49): subtle line when healthy, amber
+   warning card when the same /api/v1/system/status health data reports
+   any root-folder issue. */
+.health-banner {
+  margin-bottom: 1rem;
+  padding: 0.6rem 0.85rem;
+  border-radius: var(--radius);
+  font-size: 0.85rem;
+}
+
+.health-banner-warn {
+  border: 1px solid var(--warn);
+  background: rgba(224, 160, 48, 0.14);
+  color: var(--warn);
   font-weight: 600;
 }
 

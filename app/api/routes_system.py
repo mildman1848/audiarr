@@ -10,6 +10,7 @@ from fastapi import APIRouter, HTTPException
 from app import __version__
 from app.backup_service import BackupError, create_backup, list_backups
 from app.config import load_settings
+from app.library.folder_health import probe_root_folder
 from app.update_check import check_for_updates
 
 router = APIRouter()
@@ -21,6 +22,24 @@ async def health() -> dict:
     return {"status": "ok"}
 
 
+async def _root_folder_health_issues(paths: list[str]) -> list[dict]:
+    """Probe configured root folders for existence/writability.
+
+    Reuses the same filesystem probe as GET /api/v1/library/root-folders
+    (see app/library/folder_health.py) instead of a second implementation,
+    so the Dashboard health banner (issue #49) reflects the same state the
+    Library root-folder list already shows.
+    """
+    healths = await asyncio.gather(*(asyncio.to_thread(probe_root_folder, p) for p in paths))
+    issues = []
+    for path, health_result in zip(paths, healths, strict=True):
+        if not health_result.exists:
+            issues.append({"path": path, "issue": "missing"})
+        elif not health_result.writable:
+            issues.append({"path": path, "issue": "read_only"})
+    return issues
+
+
 @router.get("/api/v1/system/status")
 async def system_status() -> dict:
     """Basic system info, similar in spirit to Radarr/Sonarr's system/status.
@@ -28,13 +47,23 @@ async def system_status() -> dict:
     ``updates``/``backup``/``logging`` are derived from the settings
     document (see app/models/settings.py) so the System/Status page can show
     the configured maintenance state without a dedicated endpoint.
+    ``health`` is a minimal read-only aggregation (root folder issues only,
+    no secrets) so the Dashboard health banner (issue #49) can reuse this
+    single endpoint instead of a new one.
     """
     settings = load_settings()
+    root_folder_issues = await _root_folder_health_issues(
+        [rf.path for rf in settings.root_folders]
+    )
     return {
         "appName": "Audiarr",
         "version": __version__,
         "pythonVersion": platform.python_version(),
         "osName": platform.system(),
+        "health": {
+            "ok": not root_folder_issues,
+            "rootFolderIssues": root_folder_issues,
+        },
         "updates": {
             "branch": settings.updates.branch,
             "automatic": settings.updates.automatic,
