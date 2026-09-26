@@ -105,18 +105,31 @@ class ImportScheduler:
 
 
 async def scheduler_loop(
-    scheduler: ImportScheduler, interval_minutes: int, stop_event: asyncio.Event
+    scheduler: ImportScheduler,
+    interval_minutes: int,
+    stop_event: asyncio.Event,
+    delay_first: bool = False,
 ) -> None:
     """Run ``scheduler.run_once()`` every ``interval_minutes`` until stopped.
 
     A non-positive interval is a no-op: ``app.main``'s lifespan only
     creates this task when the configured interval is > 0, but the guard
     is kept here too so the loop stays safe to call directly (as tests do).
+
+    ``delay_first=True`` waits one full interval before the first tick
+    instead of firing immediately at startup. The default (False) keeps
+    the existing immediate-first-run behaviour used by the import/metadata
+    /wanted-search schedulers; the backup scheduler (app/backup_scheduler.py)
+    passes True, since an immediate run would mean surprise I/O at boot and
+    a duplicate backup on every container restart.
     """
     if interval_minutes <= 0:
         return
     interval_seconds = interval_minutes * 60
     log.info("import scheduler started (interval=%d minute(s))", interval_minutes)
+    if delay_first:
+        with contextlib.suppress(TimeoutError):
+            await asyncio.wait_for(stop_event.wait(), timeout=interval_seconds)
     while not stop_event.is_set():
         await scheduler.run_once()
         with contextlib.suppress(TimeoutError):

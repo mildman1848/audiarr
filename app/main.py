@@ -213,6 +213,28 @@ async def lifespan(app: FastAPI):
                 "wanted search scheduler configured but Prowlarr/SABnzbd not both enabled; disabled"
             )
 
+    # Periodic config backup (issue #32): only runs when a positive interval
+    # is configured; 0 (the default) disables it. delay_first=True so the
+    # first backup runs after one full interval instead of firing
+    # immediately at boot -- avoids surprise I/O and a duplicate backup on
+    # every container restart.
+    backup_stop_event = asyncio.Event()
+    backup_task = None
+    backup_interval_hours = settings.backup.interval_hours
+    if backup_interval_hours > 0:
+        from app.backup_scheduler import BackupScheduler
+        from app.import_scheduler import scheduler_loop
+
+        backup_task = asyncio.create_task(
+            scheduler_loop(
+                BackupScheduler(),
+                backup_interval_hours * 60,
+                backup_stop_event,
+                delay_first=True,
+            )
+        )
+        log.info("backup scheduler enabled (interval=%d hour(s))", backup_interval_hours)
+
     yield
 
     if worker_task is not None:
@@ -239,6 +261,11 @@ async def lifespan(app: FastAPI):
         wanted_search_stop_event.set()
         with contextlib.suppress(asyncio.CancelledError):
             await asyncio.wait_for(wanted_search_task, timeout=5)
+
+    if backup_task is not None:
+        backup_stop_event.set()
+        with contextlib.suppress(asyncio.CancelledError):
+            await asyncio.wait_for(backup_task, timeout=5)
 
     if backfill_task is not None:
         with contextlib.suppress(asyncio.CancelledError, TimeoutError):

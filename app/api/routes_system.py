@@ -2,11 +2,13 @@
 
 from __future__ import annotations
 
+import asyncio
 import platform
 
-from fastapi import APIRouter
+from fastapi import APIRouter, HTTPException
 
 from app import __version__
+from app.backup_service import BackupError, create_backup, list_backups
 from app.config import load_settings
 
 router = APIRouter()
@@ -44,5 +46,28 @@ async def system_status() -> dict:
         "logging": {
             "level": settings.logging.level,
             "retentionDays": settings.logging.retention_days,
+        },
+    }
+
+
+@router.post("/api/v1/system/backup")
+async def create_backup_route() -> dict:
+    """Trigger an on-demand backup (see app/backup_service.py for the format)."""
+    try:
+        return await asyncio.to_thread(create_backup, "manual")
+    except BackupError as exc:
+        raise HTTPException(status_code=500, detail=str(exc)) from exc
+
+
+@router.get("/api/v1/system/backup")
+async def list_backups_route() -> dict:
+    """List existing backups plus the settings that govern scheduling/rotation."""
+    settings = load_settings()
+    return {
+        "backups": list_backups(),
+        "settings": {
+            "folder": settings.backup.folder,
+            "intervalHours": settings.backup.interval_hours,
+            "retentionCopies": settings.backup.retention_copies,
         },
     }
