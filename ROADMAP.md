@@ -10,6 +10,7 @@ LinuxServer.io-style Docker deployment.
 - Keep provider integrations replaceable; no hard lock-in to one metadata source.
 - Treat Audible marketplace access conservatively and document assumptions.
 - Keep `/config` persistent and `/data` media-oriented, following LSIO conventions.
+- Stay intentionally close to the Starr UI/UX family (Radarr/Sonarr/Lidarr): familiar navigation, dense data pages, toolbars, settings forms, modals, save bars, and status pages; deviate only where the audiobook domain genuinely requires it.
 - Prefer small verified milestones over a large untested rewrite.
 - Do not build a beautiful UI over an unverified import pipeline. That is how humans summon support tickets.
 
@@ -110,7 +111,7 @@ Phased plan; each phase lands as small verified slices (issue → branch → PR 
 - Tags data model and tagging UI for books and root folders. **Done**
 - Connect editor: webhooks/notifications for grab/import/health events. **Done**
 
-### Phase 4 — Media management — In progress
+### Phase 4 — Media management — Done
 
 - Rename/organize imports per `file_name_pattern` — explicit opt-in only; preview/apply runs per book and never deletes originals. **Done**
 - Hardlink/copy import strategies — per root folder (`copy`/`hardlink`/`move`), free-space checks, hardlink copy fallback, dry-run read-only. **Done**
@@ -123,9 +124,19 @@ Phased plan; each phase lands as small verified slices (issue → branch → PR 
 - Backup/restore documented and tested once for real. **Next**
 - Dependency hygiene and a final security pass (issue #8). **Partial**
 
+### Phase 6 — Starr UI/UX parity for 1.0
+
+Audiarr should feel like a deliberate member of the Starr UI family, not a forked movie app with labels changed. Keep Radarr/Sonarr/Lidarr interaction patterns wherever they make sense, while preserving audiobook-specific entities and workflow semantics.
+
+- Starr UI parity audit and gap matrix (#48). **Next**
+- Shell and navigation Starr parity pass (#49). **Next**
+- Primary data pages Starr parity pass (#50). **Next**
+- Settings Starr parity pass (#51). **Next**
+- Final Starr-style release polish pass (#52). **Next**
+
 ### Release
 
-- `1.0.0` ships when Phases 1–5 are green: the automation loop is complete, quality decisions are per-book, and backups exist.
+- `1.0.0` ships when Phases 1–6 are green: the automation loop is complete, quality decisions are per-book, backups and restore are verified, and the UI/UX is intentionally close to the Starr family.
 
 ## Later Ideas
 
