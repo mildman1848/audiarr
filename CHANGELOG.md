@@ -2,6 +2,14 @@
 
 ## Unreleased
 
+- Document and close the backup/restore drill for Phase 5 item 3 (#34): a
+  new `docs/backup-restore-runbook.md` covering backup contents, restore
+  prerequisites/procedure (Docker Compose and local/dev), rollback, and a
+  verification checklist; linked from the README; records a real restore
+  drill (2026-09-26) performed against a disposable instance, result PASS.
+  Update the Settings backup hint copy (EN/DE) now that restore is
+  documented and tested instead of "planned for a later release". Bump
+  project version to `0.5.3`.
 - Add a display-only update check for Phase 5 item 2 (#33): a single GET against the GitHub releases API (disableable via a new Settings -> General "Update check" toggle, no other telemetry), current/latest version and a Starr-style "update available" callout with a link to the release notes on the System/Status page, and a manual "Check for updates" button plus `POST /api/v1/system/update-check`; Audiarr never auto-updates. EN/DE i18n. Bump project version to `0.5.2`.
 - Add automatic configuration backups for Phase 5 item 1 (#32): safe SQLite online snapshot + `settings.json` ZIP archives with manifest SHA256s, manual backup endpoint/button, backup listing, retention rotation, delayed-first scheduled backups, and EN/DE Settings UI; bump project version to `0.5.1`.
 - Make hardlink the default import strategy with copy as the automatic fallback (zero extra disk usage, sources stay seedable; migration 013 flips existing default-`copy` root folders to `hardlink` since no explicit user choice existed before); UI texts updated to reflect the fallback behavior; bump project version to `0.4.4`.

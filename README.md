@@ -72,8 +72,8 @@ If Docker is unavailable, `make validate` still verifies Python, tests, static c
 
 ## Image targets
 
-- `ghcr.io/mildman1848/audiarr:0.5.2`
-- `docker.io/mildman1848/audiarr:0.5.2`
+- `ghcr.io/mildman1848/audiarr:0.5.3`
+- `docker.io/mildman1848/audiarr:0.5.3`
 
 Optional GitLab/Codeberg container registry targets are supported by CI secrets, but should only be enabled after the first GHCR/Docker Hub build is verified.
 
@@ -91,7 +91,7 @@ Important defaults:
 | Audible locale | `us` |
 | UI language | `en`, with `de` available |
 | Optional translation backend | `none` by default; LibreTranslate-compatible backend optional |
-| Version | `0.5.2` |
+| Version | `0.5.3` |
 
 Versioning follows the Audiarr roadmap, not the household/fork `mldm<N>` suffix:
 
@@ -100,6 +100,16 @@ Versioning follows the Audiarr roadmap, not the household/fork `mldm<N>` suffix:
 ```
 
 Examples: after the second item in Phase 3 is complete, the image version is `0.3.2`; after the first item in Phase 4 is complete, it is `0.4.1`.
+
+## Backups and restore
+
+Audiarr takes automatic (and on-demand) backups of `audiarr.db` and
+`settings.json` into a ZIP archive with a manifest, with retention rotation.
+Restoring is documented and has been tested against a disposable instance.
+
+See [`docs/backup-restore-runbook.md`](docs/backup-restore-runbook.md) for
+what backups contain, restore prerequisites/procedures (Docker Compose and
+local/dev), rollback, a verification checklist, and the real drill result.
 
 ## Publishing policy
 
