@@ -1,5 +1,16 @@
 # Changelog
 
+## 1.0.0
+
+Audiarr 1.0.0 ships as the first complete release: Phases 1-6 of the roadmap are done.
+
+- Complete automation loop (Phase 2): periodic root-folder import scans, auto-import after SABnzbd completes a download, and a metadata refresh / wanted-search scheduler run without manual intervention.
+- Per-book quality decisions (Phase 1): per-book quality profile assignment, upgrade search that chases the profile cutoff for monitored books, and an optional quality filter when grabbing releases.
+- Tags and Connect (Phase 3): first-class tags with book/root-folder assignments and Library filtering, plus a Connect webhook editor for grab/import/health/test events.
+- Media management (Phase 4): explicit preview/apply file organization, per-root-folder import strategies (hardlink default with automatic copy fallback, zero extra disk usage), and root-folder health (free space, writability, existence) surfaced as API fields, library badges, and `health_issue` webhooks.
+- Hardening (Phase 5): automatic config/database backups with retention rotation, a documented and tested backup/restore drill, a display-only update check against the GitHub releases API, and a real Trivy HIGH/CRITICAL security gate in CI.
+- Starr UI/UX parity (Phase 6): shell/navigation, primary data pages, and Settings brought in line with Radarr/Sonarr/Lidarr interaction patterns, finished with a release polish pass.
+
 ## Unreleased
 
 - Final Starr-style release polish pass (#52): tighten Activity and Import empty/config states with shared Starr-style empty-state components and actionable hints; refresh README wording so shipped Profiles/Quality/Connect/Tags and Starr-family UI state are described accurately; mark Phase 6 complete in the roadmap; bump project version to `0.6.4`.

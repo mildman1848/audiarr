@@ -1,7 +1,7 @@
 # Audiarr Roadmap
 
-Audiarr is a pre-1.0 Servarr-style audiobook manager. The project is
-English-first, keeps German as a first-class locale, and targets
+Audiarr is a Servarr-style audiobook manager that shipped `1.0.0`. The
+project is English-first, keeps German as a first-class locale, and targets
 LinuxServer.io-style Docker deployment.
 
 ## Principles
@@ -136,9 +136,9 @@ Audiarr should feel like a deliberate member of the Starr UI family, not a forke
 - Settings Starr parity pass (#51). **Done**
 - Final Starr-style release polish pass (#52). **Done**
 
-### Release
+### Release — Shipped
 
-- `1.0.0` ships when Phases 1–6 are green: the automation loop is complete, quality decisions are per-book, backups and restore are verified, and the UI/UX is intentionally close to the Starr family.
+- `1.0.0` shipped: Phases 1–6 are green. The automation loop is complete, quality decisions are per-book, backups and restore are verified, and the UI/UX is intentionally close to the Starr family.
 
 ## Later Ideas
 

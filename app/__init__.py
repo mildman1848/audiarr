@@ -8,4 +8,4 @@ outbound connection clients, and the minimal server-rendered web UI.
 __all__ = ["__version__"]
 
 # Kept in sync with Dockerfile ARG APP_VERSION and docker-compose.yml.
-__version__ = "0.6.4"
+__version__ = "1.0.0"

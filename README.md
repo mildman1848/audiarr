@@ -4,9 +4,9 @@ Servarr-style audiobook manager with an LSIO/s6 Docker image.
 
 Audiarr manages an audiobook library end to end: metadata search, import
 matching, quality/profile settings, and outbound integrations (Audiobookshelf,
-Prowlarr/SABnzbd, m4b-convertarr) around an existing media stack. It is
-pre-1.0 and still growing, but the core workflows below are implemented and
-tested, not just modeled.
+Prowlarr/SABnzbd, m4b-convertarr) around an existing media stack. Audiarr has
+shipped `1.0.0` and is still actively developed, with the core workflows
+below implemented and tested, not just modeled.
 
 ## What works today
 
@@ -71,8 +71,8 @@ If Docker is unavailable, `make validate` still verifies Python, tests, static c
 
 ## Image targets
 
-- `ghcr.io/mildman1848/audiarr:0.6.4`
-- `docker.io/mildman1848/audiarr:0.6.4`
+- `ghcr.io/mildman1848/audiarr:1.0.0`
+- `docker.io/mildman1848/audiarr:1.0.0`
 
 Optional GitLab/Codeberg container registry targets are supported by CI secrets, but should only be enabled after the first GHCR/Docker Hub build is verified.
 
@@ -94,7 +94,7 @@ Important defaults:
 | Audible locale | `us` |
 | UI language | `en`, with `de` available |
 | Optional translation backend | `none` by default; LibreTranslate-compatible backend optional |
-| Version | `0.6.4` |
+| Version | `1.0.0` |
 
 Versioning follows the Audiarr roadmap, not the household/fork `mldm<N>` suffix:
 
