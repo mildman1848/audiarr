@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 import logging
 from typing import Any, Literal
 
@@ -9,6 +10,7 @@ from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel, Field
 
 from app.config import load_settings
+from app.connect import dispatch_event
 from app.db import get_conn, migrate
 from app.library import (
     BookCreate,
@@ -26,6 +28,7 @@ from app.library import (
     update_book,
     update_root_folder_strategy,
 )
+from app.library.folder_health import FolderHealth, probe_root_folder
 from app.library.import_strategy import DEFAULT_STRATEGY
 from app.library.organizer import apply_preview, build_preview
 
@@ -69,6 +72,10 @@ class RootFolderOut(BaseModel):
     created_at: str
     updated_at: str
     tags: list[TagRef]
+    free_bytes: int | None = None
+    total_bytes: int | None = None
+    writable: bool | None = None
+    exists: bool | None = None
 
 
 class BookIn(BaseModel):
@@ -243,18 +250,66 @@ def _get_entity_tags(
     return [TagRef(**dict(r)) for r in rows]
 
 
+def _health_fields(health: FolderHealth) -> dict[str, Any]:
+    return {
+        "exists": health.exists,
+        "writable": health.writable,
+        "free_bytes": health.free_bytes,
+        "total_bytes": health.total_bytes,
+    }
+
+
+_background_tasks: set[asyncio.Task] = set()
+
+
+def _dispatch_health_issue_if_unhealthy(folder_id: int, path: str, health: FolderHealth) -> None:
+    """Fire-and-forget health_issue dispatch for an unhealthy root folder.
+
+    Runs on every GET while the folder stays unhealthy (no dedupe yet) --
+    acceptable for now since dispatch_event is best-effort and idempotent
+    on the receiving webhook side.
+    """
+    if health.exists and health.writable:
+        return
+    if not health.exists:
+        message = f"Root folder {path!r} does not exist"
+    else:
+        message = f"Root folder {path!r} is not writable" + (
+            f": {health.error}" if health.error else ""
+        )
+    task = asyncio.create_task(
+        dispatch_event(
+            "health_issue",
+            {
+                "integration": "root-folder",
+                "root_folder_id": folder_id,
+                "path": path,
+                "message": message,
+            },
+        )
+    )
+    # Keep a strong reference until done; asyncio only weakly tracks tasks.
+    _background_tasks.add(task)
+    task.add_done_callback(_background_tasks.discard)
+
+
 @router.get("/api/v1/library/root-folders", response_model=list[RootFolderOut])
 async def get_root_folders() -> list[RootFolderOut]:
     _ensure_schema()
     with get_conn() as conn:
         rows = list_root_folders(conn)
+        paths = [r["path"] for r in rows]
+        healths = await asyncio.gather(*(asyncio.to_thread(probe_root_folder, p) for p in paths))
         result = [
             RootFolderOut(
                 **dict(r),
                 tags=_get_entity_tags(conn, "root_folder_tags", "root_folder_id", r["id"]),
+                **_health_fields(health),
             )
-            for r in rows
+            for r, health in zip(rows, healths, strict=True)
         ]
+    for r, health in zip(rows, healths, strict=True):
+        _dispatch_health_issue_if_unhealthy(r["id"], r["path"], health)
     return result
 
 
@@ -271,7 +326,8 @@ async def post_root_folder(data: RootFolderIn) -> RootFolderOut:
         row = get_root_folder(conn, folder_id)
         assert row is not None
         tags = _get_entity_tags(conn, "root_folder_tags", "root_folder_id", folder_id)
-    return RootFolderOut(**dict(row), tags=tags)
+    health = await asyncio.to_thread(probe_root_folder, row["path"])
+    return RootFolderOut(**dict(row), tags=tags, **_health_fields(health))
 
 
 @router.delete("/api/v1/library/root-folders/{folder_id}", status_code=204)
@@ -303,7 +359,8 @@ async def put_root_folder_strategy(folder_id: int, data: RootFolderStrategyIn) -
         row = get_root_folder(conn, folder_id)
         assert row is not None
         tags = _get_entity_tags(conn, "root_folder_tags", "root_folder_id", folder_id)
-    return RootFolderOut(**dict(row), tags=tags)
+    health = await asyncio.to_thread(probe_root_folder, row["path"])
+    return RootFolderOut(**dict(row), tags=tags, **_health_fields(health))
 
 
 # -- books ------------------------------------------------------------------------

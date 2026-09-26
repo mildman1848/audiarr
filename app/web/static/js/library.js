@@ -288,6 +288,22 @@ function folderTagChipsHtml(folder) {
     .join("");
 }
 
+// Render the per-root-folder health badge: free space when healthy, a clear
+// error badge when the folder is missing or read-only (fields come from the
+// #31 folder-health probe and may be null on older API responses).
+function folderHealthBadgeHtml(f) {
+  if (f.exists === false) {
+    return `<span class="badge badge-error">${esc(T.library_root_folder_missing)}</span>`;
+  }
+  if (f.writable === false) {
+    return `<span class="badge badge-error">${esc(T.library_root_folder_readonly)}</span>`;
+  }
+  if (typeof f.free_bytes === "number" && f.free_bytes >= 0) {
+    return `<span class="badge badge-done" title="${esc(T.library_root_folder_free_space)}">${esc(T.library_root_folder_free_space)}: ${esc(humanSize(f.free_bytes))}</span>`;
+  }
+  return `<span class="badge">${esc(T.library_root_folder_health_unknown)}</span>`;
+}
+
 function renderRootFoldersList() {
   const container = document.getElementById("root-folders-list");
   if (!rootFolders.length) {
@@ -305,6 +321,7 @@ function renderRootFoldersList() {
         </div>
         <div class="library-badge-row" style="margin-top:0.35rem;">
           <span class="badge">${esc(T.library_root_folder_strategy_label)}: ${esc(T[`library_root_folder_strategy_${f.import_strategy}`] || f.import_strategy || "copy")}</span>
+          ${folderHealthBadgeHtml(f)}
           ${folderTagChipsHtml(f)}
         </div>
         <div class="inline-form" style="margin-top:0.35rem;">

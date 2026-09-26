@@ -270,6 +270,33 @@ def test_api_root_folder_strategy_update_roundtrip(app_client):
     assert missing.status_code == 404
 
 
+def test_api_root_folder_list_reports_health_for_existing_path(app_client, tmp_path):
+    folder = tmp_path / "audiobooks"
+    folder.mkdir()
+
+    app_client.post("/api/v1/library/root-folders", json={"path": str(folder)})
+    listing = app_client.get("/api/v1/library/root-folders").json()
+
+    assert len(listing) == 1
+    assert listing[0]["exists"] is True
+    assert listing[0]["writable"] is True
+    assert listing[0]["free_bytes"] > 0
+    assert listing[0]["total_bytes"] > 0
+
+
+def test_api_root_folder_list_reports_unhealthy_for_missing_path(app_client, tmp_path):
+    missing = tmp_path / "does-not-exist"
+
+    app_client.post("/api/v1/library/root-folders", json={"path": str(missing)})
+    listing = app_client.get("/api/v1/library/root-folders").json()
+
+    assert len(listing) == 1
+    assert listing[0]["exists"] is False
+    assert listing[0]["writable"] is False
+    assert listing[0]["free_bytes"] is None
+    assert listing[0]["total_bytes"] is None
+
+
 def test_api_book_lifecycle_with_provider_attribution(app_client):
     payload = {
         "title": "Der Vorleser",
