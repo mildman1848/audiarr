@@ -68,6 +68,32 @@
       </form>
       <p id="m4b-msg" class="muted" role="status"></p>
     </div>
+
+    <div class="card">
+      <div class="section-head">
+        <span class="eyebrow">{{ t.connections_eyebrow }}</span>
+        <h2>{{ t.connections_liberatarr_heading }}</h2>
+      </div>
+      <form id="liberatarr-form" class="settings-form">
+        <label>{{ t.connections_url_label }}
+          <input type="text" id="liberatarr-url" name="url" autocomplete="off" placeholder="http://ai-agent:8800">
+        </label>
+        <label>{{ t.connections_liberatarr_token_label }}
+          <input type="password" id="liberatarr-token" name="token" autocomplete="new-password">
+        </label>
+        <label class="inline-check">
+          <input type="checkbox" id="liberatarr-enabled" name="enabled">
+          {{ t.connections_enabled_label }}
+        </label>
+        <p class="muted small">{{ t.connections_api_key_hint }}</p>
+        <div class="button-row">
+          <button type="submit" class="btn btn-primary">{{ t.connections_save }}</button>
+          <button type="button" id="liberatarr-test-btn" class="btn btn-secondary">{{ t.connections_test }}</button>
+          <button type="button" id="liberatarr-sync-btn" class="btn btn-ghost">{{ t.connections_liberatarr_sync }}</button>
+        </div>
+      </form>
+      <p id="liberatarr-msg" class="muted" role="status"></p>
+    </div>
   </div>
 {% endblock %}
 
