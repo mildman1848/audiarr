@@ -2,6 +2,16 @@
 
 ## Unreleased
 
+- Shell and navigation Starr parity pass (#49): the System page becomes a
+  Starr-style Status/Tasks/Events tab strip (ARIA tablist, keyboard
+  navigation, deep-linkable via `?tab=`); Tasks lists the five schedulers
+  read-only from existing settings/backup data; Events shows the import
+  jobs audit trail with a refresh button; the Dashboard gains a compact
+  health banner (root folder missing/read-only) fed by a new read-only
+  `health` aggregation on `/api/v1/system/status` that reuses the
+  folder-health probe; Library is visually primary in the sidebar while
+  the Dashboard stays the landing page as a documented intentional
+  deviation. EN/DE i18n throughout. Bump project version to `0.6.1`.
 - Make the Trivy HIGH/CRITICAL config scan a real gate (`exit-code: '1'` in
   `.github/workflows/security.yml` and `make security`) instead of
   report-only. Add `.trivyignore` triaging the one known finding, DS-0002

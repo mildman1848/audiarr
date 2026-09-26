@@ -417,6 +417,71 @@ def test_system_status_page_has_status_markers(app_client):
     assert 'id="system-logging-level"' in page.text
 
 
+@pytest.mark.parametrize(
+    ("language", "status_label", "tasks_label", "events_label"),
+    [
+        ("en", "Status", "Tasks", "Events"),
+        ("de", "Status", "Aufgaben", "Ereignisse"),
+    ],
+)
+def test_system_status_page_has_tab_markers(
+    app_client, language, status_label, tasks_label, events_label
+):
+    """Issue #49: System/Status is now a Starr-style Status/Tasks/Events tab
+    strip (ARIA tablist), not one long scrolling page, in both UI languages."""
+    _set_ui_language(app_client, language)
+
+    page = app_client.get("/system/status")
+    assert page.status_code == 200
+    assert 'role="tablist"' in page.text
+    assert 'data-system-tab="status"' in page.text
+    assert 'data-system-tab="tasks"' in page.text
+    assert 'data-system-tab="events"' in page.text
+    assert 'id="system-panel-status"' in page.text
+    assert 'id="system-panel-tasks"' in page.text
+    assert 'id="system-panel-events"' in page.text
+    assert 'role="tabpanel"' in page.text
+    assert status_label in page.text
+    assert tasks_label in page.text
+    assert events_label in page.text
+
+
+def test_system_status_page_has_tasks_and_events_table_markers(app_client):
+    _set_ui_language(app_client, "en")
+
+    page = app_client.get("/system/status")
+    assert page.status_code == 200
+    assert 'id="system-tasks-table"' in page.text
+    assert 'id="system-tasks-tbody"' in page.text
+    assert 'id="system-events-table"' in page.text
+    assert 'id="system-events-tbody"' in page.text
+    assert 'id="system-events-refresh-btn"' in page.text
+
+
+def test_system_status_page_tab_query_param_preselects_tab(app_client):
+    """?tab= must be present in the markup so the client-side tab script can
+    read it on load; the actual show/hide happens in system.js, but the
+    server-rendered shell must not error and must still expose all panels
+    regardless of the query string (deep-linkable, e.g. ?tab=events)."""
+    _set_ui_language(app_client, "en")
+
+    page = app_client.get("/system/status?tab=events")
+    assert page.status_code == 200
+    assert 'id="system-panel-events"' in page.text
+
+
+def test_system_js_defines_tab_switching_and_data_functions():
+    js = Path("app/web/static/js/system.js").read_text(encoding="utf-8")
+    assert "function setSystemTab" in js
+    assert "function setupSystemTabs" in js
+    assert "async function refreshTasks" in js
+    assert "async function refreshEvents" in js
+    assert '"/api/v1/import/jobs"' in js
+    assert "ArrowRight" in js
+    assert "ArrowLeft" in js
+    assert "searchParams.set(\"tab\"" in js
+
+
 def test_system_status_page_marks_nav_active(app_client):
     _set_ui_language(app_client, "en")
 
@@ -1025,3 +1090,23 @@ def test_dashboard_has_quick_actions(app_client, language, heading_marker, actio
     assert 'class="quick-action-card" href="/library"' in page.text
     assert 'class="quick-action-card" href="/wanted/missing"' in page.text
     assert 'class="quick-action-card" href="/calendar"' in page.text
+
+
+def test_dashboard_has_health_banner_container(app_client):
+    """Issue #49: the Dashboard renders a health banner container (populated
+    client-side from the shared /api/v1/system/status health data) above the
+    quick-action cards."""
+    _set_ui_language(app_client, "en")
+
+    page = app_client.get("/")
+    assert page.status_code == 200
+    assert 'id="dashboard-health-banner"' in page.text
+    assert 'id="dashboard-health-banner-text"' in page.text
+    assert "/static/js/index.js" in page.text
+
+
+def test_index_js_defines_health_banner_refresh():
+    js = Path("app/web/static/js/index.js").read_text(encoding="utf-8")
+    assert "async function refreshDashboardHealth" in js
+    assert '"/api/v1/system/status"' in js
+    assert "dashboard-health-banner" in js
