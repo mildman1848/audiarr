@@ -114,7 +114,7 @@ Phased plan; each phase lands as small verified slices (issue → branch → PR 
 
 - Rename/organize imports per `file_name_pattern` — explicit opt-in only; preview/apply runs per book and never deletes originals. **Done**
 - Hardlink/copy import strategies — per root folder (`copy`/`hardlink`/`move`), free-space checks, hardlink copy fallback, dry-run read-only. **Done**
-- Root folder free-space and permissions view. **Next**
+- Root folder free-space and permissions view — probe-backed API fields and library-page badges; `health_issue` webhook on missing/read-only folders. **Done**
 
 ### Phase 5 — Hardening for 1.0
 
