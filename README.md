@@ -26,12 +26,13 @@ tested, not just modeled.
   Activity page with live queue/history.
 - Forms login and API-key authentication middleware (Radarr/Sonarr-style
   Security settings), not just a modeled setting.
-- Sonarr-style settings: dedicated pages per section (Media Management,
-  Indexers, Download Clients, Metadata, General/Security, UI, Conversion are
-  fully editable; Profiles, Quality, Connect, and Tags are read-only/planned
-  and clearly marked as such in the UI).
+- Sonarr-style settings: dedicated pages per section with editable Media
+  Management, Profiles, Quality, Indexers, Download Clients, Connect, Tags,
+  Metadata, General, Security, UI, and Conversion controls where Audiarr has
+  real backing behavior.
 - Server-rendered web UI (Jinja2 + vanilla JS, no build step) with a dark
-  Servarr-like layout, Audible-orange accent, and full English/German i18n.
+  Starr-family layout, dense data pages, System Status/Tasks/Events tabs,
+  Activity queue/history tabs, and full English/German i18n.
 - LSIO/s6-style Docker image using `/config`, `/data`, `PUID`, `PGID`, `TZ`,
   `UMASK`, and `FILE__` secrets.
 
@@ -39,8 +40,6 @@ tested, not just modeled.
 
 - No personal Audible account/library sync — catalog search uses Audible's
   public, no-login API only.
-- No editable Profiles/Quality/Tags/Connect UI yet; those settings sections
-  are read-only or placeholder and marked "Planned" (see `ROADMAP.md`).
 - No embedded audio converter; Audiarr delegates to `m4b-convertarr`.
 - Update checks are display-only (GitHub releases API, disableable); Audiarr
   never auto-updates.
@@ -72,8 +71,8 @@ If Docker is unavailable, `make validate` still verifies Python, tests, static c
 
 ## Image targets
 
-- `ghcr.io/mildman1848/audiarr:0.6.3`
-- `docker.io/mildman1848/audiarr:0.6.3`
+- `ghcr.io/mildman1848/audiarr:0.6.4`
+- `docker.io/mildman1848/audiarr:0.6.4`
 
 Optional GitLab/Codeberg container registry targets are supported by CI secrets, but should only be enabled after the first GHCR/Docker Hub build is verified.
 
@@ -95,7 +94,7 @@ Important defaults:
 | Audible locale | `us` |
 | UI language | `en`, with `de` available |
 | Optional translation backend | `none` by default; LibreTranslate-compatible backend optional |
-| Version | `0.6.3` |
+| Version | `0.6.4` |
 
 Versioning follows the Audiarr roadmap, not the household/fork `mldm<N>` suffix:
 

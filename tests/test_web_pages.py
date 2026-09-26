@@ -189,6 +189,33 @@ def test_settings_page_has_security_section(
 
 
 @pytest.mark.parametrize(
+    ("language", "activity_marker", "import_marker"),
+    [
+        ("en", "Live SABnzbd queue", "Review folders Audiarr could not confidently match"),
+        ("de", "Live-SABnzbd-Warteschlange", "Prüfe Ordner, die Audiarr nicht sicher zuordnen konnte"),
+    ],
+)
+def test_release_polish_pages_have_actionable_empty_state_copy(
+    app_client, language, activity_marker, import_marker
+):
+    """Issue #52: Activity and Import pages should read like finished
+    Starr-style operational pages, not bare placeholder text."""
+    _set_ui_language(app_client, language)
+
+    activity = app_client.get("/activity")
+    assert activity.status_code == 200
+    assert activity_marker in activity.text
+    assert "activity.js" in activity.text
+    assert "releasepolish" in activity.text
+
+    import_page = app_client.get("/import")
+    assert import_page.status_code == 200
+    assert import_marker in import_page.text
+    assert "import.js" in import_page.text
+    assert "releasepolish" in import_page.text
+
+
+@pytest.mark.parametrize(
     ("language", "marker"),
     [
         ("en", "Back to Library"),

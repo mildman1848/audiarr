@@ -97,6 +97,7 @@ function renderConfigWarning(container) {
   container.innerHTML = window.AudiarrUI.emptyState({
     icon: "⚙",
     title: T.activity_config_missing,
+    hint: T.activity_config_hint,
     actionHtml: link,
   });
 }
@@ -115,7 +116,11 @@ async function refreshQueue() {
     console.debug("activity queue: %d slot(s)", slots.length);
 
     if (!slots.length) {
-      container.innerHTML = window.AudiarrUI.emptyState({ icon: "⇩", title: T.activity_queue_empty });
+      container.innerHTML = window.AudiarrUI.emptyState({
+        icon: "⇩",
+        title: T.activity_queue_empty,
+        hint: T.activity_queue_empty_hint,
+      });
       return;
     }
 
@@ -185,7 +190,11 @@ async function refreshHistory() {
     console.debug("activity history: %d slot(s)", slots.length);
 
     if (!slots.length) {
-      container.innerHTML = window.AudiarrUI.emptyState({ icon: "⇩", title: T.activity_history_empty });
+      container.innerHTML = window.AudiarrUI.emptyState({
+        icon: "⇩",
+        title: T.activity_history_empty,
+        hint: T.activity_history_empty_hint,
+      });
       return;
     }
 

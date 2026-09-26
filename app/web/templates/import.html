@@ -18,6 +18,7 @@
       <span class="eyebrow">{{ t.import_eyebrow }}</span>
       <h2>{{ t.import_unmatched_heading }}</h2>
     </div>
+    <p class="section-hint">{{ t.import_unmatched_hint }}</p>
     <div class="card">
       <div id="import-unmatched">
         <p class="muted">{{ t.import_loading }}</p>
@@ -29,6 +30,7 @@
     <details id="import-ignored-details">
       <summary>{{ t.import_ignored_heading }}</summary>
       <div class="card">
+        <p class="section-hint">{{ t.import_ignored_hint }}</p>
         <div id="import-ignored">
           <p class="muted">{{ t.import_loading }}</p>
         </div>
@@ -64,5 +66,5 @@
 {% endblock %}
 
 {% block scripts %}
-  <script src="/static/js/import.js?v={{ version }}-retry"></script>
+  <script src="/static/js/import.js?v={{ version }}-releasepolish"></script>
 {% endblock %}
