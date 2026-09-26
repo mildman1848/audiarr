@@ -41,6 +41,20 @@ function setPlaceholder(id, text) {
   if (el) el.placeholder = text;
 }
 
+// Settings -> UI: reformat a stored "YYYY-MM-DD[ HH:MM:SS]" timestamp per
+// the user's date_format preference (shared helper lives in common.js so
+// every page can use it, not just Settings).
+function formatDate(value) {
+  return window.AudiarrUI && window.AudiarrUI.formatDate ? window.AudiarrUI.formatDate(value) : value;
+}
+
+// Settings -> UI: apply the theme immediately (no reload needed) so a save
+// visibly re-renders the shell, matching Starr's "changes take effect
+// right away" behavior for this kind of setting.
+function applyTheme(theme) {
+  document.documentElement.dataset.theme = theme;
+}
+
 function getValue(id, fallback) {
   const el = $(id);
   return el ? el.value : fallback ?? "";
@@ -51,9 +65,28 @@ function getChecked(id) {
   return el ? el.checked : false;
 }
 
+// Turn a failed response into a readable message: FastAPI/pydantic 422s
+// return {"detail": [{"loc": [...], "msg": "...", ...}, ...]}, not a plain
+// string, so a bare `HTTP 422` would hide the actual validation problem
+// (e.g. a negative interval) from the user.
+async function readErrorDetail(resp) {
+  const data = await resp.json().catch(() => null);
+  const detail = data && data.detail;
+  if (typeof detail === "string" && detail) return detail;
+  if (Array.isArray(detail) && detail.length) {
+    return detail
+      .map((e) => {
+        const field = Array.isArray(e.loc) ? e.loc.filter((p) => p !== "body").join(".") : "";
+        return field ? `${field}: ${e.msg}` : e.msg;
+      })
+      .join("; ");
+  }
+  return `HTTP ${resp.status}`;
+}
+
 async function getSettings() {
   const resp = await fetch("/api/v1/settings");
-  if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+  if (!resp.ok) throw new Error(await readErrorDetail(resp));
   return resp.json();
 }
 
@@ -63,7 +96,7 @@ async function putSettings(doc) {
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(doc),
   });
-  if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+  if (!resp.ok) throw new Error(await readErrorDetail(resp));
   return resp.json();
 }
 
@@ -371,18 +404,18 @@ function populate(s) {
   setValue("media-file-name-pattern", s.media_management.file_name_pattern || "");
   setChecked("media-delete-empty-folders", s.media_management.delete_empty_folders);
   setValue("media-scan-interval", s.media_management.import_scan_interval_minutes ?? 0);
-  setText("media-scan-last-run", s.media_management.last_scheduled_scan_at || "—");
+  setText("media-scan-last-run", formatDate(s.media_management.last_scheduled_scan_at) || "—");
   setChecked("media-sab-import-enabled", s.media_management.sab_auto_import_enabled);
   setValue("media-sab-import-category", s.media_management.sab_auto_import_category || "");
   setValue("media-sab-import-interval", s.media_management.sab_auto_import_interval_minutes ?? 5);
   setValue("metadata-refresh-interval", s.metadata.refresh_interval_minutes ?? 0);
   setValue("metadata-refresh-batch-size", s.metadata.refresh_batch_size ?? 10);
-  setText("metadata-refresh-last-run", s.metadata.last_scheduled_refresh_at || "—");
+  setText("metadata-refresh-last-run", formatDate(s.metadata.last_scheduled_refresh_at) || "—");
   setText("metadata-refresh-updated", s.metadata.last_refresh_updated ?? 0);
   setText("metadata-refresh-failed", s.metadata.last_refresh_failed ?? 0);
   setText("metadata-refresh-remaining", s.metadata.last_refresh_remaining ?? 0);
   setValue("wanted-search-interval", s.wanted.search_interval_minutes ?? 0);
-  setText("wanted-search-last-run", s.wanted.last_scheduled_search_at || "—");
+  setText("wanted-search-last-run", formatDate(s.wanted.last_scheduled_search_at) || "—");
   setText("wanted-search-grabbed", s.wanted.last_search_grabbed ?? 0);
   setText("wanted-search-no-release", s.wanted.last_search_no_release ?? 0);
   setText("wanted-search-skipped", s.wanted.last_search_skipped ?? 0);
@@ -397,8 +430,9 @@ function populate(s) {
   if ($("connect-list") && window.AudiarrConnect) {
     window.AudiarrConnect.populate(s.connect);
   }
-  setText("ui-theme-summary", s.ui.theme || "—");
-  setText("ui-date-format-summary", s.ui.date_format || "—");
+  setValue("ui-theme", s.ui.theme || "dark");
+  setValue("ui-date-format", s.ui.date_format || "YYYY-MM-DD");
+  applyTheme(s.ui.theme || "dark");
   setValue("conversion-backend", s.conversion.backend || "disabled");
   setChecked("conversion-delete-originals", s.conversion.delete_originals);
   setValue("conversion-job-timeout", s.conversion.job_timeout_hours ?? 6);
@@ -534,6 +568,8 @@ async function saveSettings(event) {
       doc.auth.password = password; // empty means keep the stored password
     }
     if ($("ui-language")) doc.ui.language = getValue("ui-language");
+    if ($("ui-theme")) doc.ui.theme = getValue("ui-theme");
+    if ($("ui-date-format")) doc.ui.date_format = getValue("ui-date-format");
     if ($("update-check-enabled")) {
       doc.updates.check_enabled = getChecked("update-check-enabled");
     }
@@ -656,6 +692,7 @@ async function saveSettings(event) {
     }
 
     await putSettings(doc);
+    applyTheme(doc.ui.theme);
     if (doc.auth.method === "forms" && password) {
       await loginAfterAuthChange(doc.auth.username, password);
     }
@@ -680,10 +717,14 @@ async function saveSettings(event) {
 }
 
 // Fire a connection test against one of the /api/v1/connections/.../test
-// endpoints using the current (unsaved) form values.
-async function testConnection(endpoint, urlId, keyId, msgId) {
+// endpoints using the current (unsaved) form values. Disables the button
+// for the duration of the request and reports through both the inline
+// status text and a toast, matching connect.js's per-row test pattern.
+async function testConnection(endpoint, urlId, keyId, msgId, btnId) {
   const msg = $(msgId);
+  const btn = btnId ? $(btnId) : null;
   if (msg) msg.textContent = T.settings_testing;
+  if (btn) btn.disabled = true;
   try {
     const body = { url: getValue(urlId).trim() };
     const key = getValue(keyId);
@@ -695,12 +736,20 @@ async function testConnection(endpoint, urlId, keyId, msgId) {
     });
     const data = await resp.json().catch(() => ({}));
     if (!resp.ok) {
-      if (msg) msg.textContent = `${T.settings_test_error} (${data.detail || `HTTP ${resp.status}`})`;
+      const text = `${T.settings_test_error} (${data.detail || `HTTP ${resp.status}`})`;
+      if (msg) msg.textContent = text;
+      if (window.AudiarrToast) window.AudiarrToast.error(text);
       return;
     }
-    if (msg) msg.textContent = `${data.ok ? "✓" : "✗"} ${data.message || ""}`.trim();
+    const text = `${data.ok ? "✓" : "✗"} ${data.message || ""}`.trim();
+    if (msg) msg.textContent = text;
+    if (window.AudiarrToast) (data.ok ? window.AudiarrToast.success : window.AudiarrToast.error)(text);
   } catch (err) {
-    if (msg) msg.textContent = `${T.settings_test_error} (${err.message})`;
+    const text = `${T.settings_test_error} (${err.message})`;
+    if (msg) msg.textContent = text;
+    if (window.AudiarrToast) window.AudiarrToast.error(text);
+  } finally {
+    if (btn) btn.disabled = false;
   }
 }
 
@@ -791,7 +840,13 @@ document.addEventListener("DOMContentLoaded", () => {
   const sabTestBtn = $("sab-test-btn");
   if (sabTestBtn) {
     sabTestBtn.addEventListener("click", () =>
-      testConnection("/api/v1/connections/sabnzbd/test", "sab-url", "sab-api-key", "sab-msg")
+      testConnection(
+        "/api/v1/connections/sabnzbd/test",
+        "sab-url",
+        "sab-api-key",
+        "sab-msg",
+        "sab-test-btn"
+      )
     );
   }
 
@@ -802,7 +857,8 @@ document.addEventListener("DOMContentLoaded", () => {
         "/api/v1/connections/prowlarr/test",
         "prowlarr-url",
         "prowlarr-api-key",
-        "prowlarr-msg"
+        "prowlarr-msg",
+        "prowlarr-test-btn"
       )
     );
   }

@@ -88,6 +88,12 @@ SETTINGS_SECTIONS: list[dict[str, str]] = [
         "desc_key": "settings_overview_general_desc",
     },
     {
+        "slug": "security",
+        "template": "settings/security.html",
+        "label_key": "settings_section_security",
+        "desc_key": "settings_overview_security_desc",
+    },
+    {
         "slug": "ui",
         "template": "settings/ui.html",
         "label_key": "settings_section_ui",
@@ -112,6 +118,8 @@ def _base_context(active_page: str) -> dict:
         "lang": lang,
         "version": __version__,
         "active_page": active_page,
+        "ui_theme": settings.ui.theme,
+        "ui_date_format": settings.ui.date_format,
     }
 
 

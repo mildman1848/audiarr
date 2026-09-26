@@ -57,7 +57,10 @@ function deliverySummary(row) {
   if (!row.last_delivered_at) return T.settings_connect_never;
   const parts = [row.last_event, row.last_status];
   if (row.last_status_code != null) parts.push(`(${row.last_status_code})`);
-  let text = `${parts.filter(Boolean).join(" ")} @ ${row.last_delivered_at}`;
+  const when = window.AudiarrUI && window.AudiarrUI.formatDate
+    ? window.AudiarrUI.formatDate(row.last_delivered_at)
+    : row.last_delivered_at;
+  let text = `${parts.filter(Boolean).join(" ")} @ ${when}`;
   if (row.last_error) text += ` — ${row.last_error}`;
   return text;
 }
@@ -154,7 +157,9 @@ async function testRow(id) {
   const row = findRow(id);
   if (!row) return;
   const msgEl = document.querySelector(`[data-connect-msg="${id}"]`);
+  const btnEl = document.querySelector(`[data-connect-test="${id}"]`);
   if (msgEl) msgEl.textContent = T.settings_testing;
+  if (btnEl) btnEl.disabled = true;
   try {
     const resp = await fetch(`/api/v1/connect/test/${encodeURIComponent(id)}`, {
       method: "POST",
@@ -176,6 +181,8 @@ async function testRow(id) {
     const text = `${T.settings_test_error} (${err.message})`;
     if (msgEl) msgEl.textContent = text;
     if (window.AudiarrToast) window.AudiarrToast.error(text);
+  } finally {
+    if (btnEl) btnEl.disabled = false;
   }
 }
 

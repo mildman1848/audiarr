@@ -74,7 +74,22 @@
       </div>`;
   }
 
-  window.AudiarrUI = { emptyState };
+  // Settings -> UI -> Date format (issue #51): reformat a stored
+  // "YYYY-MM-DD[ HH:MM:SS]" timestamp per window.AUDIARR_UI.date_format
+  // (set server-side in base.html from Settings.ui.date_format). The
+  // format tokens (YYYY/MM/DD) are unique substrings, so plain string
+  // substitution is enough -- no date-parsing library needed.
+  function formatDate(value) {
+    if (!value) return value;
+    const match = String(value).match(/^(\d{4})-(\d{2})-(\d{2})(?:[ T](\d{2}:\d{2}(?::\d{2})?))?/);
+    if (!match) return value;
+    const [, year, month, day, time] = match;
+    const fmt = (window.AUDIARR_UI && window.AUDIARR_UI.date_format) || "YYYY-MM-DD";
+    const datePart = fmt.replace("YYYY", year).replace("MM", month).replace("DD", day);
+    return time ? `${datePart} ${time}` : datePart;
+  }
+
+  window.AudiarrUI = { emptyState, formatDate };
 
   async function switchLanguage(language) {
     try {

@@ -1,10 +1,10 @@
 <!DOCTYPE html>
-<html lang="{{ lang }}">
+<html lang="{{ lang }}" data-theme="{{ ui_theme }}">
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>{% block page_title %}{{ t.app_name }}{% endblock %} — {{ t.app_name }}</title>
-  <link rel="stylesheet" href="/static/css/style.css?v={{ version }}-starrtabs">
+  <link rel="stylesheet" href="/static/css/style.css?v={{ version }}-settingsparity">
   <noscript>
     <style>
       /* Without JS the drawer can never be toggled, so keep the sidebar
@@ -84,8 +84,11 @@
     </div>
   </div>
 
-  <script>window.AUDIARR_I18N = {{ t|tojson }};</script>
-  <script src="/static/js/common.js?v={{ version }}-starrtabs"></script>
+  <script>
+    window.AUDIARR_I18N = {{ t|tojson }};
+    window.AUDIARR_UI = { theme: {{ ui_theme|tojson }}, date_format: {{ ui_date_format|tojson }} };
+  </script>
+  <script src="/static/js/common.js?v={{ version }}-settingsparity"></script>
   {% block scripts %}{% endblock %}
 </body>
 </html>

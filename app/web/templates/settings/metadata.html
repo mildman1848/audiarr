@@ -6,13 +6,17 @@
       <span class="eyebrow">{{ t.settings_eyebrow }}</span>
       <h2>{{ t.settings_section_metadata }}</h2>
     </div>
-    <label>{{ t.settings_metadata_locale }}
-      <select id="metadata-locale">
-        <option value="us">us</option>
-        <option value="de">de</option>
-      </select>
-    </label>
-    <p class="muted">{{ t.settings_metadata_provider_order }}: <span id="provider-order">—</span></p>
+    <p class="section-hint">{{ t.settings_metadata_hint }}</p>
+
+    <div class="settings-subsection">
+      <label>{{ t.settings_metadata_locale }}
+        <select id="metadata-locale">
+          <option value="us">us</option>
+          <option value="de">de</option>
+        </select>
+      </label>
+      <p class="muted">{{ t.settings_metadata_provider_order }}: <span id="provider-order">—</span></p>
+    </div>
 
     <div class="settings-subsection">
       <h3>{{ t.settings_metadata_refresh_heading }}</h3>

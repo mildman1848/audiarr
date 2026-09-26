@@ -167,18 +167,25 @@ def test_settings_page_has_sabnzbd_and_prowlarr_sections(
 def test_settings_page_has_security_section(
     app_client, language, security_marker, method_marker
 ):
+    """Security is its own dedicated /settings/security page (issue #51),
+    matching Radarr/Sonarr's own Security settings tab rather than nesting
+    auth under General."""
     _set_ui_language(app_client, language)
+
+    security = app_client.get("/settings/security")
+    assert security.status_code == 200
+    assert security_marker in security.text
+    assert method_marker in security.text
+    assert 'id="security-method"' in security.text
+    assert 'id="security-username"' in security.text
+    assert 'id="security-password"' in security.text
+    assert 'id="security-api-key"' in security.text
+    assert 'id="security-api-key-copy-btn"' in security.text
+    assert 'id="security-api-key-regen-btn"' in security.text
 
     general = app_client.get("/settings/general")
     assert general.status_code == 200
-    assert security_marker in general.text
-    assert method_marker in general.text
-    assert 'id="security-method"' in general.text
-    assert 'id="security-username"' in general.text
-    assert 'id="security-password"' in general.text
-    assert 'id="security-api-key"' in general.text
-    assert 'id="security-api-key-copy-btn"' in general.text
-    assert 'id="security-api-key-regen-btn"' in general.text
+    assert 'id="security-method"' not in general.text
 
 
 @pytest.mark.parametrize(
@@ -515,6 +522,7 @@ def test_system_js_defines_refresh_and_status_functions():
                 "Metadata",
                 "Tags",
                 "General",
+                "Security",
                 "UI",
                 "Conversion",
             ],
@@ -531,6 +539,7 @@ def test_system_js_defines_refresh_and_status_functions():
                 "Metadaten",
                 "Tags",
                 "Allgemein",
+                "Sicherheit",
                 "Oberfläche",
                 "Konvertierung",
             ],
@@ -555,6 +564,7 @@ def test_settings_overview_links_to_dedicated_sections(app_client, language, lab
         "metadata",
         "tags",
         "general",
+        "security",
         "ui",
         "conversion",
     ):
@@ -573,6 +583,7 @@ SETTINGS_SECTION_URLS = (
     "/settings/metadata",
     "/settings/tags",
     "/settings/general",
+    "/settings/security",
     "/settings/ui",
     "/settings/conversion",
 )
@@ -585,6 +596,7 @@ SETTINGS_SECTION_URLS = (
         "/settings/indexers",
         "/settings/download-clients",
         "/settings/general",
+        "/settings/security",
         "/settings/conversion",
     ),
 )
@@ -681,6 +693,63 @@ def test_settings_page_has_media_management_and_summary_fields(app_client, langu
 
 
 @pytest.mark.parametrize("language", ["en", "de"])
+def test_settings_ui_page_has_functional_theme_and_date_format_controls(app_client, language):
+    """Issue #51: Theme and Date format used to be read-only summary text
+    with a placeholder note; they are now real, saveable <select> controls
+    like every other Settings field."""
+    _set_ui_language(app_client, language)
+
+    page = app_client.get("/settings/ui")
+    assert page.status_code == 200
+    assert 'id="ui-theme"' in page.text
+    assert '<option value="dark">' in page.text
+    assert '<option value="light">' in page.text
+    assert 'id="ui-date-format"' in page.text
+    assert '<option value="YYYY-MM-DD">' in page.text
+    assert "ui-theme-summary" not in page.text
+    assert "ui-date-format-summary" not in page.text
+
+
+@pytest.mark.parametrize(
+    ("path", "hint_fragment"),
+    [
+        ("/settings/indexers", "delegates indexer management to Prowlarr"),
+        ("/settings/download-clients", "download client Audiarr grabs"),
+        ("/settings/metadata", "Metadata provider chain"),
+        ("/settings/conversion", "conversion backend"),
+    ],
+)
+def test_settings_pages_have_intro_hint_and_grouped_subsections(app_client, path, hint_fragment):
+    """Issue #51: Indexers/Download Clients/Metadata/Conversion previously
+    dropped their integration fields directly under the page heading with
+    no intro text and no card-like grouping, unlike Media Management/
+    General. They now match that pattern: one intro hint paragraph plus at
+    least one .settings-subsection wrapper."""
+    _set_ui_language(app_client, "en")
+
+    page = app_client.get(path)
+    assert page.status_code == 200
+    assert 'class="section-hint"' in page.text
+    assert hint_fragment in page.text
+    assert 'class="settings-subsection"' in page.text
+
+
+def test_settings_js_never_writes_masked_secrets_into_input_values():
+    """Secret fields (SABnzbd/Prowlarr API keys, the conversion webhook key,
+    the auth password) must only ever get a masked placeholder from a GET,
+    never the real stored value in .value -- the same guarantee already
+    covered for connect.js's header_value."""
+    script = (Path(__file__).parents[1] / "app/web/static/js/settings.js").read_text()
+
+    for secret_id in ("sab-api-key", "prowlarr-api-key", "conversion-webhook-key"):
+        assert f'setValue("{secret_id}"' not in script
+        assert f'setPlaceholder("{secret_id}", ' in script
+
+    # The password field is never populated at all (stays blank on load).
+    assert 'setValue("security-password"' not in script
+
+
+@pytest.mark.parametrize("language", ["en", "de"])
 def test_settings_overview_has_no_planned_sections(app_client, language):
     """Connect was the last read-only/placeholder section; issue #28 gives
     it a real, saveable editor, so no section should badge itself as
@@ -692,22 +761,7 @@ def test_settings_overview_has_no_planned_sections(app_client, language):
     assert "badge-planned" not in settings.text
 
 
-@pytest.mark.parametrize(
-    "path",
-    (
-        "/settings/media-management",
-        "/settings/profiles",
-        "/settings/quality",
-        "/settings/indexers",
-        "/settings/download-clients",
-        "/settings/connect",
-        "/settings/metadata",
-        "/settings/tags",
-        "/settings/general",
-        "/settings/ui",
-        "/settings/conversion",
-    ),
-)
+@pytest.mark.parametrize("path", SETTINGS_SECTION_URLS)
 def test_active_settings_pages_keep_save_bar(app_client, path):
     """Sections with real, saveable fields keep the dirty-state save bar
     and advanced toggle, and are not marked planned."""
@@ -1013,10 +1067,27 @@ def test_common_js_defines_shared_empty_state_helper():
     script = (Path(__file__).parents[1] / "app/web/static/js/common.js").read_text()
 
     assert "function emptyState" in script
-    assert "window.AudiarrUI = { emptyState }" in script
+    assert "window.AudiarrUI = { emptyState, formatDate }" in script
     assert '"empty-state"' in script
     assert "empty-state-icon" in script
     assert "empty-state-title" in script
+
+
+def test_common_js_defines_shared_date_format_helper():
+    """Settings -> UI's date_format (issue #51) must actually take effect
+    somewhere, not just be stored: a shared formatDate() helper reformats
+    stored timestamps per window.AUDIARR_UI.date_format, and Settings/Connect
+    use it instead of printing the raw ISO-ish string."""
+    common = (Path(__file__).parents[1] / "app/web/static/js/common.js").read_text()
+    assert "function formatDate" in common
+
+    settings_js = (Path(__file__).parents[1] / "app/web/static/js/settings.js").read_text()
+    assert "function formatDate" in settings_js
+    assert "formatDate(s.media_management.last_scheduled_scan_at)" in settings_js
+    assert "function applyTheme" in settings_js
+
+    connect_js = (Path(__file__).parents[1] / "app/web/static/js/connect.js").read_text()
+    assert "window.AudiarrUI.formatDate(row.last_delivered_at)" in connect_js
 
 
 @pytest.mark.parametrize(
