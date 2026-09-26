@@ -87,7 +87,7 @@ but with real gaps; **Next** — not started.
 - Local `make validate`, `make build`, `make smoke`, and Trivy HIGH/CRITICAL scan are documented.
 - Dependabot open alerts are zero or explicitly triaged.
 - Runtime image does not include unnecessary build tooling such as pip/setuptools/wheel.
-- Automatic config backups and update checks are modeled in settings but not implemented — **Next**.
+- Automatic config backups are implemented with manual/scheduled ZIP snapshots and retention rotation; update checks remain **Next**.
 
 ## Roadmap to 1.0.0
 
@@ -118,7 +118,7 @@ Phased plan; each phase lands as small verified slices (issue → branch → PR 
 
 ### Phase 5 — Hardening for 1.0
 
-- Automatic config DB + settings backups with rotation. **Next**
+- Automatic config DB + settings backups with rotation. **Done**
 - Update check (display only, no auto-update). **Next**
 - Backup/restore documented and tested once for real. **Next**
 - Dependency hygiene and a final security pass (issue #8). **Partial**

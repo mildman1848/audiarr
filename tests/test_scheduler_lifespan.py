@@ -104,3 +104,41 @@ def test_wanted_search_scheduler_disabled_without_connections(tmp_path, monkeypa
     with TestClient(main_module.app) as client:
         resp = client.get("/api/v1/settings")
         assert resp.status_code == 200
+
+
+def test_backup_scheduler_starts_when_interval_positive(tmp_path, monkeypatch):
+    """A positive backup.interval_hours must start the scheduler task
+    without breaking app startup/shutdown (issue #32, phase 5)."""
+    from app.config import load_settings, save_settings
+
+    monkeypatch.setenv("AUDIARR_CONFIG_DIR", str(tmp_path))
+    from app import config as config_module
+
+    importlib.reload(config_module)
+
+    settings = load_settings()
+    settings.backup.interval_hours = 1
+    settings.backup.folder = str(tmp_path / "backups")
+    save_settings(settings)
+
+    main_module = _reload_app(tmp_path, monkeypatch)
+    from fastapi.testclient import TestClient
+
+    with TestClient(main_module.app) as client:
+        resp = client.get("/api/v1/settings")
+        assert resp.status_code == 200
+
+
+def test_backup_scheduler_enabled_by_default(tmp_path, monkeypatch):
+    """Unlike the other optional schedulers (default interval 0 = off),
+    BackupSettings defaults interval_hours to 24 -- backups are on by
+    default. delay_first=True means this must not touch the filesystem
+    during the (short) test lifetime, so this only asserts clean startup
+    plus the still-positive default, not that a backup file appears."""
+    main_module = _reload_app(tmp_path, monkeypatch)
+    from fastapi.testclient import TestClient
+
+    with TestClient(main_module.app) as client:
+        resp = client.get("/api/v1/settings")
+        assert resp.status_code == 200
+        assert resp.json()["backup"]["interval_hours"] == 24

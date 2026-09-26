@@ -416,6 +416,90 @@ function populate(s) {
   setValue("prowlarr-name", prowlarr.name || "Prowlarr");
   setValue("prowlarr-url", prowlarr.url || "");
   setPlaceholder("prowlarr-api-key", prowlarr.api_key ? MASK : "");
+
+  // Maintenance / backups (issue #32): interval + retention are settings
+  // fields; the backup list itself comes from the system API.
+  if (s.backup) {
+    setValue("backup-folder", s.backup.folder || "");
+    setValue("backup-interval", s.backup.interval_hours ?? 24);
+    setValue("backup-retention", s.backup.retention_copies ?? 7);
+  }
+}
+
+// --- Backups (issue #32) -------------------------------------------------
+
+function humanSize(bytes) {
+  if (!Number.isFinite(bytes) || bytes <= 0) return "0 B";
+  const units = ["B", "KB", "MB", "GB"];
+  let value = bytes;
+  let unit = 0;
+  while (value >= 1024 && unit < units.length - 1) {
+    value /= 1024;
+    unit += 1;
+  }
+  return `${value >= 10 || unit === 0 ? Math.round(value) : value.toFixed(1)} ${units[unit]}`;
+}
+
+async function loadBackupList() {
+  if (!$("backup-list-wrap")) return;
+  try {
+    const resp = await fetch("/api/v1/system/backup");
+    if (!resp.ok) return;
+    const data = await resp.json();
+    renderBackupList(data.backups || []);
+  } catch {
+    // Backup list is informational; a failed fetch just leaves it hidden.
+  }
+}
+
+function renderBackupList(backups) {
+  const wrap = $("backup-list-wrap");
+  const list = $("backup-list");
+  if (!wrap || !list) return;
+  wrap.hidden = backups.length === 0;
+  list.innerHTML = "";
+  for (const b of backups) {
+    const li = document.createElement("li");
+    const name = document.createElement("span");
+    name.textContent = `${b.name} — ${humanSize(b.size_bytes)}`;
+    li.appendChild(name);
+    list.appendChild(li);
+  }
+}
+
+async function backupNow() {
+  const btn = $("backup-now-btn");
+  const msg = $("backup-result-msg");
+  if (!btn) return;
+  btn.disabled = true;
+  const restoreLabel = btn.textContent;
+  btn.textContent = T.settings_backup_running;
+  if (msg) {
+    msg.hidden = false;
+    msg.textContent = T.settings_backup_running;
+  }
+  try {
+    const resp = await fetch("/api/v1/system/backup", { method: "POST" });
+    const data = await resp.json().catch(() => ({}));
+    if (!resp.ok) throw new Error(data.detail || `HTTP ${resp.status}`);
+    if (msg) {
+      msg.textContent = `${T.settings_backup_done} (${humanSize(data.size_bytes)})`;
+    }
+    await loadBackupList();
+  } catch (err) {
+    if (msg) msg.textContent = `${T.settings_backup_failed} (${err.message})`;
+  } finally {
+    btn.disabled = false;
+    btn.textContent = restoreLabel;
+  }
+}
+
+function bindBackupEvents() {
+  const btn = $("backup-now-btn");
+  if (btn && !btn.dataset.bound) {
+    btn.dataset.bound = "1";
+    btn.addEventListener("click", backupNow);
+  }
 }
 
 async function loadSettings() {
@@ -442,6 +526,16 @@ async function saveSettings(event) {
       doc.auth.password = password; // empty means keep the stored password
     }
     if ($("ui-language")) doc.ui.language = getValue("ui-language");
+    if ($("backup-interval")) {
+      const interval = Number(getValue("backup-interval"));
+      doc.backup.interval_hours =
+        Number.isFinite(interval) && interval >= 0 ? Math.trunc(interval) : 24;
+    }
+    if ($("backup-retention")) {
+      const retention = Number(getValue("backup-retention"));
+      doc.backup.retention_copies =
+        Number.isFinite(retention) && retention >= 0 ? Math.trunc(retention) : 7;
+    }
     if ($("media-rename-files")) {
       doc.media_management.rename_files = getChecked("media-rename-files");
     }
@@ -674,6 +768,9 @@ function setupAdvancedToggle() {
 
 document.addEventListener("DOMContentLoaded", () => {
   loadSettings();
+  // Backups live on the general page only; both helpers no-op elsewhere.
+  bindBackupEvents();
+  loadBackupList();
   setupDirtyTracking();
   setupAdvancedToggle();
 
