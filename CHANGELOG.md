@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- Primary data pages Starr parity pass (#50): Library table gains clickable sortable headers with URL state; Add New now uses a Starr-style add wizard with root-folder and quality-profile selection validated at create time (no create-then-patch partial books); books can store/clear a root-folder preference used by organize preview/apply; Book Detail adds refresh/search actions and author/narrator monograms; Wanted gains reason filter and sort controls; Import Problems gains retry-from-guess; Activity Queue shows disabled pause/remove controls with an explicit read-only SABnzbd explanation. Adds schema migration 014 (`books.root_folder_id`) and bumps project version to `0.6.2`.
 - Shell and navigation Starr parity pass (#49): the System page becomes a
   Starr-style Status/Tasks/Events tab strip (ARIA tablist, keyboard
   navigation, deep-linkable via `?tab=`); Tasks lists the five schedulers

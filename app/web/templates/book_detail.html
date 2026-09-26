@@ -7,6 +7,8 @@
 {% block page_toolbar %}
   <div class="toolbar-group toolbar-left" id="book-detail-toolbar">
     <a href="/library" id="book-detail-back-btn" class="toolbar-btn">{{ t.book_detail_toolbar_back }}</a>
+    <button type="button" id="book-detail-refresh-btn" class="toolbar-btn" disabled>{{ t.book_detail_refresh }}</button>
+    <button type="button" id="book-detail-search-btn" class="toolbar-btn" disabled>{{ t.book_detail_search }}</button>
   </div>
   <div class="toolbar-group toolbar-right">
     <button type="button" id="book-detail-delete-btn" class="toolbar-btn" disabled>{{ t.book_detail_delete }}</button>
@@ -35,5 +37,5 @@
 {% endblock %}
 
 {% block scripts %}
-  <script src="/static/js/book_detail.js?v={{ version }}-organize"></script>
+  <script src="/static/js/book_detail.js?v={{ version }}-toolbaractions"></script>
 {% endblock %}

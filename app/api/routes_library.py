@@ -9,6 +9,7 @@ from typing import Any, Literal
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel, Field
 
+from app.api.routes_metadata import build_provider_chain
 from app.config import load_settings
 from app.connect import dispatch_event
 from app.db import get_conn, migrate
@@ -25,6 +26,7 @@ from app.library import (
     get_root_folder,
     list_books,
     list_root_folders,
+    set_book_root_folder,
     update_book,
     update_root_folder_strategy,
 )
@@ -95,6 +97,8 @@ class BookIn(BaseModel):
     provider_id: str = ""
     locale: str = ""
     monitored: bool = True
+    quality_profile: str = ""
+    root_folder_id: int | None = None
 
 
 class BookPatch(BaseModel):
@@ -109,6 +113,7 @@ class BookPatch(BaseModel):
     series_position: float | None = None
     monitored: bool | None = None
     quality_profile: str | None = None
+    root_folder_id: int | None = None
     tags: list[str] | None = None
 
 
@@ -139,6 +144,7 @@ class BookOut(BaseModel):
     added_at: str | None
     monitored: bool
     quality_profile: str
+    root_folder_id: int | None
     tags: list[TagRef]
 
 
@@ -417,6 +423,7 @@ def _book_out(conn: Any, book_id: int) -> BookOut:
         provider_ids=[ProviderIdOut(**p) for p in pids],
         monitored=bool(book["monitored"]),
         quality_profile=book["quality_profile"],
+        root_folder_id=book["root_folder_id"],
         tags=tags,
         **stats,
     )
@@ -431,7 +438,7 @@ def _list_books_by_tag(conn: Any, tag: str, limit: int, offset: int) -> list[dic
     rows = conn.execute(
         """SELECT b.id, b.title, b.subtitle, b.description, b.language,
                   b.duration_seconds, b.cover_url, b.release_date, b.publisher,
-                  b.monitored, b.quality_profile,
+                  b.monitored, b.quality_profile, b.root_folder_id,
                   s.name AS series_name, b.series_position,
                   (SELECT GROUP_CONCAT(a.name, ', ')
                      FROM book_authors ba JOIN authors a ON a.id = ba.author_id
@@ -481,6 +488,7 @@ async def get_books(limit: int = 50, offset: int = 0, tag: str | None = None) ->
                     provider_ids=[ProviderIdOut(**p) for p in pids],
                     monitored=bool(b["monitored"]),
                     quality_profile=b["quality_profile"],
+                    root_folder_id=b["root_folder_id"],
                     tags=tags,
                     **stats,
                 )
@@ -514,8 +522,14 @@ async def get_library_stats() -> LibraryStatsOut:
 
 @router.post("/api/v1/library/books", response_model=BookOut, status_code=201)
 async def post_book(data: BookIn) -> BookOut:
+    """Create a book, optionally with a root folder / quality profile chosen
+    up front (Add wizard, #50). Both are validated before anything is
+    persisted so an invalid choice never leaves a half-configured book row
+    behind (see review note on the original PATCH-after-create flow)."""
     _ensure_schema()
+    _validate_quality_profile(data.quality_profile)
     with get_conn() as conn:
+        _validate_root_folder_id(conn, data.root_folder_id)
         if data.provider and data.provider_id:
             existing = find_book_by_provider_id(
                 conn, data.provider, data.provider_id, data.locale
@@ -558,18 +572,26 @@ async def get_book_files(book_id: int) -> list[LibraryFileOut]:
     return [LibraryFileOut(**dict(r)) for r in rows]
 
 
-def _resolve_organize_root_and_pattern(conn: Any, data: OrganizeIn) -> tuple[str, str]:
+def _resolve_organize_root_and_pattern(
+    conn: Any, book_id: int, data: OrganizeIn
+) -> tuple[str, str]:
     """Resolve the (root folder path, pattern) an organize request runs against.
 
-    ``root_folder_id`` picks a specific configured root folder; otherwise
-    the first one by path order (see list_root_folders) is used, matching
-    the MVP root-folder-selection rule in issue #29.
+    ``root_folder_id`` on the request picks a specific configured root
+    folder; otherwise the book's own root-folder preference (set at add
+    time, see #50) is used; otherwise the first one by path order (see
+    list_root_folders) is used, matching the MVP root-folder-selection
+    rule in issue #29.
     """
     pattern = data.pattern or load_settings().media_management.file_name_pattern
-    if data.root_folder_id is not None:
-        row = get_root_folder(conn, data.root_folder_id)
+    folder_id = data.root_folder_id
+    if folder_id is None:
+        book = get_book(conn, book_id)
+        folder_id = book["root_folder_id"] if book else None
+    if folder_id is not None:
+        row = get_root_folder(conn, folder_id)
         if row is None:
-            raise HTTPException(422, f"Root folder {data.root_folder_id} not found")
+            raise HTTPException(422, f"Root folder {folder_id} not found")
         return row["path"], pattern
     rows = list_root_folders(conn)
     if not rows:
@@ -599,7 +621,7 @@ async def post_organize_preview(book_id: int, data: OrganizeIn) -> OrganizePrevi
     with get_conn() as conn:
         if get_book(conn, book_id) is None:
             raise HTTPException(404, "Book not found")
-        root_path, pattern = _resolve_organize_root_and_pattern(conn, data)
+        root_path, pattern = _resolve_organize_root_and_pattern(conn, book_id, data)
         preview = build_preview(conn, book_id, root_path, pattern)
     return OrganizePreviewOut(
         book_id=preview.book_id,
@@ -625,7 +647,7 @@ async def post_organize_apply(book_id: int, data: OrganizeIn) -> OrganizeApplyOu
     with get_conn() as conn:
         if get_book(conn, book_id) is None:
             raise HTTPException(404, "Book not found")
-        root_path, pattern = _resolve_organize_root_and_pattern(conn, data)
+        root_path, pattern = _resolve_organize_root_and_pattern(conn, book_id, data)
         preview = build_preview(conn, book_id, root_path, pattern)
         if not preview.safe_to_apply:
             raise HTTPException(
@@ -663,21 +685,81 @@ def _validate_quality_profile(name: str) -> None:
         raise HTTPException(422, f"Unknown quality profile {name!r}")
 
 
+def _validate_root_folder_id(conn: Any, folder_id: int | None) -> None:
+    """None ("no preference") is always valid; otherwise the id must match
+    a configured root folder (Add flow / book detail root-folder picker, #50)."""
+    if folder_id is None:
+        return
+    if get_root_folder(conn, folder_id) is None:
+        raise HTTPException(422, f"Root folder {folder_id} not found")
+
+
 @router.patch("/api/v1/library/books/{book_id}", response_model=BookOut)
 async def patch_book(book_id: int, patch: BookPatch) -> BookOut:
     _ensure_schema()
     updates = patch.model_dump(exclude_unset=True)
     tags = updates.pop("tags", None)
+    # root_folder_id is handled separately from the bulk update_book() path
+    # below so that an explicit `null` (clear back to "no preference") is
+    # distinguishable from "field not sent" -- update_book() otherwise drops
+    # None values wholesale (see its docstring).
+    root_folder_set = "root_folder_id" in updates
+    root_folder_value = updates.pop("root_folder_id", None)
     if "quality_profile" in updates:
         _validate_quality_profile(updates["quality_profile"])
     with get_conn() as conn:
         if get_book(conn, book_id) is None:
             raise HTTPException(404, "Book not found")
+        if root_folder_set:
+            _validate_root_folder_id(conn, root_folder_value)
         updated_fields = update_book(conn, book_id, updates) if updates else False
+        if root_folder_set:
+            updated_fields = set_book_root_folder(conn, book_id, root_folder_value) or updated_fields
         if tags is not None:
             _sync_entity_tags(conn, "book_tags", "book_id", book_id, tags)
         elif not updated_fields:
             raise HTTPException(422, "No updatable fields provided")
+        result = _book_out(conn, book_id)
+    return result
+
+
+@router.post("/api/v1/library/books/{book_id}/refresh", response_model=BookOut)
+async def refresh_book(book_id: int) -> BookOut:
+    """Re-fetch this book's metadata from its linked provider (Starr-style
+    "Refresh metadata" toolbar action, #50).
+
+    Minimal trigger: reuses the existing provider chain's get_detail() and
+    update_book(), no new domain logic. A book with no linked provider id
+    (e.g. one added by hand) has nothing to refresh from.
+    """
+    _ensure_schema()
+    with get_conn() as conn:
+        if get_book(conn, book_id) is None:
+            raise HTTPException(404, "Book not found")
+        pids = get_provider_ids(conn, "book", book_id)
+    if not pids:
+        raise HTTPException(422, "This book has no linked metadata provider to refresh from")
+    pid = pids[0]
+
+    chain = build_provider_chain()
+    if pid["locale"]:
+        chain.config.audible_locale = pid["locale"]
+    detail = await chain.get_detail(pid["provider"], pid["provider_id"])
+    if detail is None:
+        raise HTTPException(502, "Metadata provider lookup failed; try again later")
+
+    updates: dict[str, Any] = {
+        "title": detail.title or None,
+        "subtitle": detail.subtitle or None,
+        "description": detail.description or None,
+        "release_date": detail.release_date or None,
+        "language": detail.language or None,
+        "publisher": ", ".join(detail.publishers) if detail.publishers else None,
+        "duration_seconds": detail.duration_seconds or None,
+        "cover_url": detail.cover_url or None,
+    }
+    with get_conn() as conn:
+        update_book(conn, book_id, updates)
         result = _book_out(conn, book_id)
     return result
 

@@ -13,7 +13,7 @@ from app.db import SCHEMA_VERSION, migrate
 def test_fresh_db_reaches_latest_schema(tmp_path: Path) -> None:
     db = tmp_path / "fresh.db"
     version = migrate(db)
-    assert version == SCHEMA_VERSION == 13
+    assert version == SCHEMA_VERSION == 14
 
     conn = sqlite3.connect(db)
     tables = {
@@ -73,7 +73,7 @@ def test_migration_is_idempotent(tmp_path: Path) -> None:
     conn = sqlite3.connect(db)
     rows = conn.execute("SELECT version FROM schema_version ORDER BY version").fetchall()
     conn.close()
-    assert [r[0] for r in rows] == [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13]
+    assert [r[0] for r in rows] == [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14]
 
 
 def test_v1_db_upgrades_to_latest(tmp_path: Path) -> None:
@@ -117,6 +117,7 @@ def test_v3_db_upgrades_to_v4(tmp_path: Path) -> None:
     conn.execute("ALTER TABLE books DROP COLUMN asin")
     conn.execute("ALTER TABLE books DROP COLUMN quality_profile")
     conn.execute("ALTER TABLE root_folders DROP COLUMN import_strategy")
+    conn.execute("ALTER TABLE books DROP COLUMN root_folder_id")
     conn.execute("DELETE FROM schema_version WHERE version >= 4")
     conn.commit()
     conn.close()
@@ -149,12 +150,13 @@ def test_v6_db_upgrades_to_v7(tmp_path: Path) -> None:
     conn.execute("ALTER TABLE books DROP COLUMN asin")
     conn.execute("ALTER TABLE books DROP COLUMN quality_profile")
     conn.execute("ALTER TABLE root_folders DROP COLUMN import_strategy")
+    conn.execute("ALTER TABLE books DROP COLUMN root_folder_id")
     conn.execute("DELETE FROM schema_version WHERE version >= 7")
     conn.commit()
     conn.close()
 
     version = migrate(db)
-    assert version == SCHEMA_VERSION == 13
+    assert version == SCHEMA_VERSION == 14
 
     conn = sqlite3.connect(db)
     cols = {r[1] for r in conn.execute("PRAGMA table_info(books)")}
@@ -171,12 +173,13 @@ def test_v7_db_upgrades_to_v8(tmp_path: Path) -> None:
     conn = sqlite3.connect(db)
     conn.execute("ALTER TABLE books DROP COLUMN quality_profile")
     conn.execute("ALTER TABLE root_folders DROP COLUMN import_strategy")
+    conn.execute("ALTER TABLE books DROP COLUMN root_folder_id")
     conn.execute("DELETE FROM schema_version WHERE version >= 8")
     conn.commit()
     conn.close()
 
     version = migrate(db)
-    assert version == SCHEMA_VERSION == 13
+    assert version == SCHEMA_VERSION == 14
 
     conn = sqlite3.connect(db)
     cols = {r[1]: r for r in conn.execute("PRAGMA table_info(books)")}
@@ -194,12 +197,13 @@ def test_v8_db_upgrades_to_v9(tmp_path: Path) -> None:
     conn.execute("DROP TABLE sab_import_state")
     conn.execute("DROP TABLE wanted_search_state")
     conn.execute("ALTER TABLE root_folders DROP COLUMN import_strategy")
+    conn.execute("ALTER TABLE books DROP COLUMN root_folder_id")
     conn.execute("DELETE FROM schema_version WHERE version >= 9")
     conn.commit()
     conn.close()
 
     version = migrate(db)
-    assert version == SCHEMA_VERSION == 13
+    assert version == SCHEMA_VERSION == 14
 
     conn = sqlite3.connect(db)
     tables = {
@@ -216,12 +220,13 @@ def test_v9_db_upgrades_to_v10(tmp_path: Path) -> None:
     conn = sqlite3.connect(db)
     conn.execute("DROP TABLE wanted_search_state")
     conn.execute("ALTER TABLE root_folders DROP COLUMN import_strategy")
+    conn.execute("ALTER TABLE books DROP COLUMN root_folder_id")
     conn.execute("DELETE FROM schema_version WHERE version >= 10")
     conn.commit()
     conn.close()
 
     version = migrate(db)
-    assert version == SCHEMA_VERSION == 13
+    assert version == SCHEMA_VERSION == 14
 
     conn = sqlite3.connect(db)
     tables = {
@@ -240,12 +245,13 @@ def test_v10_db_upgrades_to_v11(tmp_path: Path) -> None:
     conn.execute("DROP TABLE book_tags")
     conn.execute("DROP TABLE tags")
     conn.execute("ALTER TABLE root_folders DROP COLUMN import_strategy")
+    conn.execute("ALTER TABLE books DROP COLUMN root_folder_id")
     conn.execute("DELETE FROM schema_version WHERE version >= 11")
     conn.commit()
     conn.close()
 
     version = migrate(db)
-    assert version == SCHEMA_VERSION == 13
+    assert version == SCHEMA_VERSION == 14
 
     conn = sqlite3.connect(db)
     tables = {
@@ -263,12 +269,13 @@ def test_v11_db_upgrades_to_v12(tmp_path: Path) -> None:
     migrate(db)
     conn = sqlite3.connect(db)
     conn.execute("ALTER TABLE root_folders DROP COLUMN import_strategy")
+    conn.execute("ALTER TABLE books DROP COLUMN root_folder_id")
     conn.execute("DELETE FROM schema_version WHERE version >= 12")
     conn.commit()
     conn.close()
 
     version = migrate(db)
-    assert version == SCHEMA_VERSION == 13
+    assert version == SCHEMA_VERSION == 14
 
     conn = sqlite3.connect(db)
     cols = {r[1]: r for r in conn.execute("PRAGMA table_info(root_folders)")}
@@ -297,12 +304,13 @@ def test_v12_db_upgrades_to_v13(tmp_path: Path) -> None:
         "INSERT INTO root_folders (path, import_strategy) VALUES (?, ?)",
         ("/data/hardlink-explicit", "hardlink"),
     )
+    conn.execute("ALTER TABLE books DROP COLUMN root_folder_id")
     conn.execute("DELETE FROM schema_version WHERE version >= 13")
     conn.commit()
     conn.close()
 
     version = migrate(db)
-    assert version == SCHEMA_VERSION == 13
+    assert version == SCHEMA_VERSION == 14
 
     conn = sqlite3.connect(db)
     strategies = {
@@ -313,6 +321,32 @@ def test_v12_db_upgrades_to_v13(tmp_path: Path) -> None:
     assert strategies["/data/copy-default"] == "hardlink"
     assert strategies["/data/move-explicit"] == "move"
     assert strategies["/data/hardlink-explicit"] == "hardlink"
+
+
+def test_v13_db_upgrades_to_v14(tmp_path: Path) -> None:
+    """A v13 (prod-shaped) DB gains the nullable root_folder_id column on
+    upgrade (#50 Add flow root-folder picker); existing books are unaffected
+    (NULL, same as "no preference")."""
+    db = tmp_path / "v13.db"
+    migrate(db)
+    conn = sqlite3.connect(db)
+    conn.execute("INSERT INTO books (title) VALUES ('Untitled')")
+    conn.execute("ALTER TABLE books DROP COLUMN root_folder_id")
+    conn.execute("DELETE FROM schema_version WHERE version >= 14")
+    conn.commit()
+    conn.close()
+
+    version = migrate(db)
+    assert version == SCHEMA_VERSION == 14
+
+    conn = sqlite3.connect(db)
+    cols = {r[1] for r in conn.execute("PRAGMA table_info(books)")}
+    root_folder_id = conn.execute(
+        "SELECT root_folder_id FROM books WHERE title = 'Untitled'"
+    ).fetchone()[0]
+    conn.close()
+    assert "root_folder_id" in cols
+    assert root_folder_id is None
 
 
 def test_fresh_db_root_folders_default_to_copy_strategy(tmp_path: Path) -> None:
@@ -357,4 +391,4 @@ def test_version_history_is_preserved(tmp_path: Path) -> None:
     conn = sqlite3.connect(db)
     rows = conn.execute("SELECT version FROM schema_version ORDER BY version").fetchall()
     conn.close()
-    assert [r[0] for r in rows] == [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13]
+    assert [r[0] for r in rows] == [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14]

@@ -18,7 +18,14 @@
     <select id="library-sort" class="toolbar-select" aria-label="{{ t.toolbar_sort }}">
       <option value="title">{{ t.toolbar_sort_title }}</option>
       <option value="author">{{ t.toolbar_sort_author }}</option>
+      <option value="narrator">{{ t.toolbar_sort_narrator }}</option>
+      <option value="series">{{ t.toolbar_sort_series }}</option>
+      <option value="duration">{{ t.toolbar_sort_duration }}</option>
+      <option value="files">{{ t.toolbar_sort_files }}</option>
+      <option value="size">{{ t.toolbar_sort_size }}</option>
+      <option value="added">{{ t.toolbar_sort_added }}</option>
     </select>
+    <button type="button" id="library-sort-dir" class="toolbar-btn icon-only" aria-label="{{ t.library_sort_dir_asc }}" title="{{ t.library_sort_dir_asc }}">▴</button>
   </div>
 {% endblock %}
 
@@ -109,5 +116,5 @@
 {% endblock %}
 
 {% block scripts %}
-  <script src="/static/js/library.js?v={{ version }}-folderhealth"></script>
+  <script src="/static/js/library.js?v={{ version }}-sortheaders"></script>
 {% endblock %}

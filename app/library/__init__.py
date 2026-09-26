@@ -35,6 +35,8 @@ class BookCreate:
     provider_id: str = ""
     locale: str = ""
     monitored: bool = True
+    quality_profile: str = ""
+    root_folder_id: int | None = None
 
 
 @dataclass
@@ -136,8 +138,9 @@ def create_book(conn: sqlite3.Connection, data: BookCreate) -> int:
     cur = conn.execute(
         """INSERT INTO books
            (title, subtitle, description, release_date, language, publisher,
-            duration_seconds, cover_url, series_id, series_position, monitored)
-           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+            duration_seconds, cover_url, series_id, series_position, monitored,
+            quality_profile, root_folder_id)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
         (
             data.title,
             data.subtitle,
@@ -150,6 +153,8 @@ def create_book(conn: sqlite3.Connection, data: BookCreate) -> int:
             series_id,
             data.series_position,
             int(data.monitored),
+            data.quality_profile,
+            data.root_folder_id,
         ),
     )
     assert cur.lastrowid is not None
@@ -198,7 +203,7 @@ def list_books(conn: sqlite3.Connection, limit: int = 50, offset: int = 0) -> li
     rows = conn.execute(
         """SELECT b.id, b.title, b.subtitle, b.description, b.language,
                   b.duration_seconds, b.cover_url, b.release_date, b.publisher,
-                  b.monitored, b.quality_profile,
+                  b.monitored, b.quality_profile, b.root_folder_id,
                   s.name AS series_name, b.series_position,
                   (SELECT GROUP_CONCAT(a.name, ', ')
                      FROM book_authors ba JOIN authors a ON a.id = ba.author_id
@@ -216,6 +221,14 @@ def list_books(conn: sqlite3.Connection, limit: int = 50, offset: int = 0) -> li
 def update_book(
     conn: sqlite3.Connection, book_id: int, updates: dict[str, Any]
 ) -> bool:
+    """Apply non-null field updates to a book.
+
+    ``root_folder_id`` is deliberately excluded: it's the one book field
+    where NULL is a meaningful, settable value ("no preference"), so it goes
+    through set_book_root_folder() instead of this None-skipping bulk path
+    (used e.g. by the refresh flow, which passes a dict that may contain
+    None for fields the provider didn't return).
+    """
     allowed = {
         "title", "subtitle", "description", "release_date", "language",
         "publisher", "duration_seconds", "cover_url", "series_position",
@@ -228,6 +241,17 @@ def update_book(
     values = [int(updates[k]) if k == "monitored" else updates[k] for k in fields]
     values.append(book_id)
     cur = conn.execute(f"UPDATE books SET {sets}, updated_at = datetime('now') WHERE id = ?", values)
+    return cur.rowcount > 0
+
+
+def set_book_root_folder(conn: sqlite3.Connection, book_id: int, folder_id: int | None) -> bool:
+    """Persist a book's root-folder preference, including clearing it back
+    to NULL ("no preference"), see update_book()'s docstring for why this is
+    a separate setter."""
+    cur = conn.execute(
+        "UPDATE books SET root_folder_id = ?, updated_at = datetime('now') WHERE id = ?",
+        (folder_id, book_id),
+    )
     return cur.rowcount > 0
 
 
