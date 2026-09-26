@@ -54,13 +54,18 @@ function populate(settings) {
   document.getElementById("m4b-url").value = m4b.url || "";
   document.getElementById("m4b-enabled").checked = Boolean(m4b.enabled);
   document.getElementById("m4b-api-key").placeholder = m4b.api_key ? MASK : "";
+
+  const liberatarr = settings.connections.liberatarr;
+  document.getElementById("liberatarr-url").value = liberatarr.base_url || "";
+  document.getElementById("liberatarr-enabled").checked = Boolean(liberatarr.enabled);
+  document.getElementById("liberatarr-token").placeholder = liberatarr.token ? MASK : "";
 }
 
 async function loadConnections() {
   try {
     populate(await getSettings());
   } catch (err) {
-    for (const id of ["abs-msg", "m4b-msg"]) {
+    for (const id of ["abs-msg", "m4b-msg", "liberatarr-msg"]) {
       document.getElementById(id).textContent =
         `${T.connections_load_error} (${err.message})`;
     }
@@ -111,6 +116,88 @@ async function saveM4bConvertarr(event) {
     const text = `${T.connections_save_error} (${err.message})`;
     msg.textContent = text;
     if (window.AudiarrToast) window.AudiarrToast.error(text);
+  }
+}
+
+async function saveLiberatarr(event) {
+  event.preventDefault();
+  const msg = document.getElementById("liberatarr-msg");
+  msg.textContent = T.connections_saving;
+  try {
+    const doc = await getSettings();
+    const liberatarr = doc.connections.liberatarr;
+    liberatarr.base_url = document.getElementById("liberatarr-url").value.trim();
+    liberatarr.enabled = document.getElementById("liberatarr-enabled").checked;
+    const token = document.getElementById("liberatarr-token").value;
+    if (token) liberatarr.token = token; // empty means keep the stored token
+    await putSettings(doc);
+    document.getElementById("liberatarr-token").value = "";
+    populate(await getSettings());
+    msg.textContent = "";
+    if (window.AudiarrToast) window.AudiarrToast.success(T.connections_save_success);
+  } catch (err) {
+    const text = `${T.connections_save_error} (${err.message})`;
+    msg.textContent = text;
+    if (window.AudiarrToast) window.AudiarrToast.error(text);
+  }
+}
+
+async function testLiberatarr() {
+  const msg = document.getElementById("liberatarr-msg");
+  const btn = document.getElementById("liberatarr-test-btn");
+  msg.textContent = T.connections_testing;
+  if (btn) btn.disabled = true;
+  try {
+    // GET-only, base_url as the sole query param: the token is never sent
+    // as a request parameter (it would end up in request logs), so the
+    // route always falls back to the persisted token -- test after saving
+    // if you just changed it.
+    const baseUrl = document.getElementById("liberatarr-url").value.trim();
+    const resp = await fetch(`/api/v1/liberatarr/test?base_url=${encodeURIComponent(baseUrl)}`);
+    const data = await resp.json().catch(() => ({}));
+    if (!resp.ok) {
+      const text = `${T.connections_test_error} (${data.detail || `HTTP ${resp.status}`})`;
+      msg.textContent = text;
+      if (window.AudiarrToast) window.AudiarrToast.error(text);
+      return;
+    }
+    const text = `${data.ok ? "✓" : "✗"} ${data.message || ""}`.trim();
+    msg.textContent = text;
+    if (window.AudiarrToast) (data.ok ? window.AudiarrToast.success : window.AudiarrToast.error)(text);
+  } catch (err) {
+    const text = `${T.connections_test_error} (${err.message})`;
+    msg.textContent = text;
+    if (window.AudiarrToast) window.AudiarrToast.error(text);
+  } finally {
+    if (btn) btn.disabled = false;
+  }
+}
+
+async function syncLiberatarr() {
+  const msg = document.getElementById("liberatarr-msg");
+  const btn = document.getElementById("liberatarr-sync-btn");
+  msg.textContent = T.connections_liberatarr_syncing;
+  if (btn) btn.disabled = true;
+  try {
+    const resp = await fetch("/api/v1/liberatarr/sync", { method: "POST" });
+    const data = await resp.json().catch(() => ({}));
+    if (!resp.ok) {
+      const text = `${T.connections_liberatarr_sync_error} (${data.detail || `HTTP ${resp.status}`})`;
+      msg.textContent = text;
+      if (window.AudiarrToast) window.AudiarrToast.error(text);
+      return;
+    }
+    const text = (T.connections_liberatarr_sync_result || "")
+      .replace("{created}", data.created)
+      .replace("{skipped}", data.skipped_existing);
+    msg.textContent = text;
+    if (window.AudiarrToast) window.AudiarrToast.success(text);
+  } catch (err) {
+    const text = `${T.connections_liberatarr_sync_error} (${err.message})`;
+    msg.textContent = text;
+    if (window.AudiarrToast) window.AudiarrToast.error(text);
+  } finally {
+    if (btn) btn.disabled = false;
   }
 }
 
@@ -181,6 +268,9 @@ document.addEventListener("DOMContentLoaded", () => {
   document.getElementById("connections-refresh-top").addEventListener("click", loadConnections);
   document.getElementById("abs-form").addEventListener("submit", saveAudiobookshelf);
   document.getElementById("m4b-form").addEventListener("submit", saveM4bConvertarr);
+  document.getElementById("liberatarr-form").addEventListener("submit", saveLiberatarr);
+  document.getElementById("liberatarr-test-btn").addEventListener("click", testLiberatarr);
+  document.getElementById("liberatarr-sync-btn").addEventListener("click", syncLiberatarr);
   document.getElementById("abs-test-btn").addEventListener("click", () =>
     testConnection(
       "/api/v1/connections/audiobookshelf/test",

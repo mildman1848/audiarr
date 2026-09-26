@@ -27,6 +27,7 @@ from app.api import (
     routes_connections,
     routes_conversion,
     routes_import,
+    routes_liberatarr,
     routes_library,
     routes_metadata,
     routes_releases,
@@ -293,6 +294,7 @@ def create_app() -> FastAPI:
     app.include_router(routes_auth.router)
     app.include_router(routes_metadata.router)
     app.include_router(routes_connections.router)
+    app.include_router(routes_liberatarr.router)
     app.include_router(routes_connect.router)
     app.include_router(routes_releases.router)
     app.include_router(routes_library.router)

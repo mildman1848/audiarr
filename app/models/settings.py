@@ -442,9 +442,26 @@ class M4BConvertarrConnection(BaseModel):
     enabled: bool = False
 
 
+class LiberatarrSettings(BaseModel):
+    """Connection to a Liberatarr instance (Servarr UI for Libation, read-only).
+
+    Liberatarr exposes a purchased Audible library; Audiarr uses it as a
+    Wanted source (issue #64) -- purchased-but-missing audiobooks become
+    monitored books. ``token`` is sent as ``Authorization: Bearer <token>``
+    and is only used when non-empty (see app/connections/liberatarr.py).
+    This is a read-only integration: Audiarr only ever calls Liberatarr's
+    GET /health and GET /api/library endpoints.
+    """
+
+    base_url: str = ""
+    token: str = ""
+    enabled: bool = False
+
+
 class ConnectionsSettings(BaseModel):
     audiobookshelf: AudiobookshelfConnection = Field(default_factory=AudiobookshelfConnection)
     m4b_convertarr: M4BConvertarrConnection = Field(default_factory=M4BConvertarrConnection)
+    liberatarr: LiberatarrSettings = Field(default_factory=LiberatarrSettings)
 
 
 class Settings(BaseModel):
