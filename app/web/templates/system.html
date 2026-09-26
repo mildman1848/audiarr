@@ -45,12 +45,25 @@
           <span class="eyebrow">{{ t.system_eyebrow }}</span>
           <h2>{{ t.system_updates_heading }}</h2>
         </div>
+        <p id="system-update-banner" class="update-banner" hidden></p>
         <dl class="system-info-list">
           <dt>{{ t.system_updates_branch }}</dt>
           <dd id="system-updates-branch">—</dd>
           <dt>{{ t.system_updates_automatic }}</dt>
           <dd id="system-updates-automatic">—</dd>
+          <dt>{{ t.system_updates_check_enabled }}</dt>
+          <dd id="system-updates-check-enabled">—</dd>
+          <dt>{{ t.system_updates_latest_version }}</dt>
+          <dd id="system-updates-latest-version">—</dd>
+          <dt>{{ t.system_updates_last_checked }}</dt>
+          <dd id="system-updates-last-checked">—</dd>
+          <dt>{{ t.system_updates_last_error }}</dt>
+          <dd id="system-updates-last-error">—</dd>
         </dl>
+        <div class="button-row">
+          <button type="button" id="system-update-check-btn" class="btn btn-secondary">{{ t.system_update_check_now }}</button>
+        </div>
+        <p class="muted small" id="system-update-check-msg" hidden></p>
       </section>
 
       <section class="card" id="system-backup-section">

@@ -417,6 +417,14 @@ function populate(s) {
   setValue("prowlarr-url", prowlarr.url || "");
   setPlaceholder("prowlarr-api-key", prowlarr.api_key ? MASK : "");
 
+  // Update check (issue #33): display-only, single GET to GitHub releases
+  // when enabled. Repository/releases URL are shown read-only.
+  if (s.updates) {
+    setChecked("update-check-enabled", s.updates.check_enabled);
+    setValue("update-repository", s.updates.repository || "");
+    setValue("update-releases-url", s.updates.releases_url || "");
+  }
+
   // Maintenance / backups (issue #32): interval + retention are settings
   // fields; the backup list itself comes from the system API.
   if (s.backup) {
@@ -526,6 +534,9 @@ async function saveSettings(event) {
       doc.auth.password = password; // empty means keep the stored password
     }
     if ($("ui-language")) doc.ui.language = getValue("ui-language");
+    if ($("update-check-enabled")) {
+      doc.updates.check_enabled = getChecked("update-check-enabled");
+    }
     if ($("backup-interval")) {
       const interval = Number(getValue("backup-interval"));
       doc.backup.interval_hours =

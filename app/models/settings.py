@@ -384,8 +384,27 @@ class LoggingSettings(BaseModel):
 
 
 class UpdateSettings(BaseModel):
+    """Display-only update check against the GitHub releases API (#33).
+
+    Audiarr never auto-updates: ``automatic`` is legacy/reserved and is not
+    acted on anywhere. ``check_enabled`` gates the only outbound network
+    call this feature makes (a single GET to ``releases_url``); the
+    ``last_*``/``latest_*`` fields are the persisted result of the most
+    recent check so the System/Status page can render it without
+    re-querying GitHub. See app/update_check.py.
+    """
+
     branch: str = "main"
     automatic: bool = False
+    check_enabled: bool = True
+    repository: str = "mildman1848/audiarr"
+    releases_url: str = "https://api.github.com/repos/mildman1848/audiarr/releases/latest"
+    last_checked_at: str = ""
+    latest_version: str = ""
+    latest_url: str = ""
+    latest_name: str = ""
+    update_available: bool = False
+    last_error: str = ""
 
 
 class BackupSettings(BaseModel):

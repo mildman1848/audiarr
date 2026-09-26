@@ -1304,6 +1304,24 @@ button:disabled,
   font-size: 0.82rem;
 }
 
+/* Update-available callout on the System/Status page (issue #33). Uses
+   the accent color to stand out like Radarr/Sonarr's update banner,
+   without implying an error the way --warn/--err would. */
+.update-banner {
+  margin-top: 0.75rem;
+  padding: 0.6rem 0.85rem;
+  border-radius: var(--radius);
+  border: 1px solid var(--audiarr-accent);
+  background: var(--audiarr-accent-soft);
+  color: var(--audiarr-accent);
+  font-size: 0.85rem;
+}
+
+.update-banner a {
+  color: inherit;
+  font-weight: 600;
+}
+
 /* A settings card that is placeholder-only for this slice (Quality, Tags). */
 .placeholder-card {
   text-align: center;
