@@ -1,0 +1,35 @@
+{% extends "settings/shell.html" %}
+
+{% block settings_content %}
+  <section class="card settings-form">
+    <div class="section-head">
+      <span class="eyebrow">{{ t.settings_eyebrow }}</span>
+      <h2>{{ t.settings_section_security }}</h2>
+    </div>
+    <p class="section-hint">{{ t.settings_security_subtitle }}</p>
+
+    <div class="settings-subsection">
+      <label>{{ t.settings_security_method_label }}
+        <select id="security-method">
+          <option value="none">{{ t.settings_security_method_none }}</option>
+          <option value="forms">{{ t.settings_security_method_forms }}</option>
+        </select>
+      </label>
+      <label>{{ t.settings_security_username_label }}
+        <input type="text" id="security-username" autocomplete="off">
+      </label>
+      <label>{{ t.settings_security_password_label }}
+        <input type="password" id="security-password" autocomplete="new-password">
+      </label>
+      <p class="muted small">{{ t.settings_security_password_hint }}</p>
+      <label>{{ t.settings_security_api_key_label }}
+        <input type="text" id="security-api-key" readonly>
+      </label>
+      <p class="muted small">{{ t.settings_security_api_key_hint }}</p>
+      <div class="button-row">
+        <button type="button" id="security-api-key-copy-btn" class="btn btn-secondary">{{ t.settings_security_api_key_copy }}</button>
+        <button type="button" id="security-api-key-regen-btn" class="btn btn-secondary">{{ t.settings_security_api_key_regenerate }}</button>
+      </div>
+    </div>
+  </section>
+{% endblock %}

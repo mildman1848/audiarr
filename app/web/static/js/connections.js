@@ -9,9 +9,26 @@
 const T = window.AUDIARR_I18N || {};
 const MASK = "•••••";
 
+// See the identical helper/comment in settings.js: turns a FastAPI/pydantic
+// 422 body into a readable message instead of a bare `HTTP 422`.
+async function readErrorDetail(resp) {
+  const data = await resp.json().catch(() => null);
+  const detail = data && data.detail;
+  if (typeof detail === "string" && detail) return detail;
+  if (Array.isArray(detail) && detail.length) {
+    return detail
+      .map((e) => {
+        const field = Array.isArray(e.loc) ? e.loc.filter((p) => p !== "body").join(".") : "";
+        return field ? `${field}: ${e.msg}` : e.msg;
+      })
+      .join("; ");
+  }
+  return `HTTP ${resp.status}`;
+}
+
 async function getSettings() {
   const resp = await fetch("/api/v1/settings");
-  if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+  if (!resp.ok) throw new Error(await readErrorDetail(resp));
   return resp.json();
 }
 
@@ -21,7 +38,7 @@ async function putSettings(doc) {
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(doc),
   });
-  if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+  if (!resp.ok) throw new Error(await readErrorDetail(resp));
   return resp.json();
 }
 
@@ -97,9 +114,11 @@ async function saveM4bConvertarr(event) {
   }
 }
 
-async function testConnection(endpoint, urlId, keyId, msgId) {
+async function testConnection(endpoint, urlId, keyId, msgId, btnId) {
   const msg = document.getElementById(msgId);
+  const btn = btnId ? document.getElementById(btnId) : null;
   msg.textContent = T.connections_testing;
+  if (btn) btn.disabled = true;
   try {
     const body = { url: document.getElementById(urlId).value.trim() };
     const key = document.getElementById(keyId).value;
@@ -111,18 +130,28 @@ async function testConnection(endpoint, urlId, keyId, msgId) {
     });
     const data = await resp.json().catch(() => ({}));
     if (!resp.ok) {
-      msg.textContent = `${T.connections_test_error} (${data.detail || `HTTP ${resp.status}`})`;
+      const text = `${T.connections_test_error} (${data.detail || `HTTP ${resp.status}`})`;
+      msg.textContent = text;
+      if (window.AudiarrToast) window.AudiarrToast.error(text);
       return;
     }
-    msg.textContent = `${data.ok ? "✓" : "✗"} ${data.message || ""}`.trim();
+    const text = `${data.ok ? "✓" : "✗"} ${data.message || ""}`.trim();
+    msg.textContent = text;
+    if (window.AudiarrToast) (data.ok ? window.AudiarrToast.success : window.AudiarrToast.error)(text);
   } catch (err) {
-    msg.textContent = `${T.connections_test_error} (${err.message})`;
+    const text = `${T.connections_test_error} (${err.message})`;
+    msg.textContent = text;
+    if (window.AudiarrToast) window.AudiarrToast.error(text);
+  } finally {
+    if (btn) btn.disabled = false;
   }
 }
 
 async function scanAudiobookshelf() {
   const msg = document.getElementById("abs-msg");
+  const btn = document.getElementById("abs-scan-btn");
   msg.textContent = T.connections_scanning;
+  if (btn) btn.disabled = true;
   try {
     // The scan endpoint takes no body; it uses the persisted settings.
     const resp = await fetch("/api/v1/connections/audiobookshelf/scan", {
@@ -130,12 +159,20 @@ async function scanAudiobookshelf() {
     });
     const data = await resp.json().catch(() => ({}));
     if (!resp.ok) {
-      msg.textContent = `${T.connections_scan_error} (${data.detail || `HTTP ${resp.status}`})`;
+      const text = `${T.connections_scan_error} (${data.detail || `HTTP ${resp.status}`})`;
+      msg.textContent = text;
+      if (window.AudiarrToast) window.AudiarrToast.error(text);
       return;
     }
-    msg.textContent = `${data.ok ? "✓" : "✗"} ${data.message || ""}`.trim();
+    const text = `${data.ok ? "✓" : "✗"} ${data.message || ""}`.trim();
+    msg.textContent = text;
+    if (window.AudiarrToast) (data.ok ? window.AudiarrToast.success : window.AudiarrToast.error)(text);
   } catch (err) {
-    msg.textContent = `${T.connections_scan_error} (${err.message})`;
+    const text = `${T.connections_scan_error} (${err.message})`;
+    msg.textContent = text;
+    if (window.AudiarrToast) window.AudiarrToast.error(text);
+  } finally {
+    if (btn) btn.disabled = false;
   }
 }
 
@@ -149,7 +186,8 @@ document.addEventListener("DOMContentLoaded", () => {
       "/api/v1/connections/audiobookshelf/test",
       "abs-url",
       "abs-api-key",
-      "abs-msg"
+      "abs-msg",
+      "abs-test-btn"
     )
   );
   document.getElementById("abs-scan-btn").addEventListener("click", scanAudiobookshelf);
@@ -158,7 +196,8 @@ document.addEventListener("DOMContentLoaded", () => {
       "/api/v1/connections/m4b-convertarr/test",
       "m4b-url",
       "m4b-api-key",
-      "m4b-msg"
+      "m4b-msg",
+      "m4b-test-btn"
     )
   );
 });
