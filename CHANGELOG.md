@@ -2,6 +2,21 @@
 
 ## Unreleased
 
+- Make the Trivy HIGH/CRITICAL config scan a real gate (`exit-code: '1'` in
+  `.github/workflows/security.yml` and `make security`) instead of
+  report-only. Add `.trivyignore` triaging the one known finding, DS-0002
+  ("Specify at least 1 USER command"): the LSIO/s6-overlay base image
+  requires root for `/init` and s6-rc service setup, while the long-running
+  Audiarr API drops to `abc` via `s6-setuidgid` in
+  `root/usr/local/bin/start-audiarr-api`, verified by `make smoke`. Document
+  the triage in `docs/release-hardening.md`.
+- Close release hardening and dependency hygiene for Phase 5 item 4 (#8):
+  add `docs/release-hardening.md` documenting the GHCR/Docker Hub tag
+  publishing model (`<version>`, `sha-<short>`, `latest`), the local
+  `make validate`/`make build`/`make smoke` and Trivy HIGH/CRITICAL
+  workflow, and the Dependabot zero-open-alerts hygiene rule; records
+  zero open Dependabot alerts observed at time of closure. Linked from
+  the README publishing section. Bump project version to `0.5.4`.
 - Document and close the backup/restore drill for Phase 5 item 3 (#34): a
   new `docs/backup-restore-runbook.md` covering backup contents, restore
   prerequisites/procedure (Docker Compose and local/dev), rollback, and a
