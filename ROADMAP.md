@@ -120,7 +120,7 @@ Phased plan; each phase lands as small verified slices (issue → branch → PR 
 ### Phase 5 — Hardening for 1.0
 
 - Automatic config DB + settings backups with rotation. **Done**
-- Update check (display only, no auto-update). **Next**
+- Update check (display only, no auto-update). **Done**
 - Backup/restore documented and tested once for real. **Next**
 - Dependency hygiene and a final security pass (issue #8). **Partial**
 

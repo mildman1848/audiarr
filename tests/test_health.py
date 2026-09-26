@@ -19,7 +19,18 @@ def test_system_status(app_client):
     assert "pythonVersion" in body
     assert "osName" in body
     # Settings-derived maintenance state for the System/Status page.
-    assert body["updates"] == {"branch": "main", "automatic": False}
+    assert body["updates"] == {
+        "branch": "main",
+        "automatic": False,
+        "checkEnabled": True,
+        "currentVersion": body["version"],
+        "latestVersion": "",
+        "latestUrl": "",
+        "latestName": "",
+        "updateAvailable": False,
+        "lastCheckedAt": "",
+        "lastError": "",
+    }
     assert body["backup"] == {
         "folder": "/config/backups",
         "intervalHours": 24,

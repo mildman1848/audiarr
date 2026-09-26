@@ -4,7 +4,7 @@ SHELL := /bin/bash
 
 PYTHON ?= $(if $(wildcard .venv/bin/python),.venv/bin/python,python3)
 IMAGE_NAME ?= audiarr
-APP_VERSION ?= 0.5.1
+APP_VERSION ?= 0.5.2
 IMAGE_REVISION ?= release
 VERSION ?= $(APP_VERSION)
 IMAGE_TAG ?= $(VERSION)

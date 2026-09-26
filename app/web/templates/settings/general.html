@@ -45,6 +45,20 @@
       <h3>{{ t.settings_general_maintenance_heading }}</h3>
       <p class="callout">{{ t.settings_general_maintenance_note }}</p>
       <div class="settings-subsection">
+        <h4>{{ t.settings_update_heading }}</h4>
+        <p class="section-hint">{{ t.settings_update_hint }}</p>
+        <label class="inline-check">
+          <input type="checkbox" id="update-check-enabled">
+          {{ t.settings_update_check_enabled_label }}
+        </label>
+        <label>{{ t.settings_update_repository_label }}
+          <input type="text" id="update-repository" readonly>
+        </label>
+        <label>{{ t.settings_update_releases_url_label }}
+          <input type="text" id="update-releases-url" readonly>
+        </label>
+      </div>
+      <div class="settings-subsection">
         <h4>{{ t.settings_backup_heading }}</h4>
         <p class="section-hint">{{ t.settings_backup_hint }}</p>
         <label>{{ t.settings_backup_folder_label }}

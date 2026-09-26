@@ -42,8 +42,8 @@ tested, not just modeled.
 - No editable Profiles/Quality/Tags/Connect UI yet; those settings sections
   are read-only or placeholder and marked "Planned" (see `ROADMAP.md`).
 - No embedded audio converter; Audiarr delegates to `m4b-convertarr`.
-- No automatic backups or update checks yet, despite the settings being
-  modeled.
+- Update checks are display-only (GitHub releases API, disableable); Audiarr
+  never auto-updates.
 
 This is deliberate. Shipping a fake Arr clone is easy. Maintaining it is how
 people discover quiet despair.
@@ -72,8 +72,8 @@ If Docker is unavailable, `make validate` still verifies Python, tests, static c
 
 ## Image targets
 
-- `ghcr.io/mildman1848/audiarr:0.5.1`
-- `docker.io/mildman1848/audiarr:0.5.1`
+- `ghcr.io/mildman1848/audiarr:0.5.2`
+- `docker.io/mildman1848/audiarr:0.5.2`
 
 Optional GitLab/Codeberg container registry targets are supported by CI secrets, but should only be enabled after the first GHCR/Docker Hub build is verified.
 
@@ -91,7 +91,7 @@ Important defaults:
 | Audible locale | `us` |
 | UI language | `en`, with `de` available |
 | Optional translation backend | `none` by default; LibreTranslate-compatible backend optional |
-| Version | `0.5.1` |
+| Version | `0.5.2` |
 
 Versioning follows the Audiarr roadmap, not the household/fork `mldm<N>` suffix:
 
