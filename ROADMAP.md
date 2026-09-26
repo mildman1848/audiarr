@@ -82,13 +82,13 @@ but with real gaps; **Next** — not started.
 - Connect (outbound webhooks/notifications): implemented as configurable webhooks for grab/import/health/test events, with secret masking in the UI.
 - Profiles, Quality, Tags, and Connect are active, editable sections.
 
-### 10. Release hardening — Partial
+### 10. Release hardening — Done
 
 - CI publishes versioned and `latest` tags to GHCR and Docker Hub.
-- Local `make validate`, `make build`, `make smoke`, and Trivy HIGH/CRITICAL scan are documented.
-- Dependabot open alerts are zero or explicitly triaged.
+- Local `make validate`, `make build`, `make smoke`, and Trivy HIGH/CRITICAL scan are documented (`docs/release-hardening.md`).
+- Dependabot open alerts are zero or explicitly triaged; zero open alerts observed at time of closure.
 - Runtime image does not include unnecessary build tooling such as pip/setuptools/wheel.
-- Automatic config backups are implemented with manual/scheduled ZIP snapshots and retention rotation; update checks remain **Next**.
+- Automatic config backups are implemented with manual/scheduled ZIP snapshots and retention rotation; update checks are implemented (display-only).
 
 ## Roadmap to 1.0.0
 
@@ -117,12 +117,12 @@ Phased plan; each phase lands as small verified slices (issue → branch → PR 
 - Hardlink/copy import strategies — per root folder (`copy`/`hardlink`/`move`), free-space checks, hardlink copy fallback, dry-run read-only. **Done**
 - Root folder free-space and permissions view — probe-backed API fields and library-page badges; `health_issue` webhook on missing/read-only folders. **Done**
 
-### Phase 5 — Hardening for 1.0
+### Phase 5 — Hardening for 1.0 — Done
 
 - Automatic config DB + settings backups with rotation. **Done**
 - Update check (display only, no auto-update). **Done**
 - Backup/restore documented and tested once for real (#34). **Done**
-- Dependency hygiene and a final security pass (issue #8). **Partial**
+- Dependency hygiene and a final security pass (issue #8). **Done**
 
 ### Phase 6 — Starr UI/UX parity for 1.0
 

@@ -4,7 +4,7 @@ SHELL := /bin/bash
 
 PYTHON ?= $(if $(wildcard .venv/bin/python),.venv/bin/python,python3)
 IMAGE_NAME ?= audiarr
-APP_VERSION ?= 0.5.3
+APP_VERSION ?= 0.5.4
 IMAGE_REVISION ?= release
 VERSION ?= $(APP_VERSION)
 IMAGE_TAG ?= $(VERSION)
@@ -16,7 +16,7 @@ COMPOSE ?= $(DOCKER) compose
 LOAD_PLATFORM ?= linux/amd64
 PLATFORMS ?= linux/amd64,linux/arm64
 
-.PHONY: help info lint test validate compose-config build smoke release-dry-run clean
+.PHONY: help info lint test validate compose-config build smoke security release-dry-run clean
 
 help: ## Show available targets.
 	@python3 scripts/make_help.py $(MAKEFILE_LIST)
@@ -49,6 +49,9 @@ build: ## Build local single-platform Docker image.
 
 smoke: ## Smoke-test local Docker image, if Docker daemon is available.
 	@DOCKER='$(DOCKER)' IMAGE='$(LOCAL_IMAGE)' scripts/smoke.sh
+
+security: ## Run local Trivy HIGH/CRITICAL config scan (same gate as CI; fails on unignored findings).
+	@if command -v trivy >/dev/null 2>&1; then trivy config --severity HIGH,CRITICAL --exit-code 1 .; else echo 'ERROR: trivy not installed; see docs/release-hardening.md' >&2; exit 2; fi
 
 release-dry-run: ## Show intended publish targets.
 	@printf 'Would publish: %s\n' '$(IMAGE_REF)'

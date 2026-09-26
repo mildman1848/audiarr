@@ -72,10 +72,14 @@ If Docker is unavailable, `make validate` still verifies Python, tests, static c
 
 ## Image targets
 
-- `ghcr.io/mildman1848/audiarr:0.5.3`
-- `docker.io/mildman1848/audiarr:0.5.3`
+- `ghcr.io/mildman1848/audiarr:0.5.4`
+- `docker.io/mildman1848/audiarr:0.5.4`
 
 Optional GitLab/Codeberg container registry targets are supported by CI secrets, but should only be enabled after the first GHCR/Docker Hub build is verified.
+
+See [`docs/release-hardening.md`](docs/release-hardening.md) for the full
+publishing model, local validation commands, Trivy scan, and Dependabot
+hygiene rule.
 
 ## Environment
 
@@ -91,7 +95,7 @@ Important defaults:
 | Audible locale | `us` |
 | UI language | `en`, with `de` available |
 | Optional translation backend | `none` by default; LibreTranslate-compatible backend optional |
-| Version | `0.5.3` |
+| Version | `0.5.4` |
 
 Versioning follows the Audiarr roadmap, not the household/fork `mldm<N>` suffix:
 
@@ -120,4 +124,4 @@ This repository is public-ready, but publishing must happen only after:
 3. Registry secrets are configured explicitly.
 4. A Docker build/smoke test has passed on a host with a running Docker daemon.
 
-See `docs/publishing.md`.
+See `docs/publishing.md` and [`docs/release-hardening.md`](docs/release-hardening.md).

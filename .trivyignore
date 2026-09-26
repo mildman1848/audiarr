@@ -1,0 +1,24 @@
+# Trivy config-scan triage. Every entry here MUST include a rationale and a
+# pointer to how it is verified — untriaged HIGH/CRITICAL findings fail the
+# scan (see .github/workflows/security.yml and `make security`).
+
+# DS-0002 (HIGH): "Specify at least 1 USER command in Dockerfile with
+# non-root user as argument"
+#
+# Intentionally not fixed by adding `USER abc` to the final Dockerfile.
+# This image is LSIO/s6-overlay based (ghcr.io/linuxserver/baseimage-ubuntu),
+# and s6 requires the container to start as root:
+#   - `/init` (s6-overlay's PID 1) and the s6-rc service supervision tree
+#     need root to set up cgroups, run stage1/stage2, and manage the
+#     `init-audiarr` / `audiarr-api` services under root/etc/s6-overlay/.
+#   - PUID/PGID handling (LSIO's usermod of the `abc` user at container
+#     start) also requires root.
+#
+# Privilege drop happens at the point that actually matters: the long-running
+# application process. root/usr/local/bin/start-audiarr-api execs uvicorn via
+# `s6-setuidgid abc`, so the Audiarr API itself never runs as root.
+#
+# Verified by `make smoke` (scripts/smoke.sh), which execs into the running
+# container and asserts the uvicorn process is owned by `abc`:
+#   docker exec <container> sh -lc 'id abc; ps -eo user,args | grep uvicorn'
+DS-0002
