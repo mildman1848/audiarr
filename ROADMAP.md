@@ -121,7 +121,7 @@ Phased plan; each phase lands as small verified slices (issue → branch → PR 
 
 - Automatic config DB + settings backups with rotation. **Done**
 - Update check (display only, no auto-update). **Done**
-- Backup/restore documented and tested once for real. **Next**
+- Backup/restore documented and tested once for real (#34). **Done**
 - Dependency hygiene and a final security pass (issue #8). **Partial**
 
 ### Phase 6 — Starr UI/UX parity for 1.0

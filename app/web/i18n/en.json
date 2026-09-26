@@ -512,7 +512,7 @@
   "settings_field_name": "Name",
   "settings_base_url_label": "Base URL",
   "settings_backup_heading": "Configuration backups",
-  "settings_backup_hint": "Automatic backups of the database and settings with rotation. Restoring is planned for a later release.",
+  "settings_backup_hint": "Automatic backups of the database and settings with rotation. Restoring is documented and tested; see the backup and restore runbook.",
   "settings_backup_folder_label": "Backup folder",
   "settings_backup_interval_label": "Interval (hours, 0 = off)",
   "settings_backup_interval_hint": "0 disables scheduled backups. The first scheduled backup runs one full interval after startup; use the button below for an immediate backup.",

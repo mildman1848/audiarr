@@ -512,7 +512,7 @@
   "settings_field_name": "Name",
   "settings_base_url_label": "Basis-URL",
   "settings_backup_heading": "Konfigurations-Backups",
-  "settings_backup_hint": "Automatische Backups von Datenbank und Einstellungen mit Rotation. Das Wiederherstellen ist für eine spätere Version geplant.",
+  "settings_backup_hint": "Automatische Backups von Datenbank und Einstellungen mit Rotation. Das Wiederherstellen ist dokumentiert und getestet; siehe das Backup- und Wiederherstellungs-Runbook.",
   "settings_backup_folder_label": "Backup-Ordner",
   "settings_backup_interval_label": "Intervall (Stunden, 0 = aus)",
   "settings_backup_interval_hint": "0 deaktiviert geplante Backups. Das erste geplante Backup läuft nach einem vollen Intervall nach dem Start; für ein sofortiges Backup die Schaltfläche unten nutzen.",
