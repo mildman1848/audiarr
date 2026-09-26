@@ -3,20 +3,25 @@
 Each root folder configures how the import pipeline gets a matched
 candidate's files onto disk under that root:
 
-  - ``copy``:     safest default. Preserves the source untouched (keeps a
-                   torrent/usenet download seedable) at the cost of double
-                   disk usage during import.
-  - ``move``:      no extra space needed, but the source is gone afterwards
-                   -- do not point a root folder using this strategy at a
-                   download client's incomplete/still-seeding directory.
-  - ``hardlink``:  zero extra space and instant, but only works when the
-                   source and destination live on the same filesystem/
-                   volume. Falls back to ``copy`` (logged) whenever the OS
-                   refuses the link (cross-device, unsupported filesystem,
-                   or no permission) so an import never fails outright just
+  - ``hardlink``:  preferred default. Zero extra disk usage and instant,
+                   and keeps a torrent/usenet download seedable since the
+                   source is untouched. Only works when the source and
+                   destination live on the same filesystem/volume; falls
+                   back to ``copy`` (logged) whenever the OS refuses the
+                   link (cross-device, unsupported filesystem, or no
+                   permission) so an import never fails outright just
                    because hardlinking wasn't possible.
+  - ``copy``:      automatic fallback for hardlink, and available as an
+                   explicit choice. Preserves the source untouched at the
+                   cost of double disk usage during import.
+  - ``move``:      opt-in only. No extra space needed, but the source is
+                   gone afterwards -- do not point a root folder using
+                   this strategy at a download client's incomplete/
+                   still-seeding directory.
 
-See docs/design/import-strategies.md for the full trade-off writeup.
+See `docs/design/quality-profiles.md` for the design-doc index; the full
+trade-off writeup lives in this module's history (issue #30 and the
+hardlink-default switch).
 
 This module only ever places files under the resolved target folder inside
 the configured root folder's path (containment is enforced -- see
@@ -39,7 +44,7 @@ from pathlib import Path
 log = logging.getLogger("audiarr.library.import_strategy")
 
 STRATEGIES = ("move", "copy", "hardlink")
-DEFAULT_STRATEGY = "copy"
+DEFAULT_STRATEGY = "hardlink"
 
 
 class ImportStrategyError(RuntimeError):

@@ -155,7 +155,7 @@ def test_root_folder_crud(tmp_path):
         set_db_path_override(None)
 
 
-def test_root_folder_import_strategy_defaults_to_copy(tmp_path):
+def test_root_folder_import_strategy_defaults_to_hardlink(tmp_path):
     from app.db import set_db_path_override
 
     set_db_path_override(tmp_path / "lib.db")
@@ -166,7 +166,7 @@ def test_root_folder_import_strategy_defaults_to_copy(tmp_path):
                 conn, RootFolderCreate(path="/data/audiobooks")
             )
             row = get_root_folder(conn, folder_id)
-        assert row["import_strategy"] == "copy"
+        assert row["import_strategy"] == "hardlink"
     finally:
         set_db_path_override(None)
 
@@ -201,8 +201,9 @@ def test_api_root_folder_lifecycle(app_client):
     assert resp.status_code == 201
     folder = resp.json()
     assert folder["path"] == "/data/audiobooks"
-    # No import_strategy given -> defaults to "copy" (#30).
-    assert folder["import_strategy"] == "copy"
+    # No import_strategy given -> defaults to "hardlink" (copy is the
+    # automatic fallback when linking isn't possible, see #30 / hardlink-default).
+    assert folder["import_strategy"] == "hardlink"
 
     # Duplicate -> 409
     dup = app_client.post(
@@ -214,7 +215,7 @@ def test_api_root_folder_lifecycle(app_client):
     listing = app_client.get("/api/v1/library/root-folders")
     assert listing.status_code == 200
     assert len(listing.json()) == 1
-    assert listing.json()[0]["import_strategy"] == "copy"
+    assert listing.json()[0]["import_strategy"] == "hardlink"
 
     # Delete
     gone = app_client.delete(f"/api/v1/library/root-folders/{folder['id']}")
@@ -248,7 +249,7 @@ def test_api_root_folder_strategy_update_roundtrip(app_client):
     created = app_client.post(
         "/api/v1/library/root-folders", json={"path": "/data/audiobooks"}
     ).json()
-    assert created["import_strategy"] == "copy"
+    assert created["import_strategy"] == "hardlink"
 
     updated = app_client.put(
         f"/api/v1/library/root-folders/{created['id']}/strategy",
