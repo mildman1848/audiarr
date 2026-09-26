@@ -24,6 +24,7 @@ function issueLabel(issue) {
 async function refreshDashboardHealth() {
   const banner = document.getElementById("dashboard-health-banner");
   const text = document.getElementById("dashboard-health-banner-text");
+  const action = document.getElementById("dashboard-health-banner-action");
   if (!banner || !text) return;
 
   try {
@@ -37,11 +38,13 @@ async function refreshDashboardHealth() {
       banner.classList.remove("health-banner-warn");
       banner.classList.add("muted");
       text.textContent = T.dashboard_health_ok || "All systems healthy";
+      if (action) action.hidden = true;
     } else {
       const issues = (health.rootFolderIssues || []).map(issueLabel);
       banner.classList.remove("muted");
       banner.classList.add("health-banner-warn");
       text.innerHTML = `${esc(T.dashboard_health_warn || "Health issues detected")}: ${issues.map(esc).join(", ")}`;
+      if (action) action.hidden = false;
     }
   } catch (err) {
     // Non-fatal: the banner just stays hidden if the status call fails.
@@ -49,4 +52,8 @@ async function refreshDashboardHealth() {
   }
 }
 
-document.addEventListener("DOMContentLoaded", refreshDashboardHealth);
+document.addEventListener("DOMContentLoaded", () => {
+  refreshDashboardHealth();
+  const refreshBtn = document.getElementById("dashboard-refresh-top");
+  if (refreshBtn) refreshBtn.addEventListener("click", refreshDashboardHealth);
+});

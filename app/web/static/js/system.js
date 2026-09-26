@@ -219,6 +219,7 @@ function formatIntervalHours(hours) {
 async function refreshTasks() {
   const tbody = document.getElementById("system-tasks-tbody");
   if (!tbody) return;
+  tbody.innerHTML = `<tr><td colspan="3" class="muted table-loading-row">${esc(T.system_tasks_loading)}</td></tr>`;
   try {
     const [settingsResp, backupResp] = await Promise.all([
       fetch("/api/v1/settings"),
@@ -288,6 +289,7 @@ function eventStatusBadge(status) {
 async function refreshEvents() {
   const tbody = document.getElementById("system-events-tbody");
   if (!tbody) return;
+  tbody.innerHTML = `<tr><td colspan="4" class="muted table-loading-row">${esc(T.system_events_loading)}</td></tr>`;
   try {
     const resp = await fetch("/api/v1/import/jobs");
     if (!resp.ok) throw new Error(`HTTP ${resp.status}`);

@@ -148,13 +148,16 @@ function qualityBadge(r) {
   return `<span class="${badgeClass}"${titleAttr}>${esc(label)}</span>${compactHtml}`;
 }
 
-// Inline 503 warning: config missing, point the user at /settings.
+// Inline 503 warning: config missing, point the user at /settings. Same
+// emptyState + Settings-CTA pattern as activity.js's renderConfigWarning.
 function renderConfigWarning(container) {
-  container.innerHTML = `
-    <div class="card danger-card">
-      <p>${esc(T.search_config_missing)}</p>
-      <p><a href="/settings">${esc(T.search_config_link)}</a></p>
-    </div>`;
+  const link = `<a class="btn btn-secondary" href="/settings">${esc(T.search_config_link)}</a>`;
+  container.innerHTML = window.AudiarrUI.emptyState({
+    icon: "⚙",
+    title: T.search_config_missing,
+    hint: T.search_config_hint,
+    actionHtml: link,
+  });
 }
 
 async function runSearch(event) {
@@ -181,7 +184,13 @@ async function runSearch(event) {
     console.debug("release search: %d result(s)", lastReleases.length);
     renderResults();
   } catch (err) {
-    container.innerHTML = `<p class="muted">${esc(T.search_results_error)} (${esc(err.message)})</p>`;
+    const retry = `<button type="button" class="btn btn-secondary" id="rs-retry-btn">${esc(T.search_retry)}</button>`;
+    container.innerHTML = window.AudiarrUI.emptyState({
+      icon: "⚠",
+      title: `${T.search_results_error} (${err.message})`,
+      actionHtml: retry,
+    });
+    document.getElementById("rs-retry-btn").addEventListener("click", () => runSearch(new Event("submit")));
   }
 }
 
@@ -196,7 +205,11 @@ function isQualityFitOnlyEnabled() {
 function renderResults() {
   const container = document.getElementById("release-results");
   if (!lastReleases.length) {
-    container.innerHTML = `<p class="muted">${esc(T.search_results_empty)}</p>`;
+    container.innerHTML = window.AudiarrUI.emptyState({
+      icon: "⌕",
+      title: T.search_results_empty,
+      hint: T.search_results_empty_hint,
+    });
     return;
   }
 

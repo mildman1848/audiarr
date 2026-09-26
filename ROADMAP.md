@@ -134,7 +134,7 @@ Audiarr should feel like a deliberate member of the Starr UI family, not a forke
 - Shell and navigation Starr parity pass (#49). **Done**
 - Primary data pages Starr parity pass (#50). **Done**
 - Settings Starr parity pass (#51). **Done**
-- Final Starr-style release polish pass (#52). **Next**
+- Final Starr-style release polish pass (#52). **Done**
 
 ### Release
 

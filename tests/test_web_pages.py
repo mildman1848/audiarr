@@ -19,6 +19,20 @@ def _set_ui_language(app_client, language: str) -> None:
     assert app_client.put("/api/v1/settings", json=current).status_code == 200
 
 
+def _embedded_i18n(html: str) -> dict:
+    """Parse the `window.AUDIARR_I18N = {...};` blob base.html embeds on every
+    page. Client-rendered strings (e.g. emptyState hints built in wanted.js/
+    search.js) never appear as literal HTML text, only inside this JSON blob
+    -- and Jinja's `tojson` filter escapes non-ASCII characters (umlauts) to
+    `\\uXXXX`, so asserting German copy needs a JSON-aware comparison rather
+    than a raw substring match."""
+    import json as _json
+
+    match = re.search(r"window\.AUDIARR_I18N\s*=\s*(\{.*?\});", html, re.DOTALL)
+    assert match, "window.AUDIARR_I18N blob not found in page"
+    return _json.loads(match.group(1))
+
+
 def _nav_item_classes(html: str, href: str) -> list[str]:
     """Return the class list of the sidebar nav `<a>` for the given href.
 
@@ -186,6 +200,33 @@ def test_settings_page_has_security_section(
     general = app_client.get("/settings/general")
     assert general.status_code == 200
     assert 'id="security-method"' not in general.text
+
+
+@pytest.mark.parametrize(
+    ("language", "activity_marker", "import_marker"),
+    [
+        ("en", "Live SABnzbd queue", "Review folders Audiarr could not confidently match"),
+        ("de", "Live-SABnzbd-Warteschlange", "Prüfe Ordner, die Audiarr nicht sicher zuordnen konnte"),
+    ],
+)
+def test_release_polish_pages_have_actionable_empty_state_copy(
+    app_client, language, activity_marker, import_marker
+):
+    """Issue #52: Activity and Import pages should read like finished
+    Starr-style operational pages, not bare placeholder text."""
+    _set_ui_language(app_client, language)
+
+    activity = app_client.get("/activity")
+    assert activity.status_code == 200
+    assert activity_marker in activity.text
+    assert "activity.js" in activity.text
+    assert "releasepolish" in activity.text
+
+    import_page = app_client.get("/import")
+    assert import_page.status_code == 200
+    assert import_marker in import_page.text
+    assert "import.js" in import_page.text
+    assert "releasepolish" in import_page.text
 
 
 @pytest.mark.parametrize(
@@ -1094,10 +1135,11 @@ def test_common_js_defines_shared_date_format_helper():
     ("js_file", "expected_calls"),
     [
         ("library.js", 3),
-        ("wanted.js", 3),
+        ("wanted.js", 5),
         ("calendar.js", 3),
         ("activity.js", 3),
         ("app.js", 1),
+        ("search.js", 3),
     ],
 )
 def test_pages_use_shared_empty_state_helper(js_file, expected_calls):
@@ -1111,7 +1153,7 @@ def test_activity_js_config_missing_state_reads_as_queue_history():
     """Issue #12: the SABnzbd-not-configured state must not look like a
     generic error card — it renders through the shared empty-state helper
     (inside the existing Queue/History .card sections) with a Settings CTA,
-    not the standalone .danger-card used elsewhere (e.g. search.js)."""
+    not a standalone .danger-card."""
     script = (Path(__file__).parents[1] / "app/web/static/js/activity.js").read_text()
 
     assert "danger-card" not in script
@@ -1181,3 +1223,84 @@ def test_index_js_defines_health_banner_refresh():
     assert "async function refreshDashboardHealth" in js
     assert '"/api/v1/system/status"' in js
     assert "dashboard-health-banner" in js
+
+
+@pytest.mark.parametrize(
+    ("language", "marker"),
+    [
+        ("en", "View System status"),
+        ("de", "System-Status ansehen"),
+    ],
+)
+def test_dashboard_health_banner_has_system_action_link(app_client, language, marker):
+    """Issue #52: the health banner links to System/Status when issues are
+    detected, not just an inline warning message, in both UI languages."""
+    _set_ui_language(app_client, language)
+
+    page = app_client.get("/")
+    assert page.status_code == 200
+    assert 'id="dashboard-health-banner-action"' in page.text
+    assert 'href="/system/status"' in page.text
+    assert marker in page.text
+
+
+@pytest.mark.parametrize("language", ["en", "de"])
+def test_wanted_page_empty_states_have_hints(app_client, language):
+    """Issue #52: Wanted's Missing/Cutoff-unmet empty states carry an
+    actionable hint (rendered via AudiarrUI.emptyState in wanted.js), not
+    just a bare title, in both UI languages. Hints are only ever rendered
+    client-side, so they're verified against the embedded i18n dict rather
+    than raw page text (see _embedded_i18n)."""
+    _set_ui_language(app_client, language)
+
+    page = app_client.get("/wanted/missing")
+    assert page.status_code == 200
+    i18n = _embedded_i18n(page.text)
+    keys = ("wanted_empty_hint", "wanted_filtered_empty_hint", "wanted_cutoff_empty_hint", "wanted_retry")
+    for key in keys:
+        assert i18n.get(key), f"missing/empty i18n key: {key}"
+
+
+@pytest.mark.parametrize(
+    ("language", "tasks_loading", "events_loading"),
+    [
+        ("en", "Loading scheduled tasks…", "Loading events…"),
+        ("de", "Aufgaben werden geladen…", "Ereignisse werden geladen…"),
+    ],
+)
+def test_system_page_tasks_events_loading_is_distinct_from_empty(
+    app_client, language, tasks_loading, events_loading
+):
+    """Issue #52: System Tasks/Events tables show an explicit, translated
+    loading marker (distinct copy + a dedicated CSS hook) instead of reusing
+    generic "Loading…" text that reads the same as an empty state."""
+    _set_ui_language(app_client, language)
+
+    page = app_client.get("/system/status")
+    assert page.status_code == 200
+    assert tasks_loading in page.text
+    assert events_loading in page.text
+    assert 'class="muted table-loading-row"' in page.text
+
+    js = Path("app/web/static/js/system.js").read_text(encoding="utf-8")
+    assert "table-loading-row" in js
+
+
+@pytest.mark.parametrize("language", ["en", "de"])
+def test_search_page_empty_and_config_states_use_hints(app_client, language):
+    """Issue #52: the Releases page's empty-results and config-missing
+    states carry hints, aligning with the emptyState pattern already used
+    on Library/Activity/Import/Calendar, in both UI languages. These are
+    only ever rendered client-side, so they're verified against the
+    embedded i18n dict rather than raw page text (see _embedded_i18n)."""
+    _set_ui_language(app_client, language)
+
+    page = app_client.get("/search")
+    assert page.status_code == 200
+    i18n = _embedded_i18n(page.text)
+    for key in ("search_results_empty_hint", "search_config_hint", "search_retry"):
+        assert i18n.get(key), f"missing/empty i18n key: {key}"
+
+    js = Path("app/web/static/js/search.js").read_text(encoding="utf-8")
+    assert "window.AudiarrUI.emptyState" in js
+    assert "danger-card" not in js

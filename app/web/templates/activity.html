@@ -23,6 +23,7 @@
         <span class="eyebrow">{{ t.activity_eyebrow }}</span>
         <h2>{{ t.activity_queue_heading }}</h2>
       </div>
+      <p class="section-hint">{{ t.activity_queue_hint }}</p>
       <div id="activity-queue">
         <p class="muted">{{ t.activity_loading }}</p>
       </div>
@@ -33,6 +34,7 @@
         <span class="eyebrow">{{ t.activity_eyebrow }}</span>
         <h2>{{ t.activity_history_heading }}</h2>
       </div>
+      <p class="section-hint">{{ t.activity_history_hint }}</p>
       <div id="activity-history">
         <p class="muted">{{ t.activity_loading }}</p>
       </div>
@@ -41,5 +43,5 @@
 {% endblock %}
 
 {% block scripts %}
-  <script src="/static/js/activity.js?v={{ version }}-queuecontrols"></script>
+  <script src="/static/js/activity.js?v={{ version }}-releasepolish"></script>
 {% endblock %}

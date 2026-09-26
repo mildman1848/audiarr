@@ -43,7 +43,13 @@ async function loadUnmatched() {
 function renderUnmatched(rows) {
   const container = document.getElementById("import-unmatched");
   if (!rows.length) {
-    container.innerHTML = `<p class="muted">${esc(T.import_empty)}</p>`;
+    const action = `<a class="btn btn-secondary" href="/library">${esc(T.import_empty_action)}</a>`;
+    container.innerHTML = window.AudiarrUI.emptyState({
+      icon: "✓",
+      title: T.import_empty,
+      hint: T.import_empty_hint,
+      actionHtml: action,
+    });
     return;
   }
 
@@ -126,7 +132,11 @@ async function loadIgnored() {
 function renderIgnored(rows) {
   const container = document.getElementById("import-ignored");
   if (!rows.length) {
-    container.innerHTML = `<p class="muted">${esc(T.import_ignored_empty)}</p>`;
+    container.innerHTML = window.AudiarrUI.emptyState({
+      icon: "✓",
+      title: T.import_ignored_empty,
+      hint: T.import_ignored_empty_hint,
+    });
     return;
   }
 

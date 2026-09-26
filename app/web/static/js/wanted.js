@@ -118,13 +118,21 @@ function renderMissing() {
   const container = document.getElementById("wanted-missing-list");
 
   if (!allMissing.length) {
-    container.innerHTML = window.AudiarrUI.emptyState({ icon: "☆", title: T.wanted_empty });
+    container.innerHTML = window.AudiarrUI.emptyState({
+      icon: "☆",
+      title: T.wanted_empty,
+      hint: T.wanted_empty_hint,
+    });
     return;
   }
 
   const books = sortedMissing(filteredMissing());
   if (!books.length) {
-    container.innerHTML = window.AudiarrUI.emptyState({ icon: "⌕", title: T.toolbar_search_no_results });
+    container.innerHTML = window.AudiarrUI.emptyState({
+      icon: "⌕",
+      title: T.toolbar_search_no_results,
+      hint: T.wanted_filtered_empty_hint,
+    });
     return;
   }
 
@@ -157,7 +165,13 @@ async function loadMissing() {
     renderMissing();
   } catch (err) {
     allMissing = [];
-    container.innerHTML = `<p class="muted">${esc(T.wanted_load_error)} (${esc(err.message)})</p>`;
+    const retry = `<button type="button" class="btn btn-secondary" id="wanted-missing-retry-btn">${esc(T.wanted_retry)}</button>`;
+    container.innerHTML = window.AudiarrUI.emptyState({
+      icon: "⚠",
+      title: `${T.wanted_load_error} (${err.message})`,
+      actionHtml: retry,
+    });
+    document.getElementById("wanted-missing-retry-btn").addEventListener("click", loadMissing);
   }
 }
 
@@ -185,7 +199,11 @@ function renderCutoff() {
   const container = document.getElementById("wanted-cutoff-list");
 
   if (!allCutoff.length) {
-    container.innerHTML = window.AudiarrUI.emptyState({ icon: "⇪", title: T.wanted_cutoff_empty });
+    container.innerHTML = window.AudiarrUI.emptyState({
+      icon: "⇪",
+      title: T.wanted_cutoff_empty,
+      hint: T.wanted_cutoff_empty_hint,
+    });
     return;
   }
 
@@ -219,7 +237,13 @@ async function loadCutoff() {
     renderCutoff();
   } catch (err) {
     allCutoff = [];
-    container.innerHTML = `<p class="muted">${esc(T.wanted_cutoff_load_error)} (${esc(err.message)})</p>`;
+    const retry = `<button type="button" class="btn btn-secondary" id="wanted-cutoff-retry-btn">${esc(T.wanted_retry)}</button>`;
+    container.innerHTML = window.AudiarrUI.emptyState({
+      icon: "⚠",
+      title: `${T.wanted_cutoff_load_error} (${err.message})`,
+      actionHtml: retry,
+    });
+    document.getElementById("wanted-cutoff-retry-btn").addEventListener("click", loadCutoff);
   }
 }
 
