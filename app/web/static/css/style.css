@@ -457,6 +457,14 @@ body {
   margin-top: 0.35rem;
 }
 
+/* Distinct visual marker for an in-flight table fetch (System Tasks/Events,
+   issue #52) so a loading row can't be mistaken for an honest "nothing
+   here yet" empty state at a glance. */
+.table-loading-row {
+  font-style: italic;
+  opacity: 0.75;
+}
+
 /* ------------------------------------------------- Dashboard quick actions */
 
 .quick-action-grid {
@@ -1464,6 +1472,10 @@ button:disabled,
   background: rgba(224, 160, 48, 0.14);
   color: var(--warn);
   font-weight: 600;
+}
+
+#dashboard-health-banner-action {
+  margin-left: 0.6rem;
 }
 
 /* A settings card that is placeholder-only for this slice (Quality, Tags). */
