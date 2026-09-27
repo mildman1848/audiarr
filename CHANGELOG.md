@@ -1,5 +1,11 @@
 # Changelog
 
+## 1.1.2
+
+- OPDS 1.2/Atom catalog export (#65): root/new/authors/narrators/search feeds and acquisition links.
+- Auth-protected OPDS download route for primary audiobook file, preferring M4B and enforcing root-folder safety.
+- Settings OPDS read-only feed URL page with EN/DE i18n.
+
 ## 1.1.0
 
 - Add Liberatarr (Libation) as an optional read-only Wanted source (#64): configure base URL/token in Connections, test reachability, proxy the library, and idempotently create monitored books from Not Liberated Audible purchases. The client matches Liberatarr's real API shape (`{"books": [...]}`, `product_id` ASINs, integer status enum, `language` locale) and keeps defensive fallbacks.

@@ -1,13 +1,13 @@
 services:
   audiarr:
-    image: local/audiarr:1.1.0
+    image: local/audiarr:1.1.2
     build:
       context: .
       args:
         LSIO_BASE_VERSION: noble
-        APP_VERSION: 1.1.0
+        APP_VERSION: 1.1.2
         IMAGE_REVISION: release
-        VERSION: 1.1.0
+        VERSION: 1.1.2
     container_name: audiarr
     restart: unless-stopped
     ports:
@@ -25,7 +25,7 @@ services:
       # FILE__M4B_CONVERTARR_API_KEY: /run/secrets/m4b_convertarr_api_key
     volumes:
       - ./config:/config
-      - /mnt/qnap/mediacenter/data:/data
+      - ./data:/data
     networks:
       - media_apps
 

@@ -140,6 +140,7 @@ Audiarr should feel like a deliberate member of the Starr UI family, not a forke
 
 - `1.0.0` shipped: Phases 1–6 are green. The automation loop is complete, quality decisions are per-book, backups and restore are verified, and the UI/UX is intentionally close to the Starr family.
 - `1.1.0` shipped: Liberatarr integration as a Wanted source (#67), reusing Audible library/account knowledge where legally and technically safe.
+- `1.1.2` shipped: OPDS 1.2/Atom catalog export and an auth-protected download route (#65).
 
 ## 1.1.x Feature-Parity Convergence
 
@@ -153,7 +154,7 @@ deliberately **not** a `1.2.0` jump — so each lands as its own verified
 milestone rather than a large untested rewrite.
 
 - **1.1.1 — Parity audit + roadmap (docs-only).** This roadmap update and the gap-analysis doc. **Done**
-- **1.1.2 — OPDS export feed (#65).** Kept next because it's a scoped, already-planned integration rather than a structural UI change; revisit optional calendar/reader-consumer notes (e.g. iCal/webcal link) if cheap to add alongside it. **Next**
+- **1.1.2 — OPDS export feed (#65).** Kept next because it's a scoped, already-planned integration rather than a structural UI change; revisit optional calendar/reader-consumer notes (e.g. iCal/webcal link) if cheap to add alongside it. **Done**
 - **1.1.3 — Add New + Book Detail Starr action parity (#68).** Root folder/quality-profile/monitor-mode/tags chosen at add time (including author/series-level monitoring); Book Detail toolbar gets refresh/rescan/search/organize/delete as first-class actions; library table gets sortable column headers. Highest-value P0 gap identified in both `starr-ui-parity.md` and the new gap analysis. **Next**
 - **1.1.4 — Activity queue/history actions + remote path mappings (#69).** Queue remove/retry/mark-failed and history retry/remove actions; remote path mappings for Docker/NAS setups where the download client and Audiarr see different filesystem paths. **Next**
 - **1.1.5 — Custom release preferences / audiobook custom formats MVP (#70).** Scoring/conditions for narrator/edition/publisher/dramatized-vs-unabridged preferences, plus an optional "wait for a better release" rule (Radarr/Sonarr's delay/release-profile concepts, adapted). **Next**

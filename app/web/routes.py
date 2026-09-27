@@ -28,10 +28,13 @@ templates = Jinja2Templates(directory=str(TEMPLATES_DIR))
 # page (/settings) links to all of them via label_key/desc_key.
 #
 # "status" distinguishes sections with real, saveable fields ("active",
-# the default when omitted) from sections that are read-only/placeholder
-# for this slice ("planned"): the settings overview badges those cards and
-# settings/shell.html hides the save bar and advanced toggle on them, so a
-# page with nothing to save never claims otherwise.
+# the default when omitted) from sections with nothing to save:
+# "planned" for placeholder sections not built yet (badged "Planned" on
+# the overview and the section heading), "readonly" for sections that are
+# fully implemented but purely informational (e.g. opds -- no form
+# fields, just a generated feed URL). settings/shell.html hides the save
+# bar and advanced toggle for both, so a page with nothing to save never
+# claims otherwise, but only "planned" gets the badge.
 SETTINGS_SECTIONS: list[dict[str, str]] = [
     {
         "slug": "media-management",
@@ -104,6 +107,13 @@ SETTINGS_SECTIONS: list[dict[str, str]] = [
         "template": "settings/conversion.html",
         "label_key": "settings_section_conversion",
         "desc_key": "settings_overview_conversion_desc",
+    },
+    {
+        "slug": "opds",
+        "template": "settings/opds.html",
+        "label_key": "settings_section_opds",
+        "desc_key": "settings_overview_opds_desc",
+        "status": "readonly",
     },
 ]
 _SETTINGS_SECTIONS_BY_SLUG = {section["slug"]: section for section in SETTINGS_SECTIONS}
