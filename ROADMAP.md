@@ -139,9 +139,30 @@ Audiarr should feel like a deliberate member of the Starr UI family, not a forke
 ### Release — Shipped
 
 - `1.0.0` shipped: Phases 1–6 are green. The automation loop is complete, quality decisions are per-book, backups and restore are verified, and the UI/UX is intentionally close to the Starr family.
+- `1.1.0` shipped: Liberatarr integration as a Wanted source (#67), reusing Audible library/account knowledge where legally and technically safe.
+
+## 1.1.x Feature-Parity Convergence
+
+Gap analysis and full rationale: [`docs/design/feature-parity-gap-analysis.md`](docs/design/feature-parity-gap-analysis.md).
+
+Two questions drove this track: have we adopted (or deliberately adapted)
+everything worth adopting from Radarr/Sonarr, and what do sibling
+audiobook-manager projects (Listenarr, Chaptarr) have that we should
+selectively harvest? The answer is a sequence of small `1.1.x` slices —
+deliberately **not** a `1.2.0` jump — so each lands as its own verified
+milestone rather than a large untested rewrite.
+
+- **1.1.1 — Parity audit + roadmap (docs-only).** This roadmap update and the gap-analysis doc. **Done**
+- **1.1.2 — OPDS export feed (#65).** Kept next because it's a scoped, already-planned integration rather than a structural UI change; revisit optional calendar/reader-consumer notes (e.g. iCal/webcal link) if cheap to add alongside it. **Next**
+- **1.1.3 — Add New + Book Detail Starr action parity (#68).** Root folder/quality-profile/monitor-mode/tags chosen at add time (including author/series-level monitoring); Book Detail toolbar gets refresh/rescan/search/organize/delete as first-class actions; library table gets sortable column headers. Highest-value P0 gap identified in both `starr-ui-parity.md` and the new gap analysis. **Next**
+- **1.1.4 — Activity queue/history actions + remote path mappings (#69).** Queue remove/retry/mark-failed and history retry/remove actions; remote path mappings for Docker/NAS setups where the download client and Audiarr see different filesystem paths. **Next**
+- **1.1.5 — Custom release preferences / audiobook custom formats MVP (#70).** Scoring/conditions for narrator/edition/publisher/dramatized-vs-unabridged preferences, plus an optional "wait for a better release" rule (Radarr/Sonarr's delay/release-profile concepts, adapted). **Next**
+- **1.1.6 — Listenarr/Chaptarr audio metadata harvest (#71).** ffprobe-based chapter/duration/bitrate metadata as read-only enrichment around the existing external conversion backend (no embedded converter); edition/multi-file clarity in the file table; opportunistic naming-token verification. **Next**
+- **1.1.7 — Import lists / Hardcover (#66) / metadata profiles groundwork (#72).** Generalize the import-list concept once OPDS and Hardcover exist as concrete sources; stand up metadata profiles (language/content restrictions), replacing the current "coming next" placeholder. **Next**
+- **1.1.8 — System tabs/tasks/events/logs and UI settings parity (#73).** Tasks list, Events log, in-UI log viewer, and functional theme/date-format UI settings. **Next**
 
 ## Later Ideas
 
-- Liberatarr integration for Audible library/import flows.
-- Hardcover integration for book tracking and metadata enrichment.
-- OPDS or ABS-compatible export.
+- Multi download-client support (qBittorrent/Transmission/NZBGet) beyond SABnzbd — real value per the Listenarr harvest, but a genuine scope increase; revisit after 1.1.4 proves out the remote-path-mapping/queue-action boundary.
+- Native multi-indexer UI beyond Prowlarr-first — only if Prowlarr proves insufficient in practice.
+- Root folder relocation / library move workflow — plausible fit, high blast-radius (filesystem mutation); needs a concrete user need and explicit backup-first/approval gating before scheduling.
