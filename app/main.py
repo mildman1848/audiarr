@@ -30,6 +30,7 @@ from app.api import (
     routes_liberatarr,
     routes_library,
     routes_metadata,
+    routes_opds,
     routes_releases,
     routes_settings,
     routes_system,
@@ -298,6 +299,7 @@ def create_app() -> FastAPI:
     app.include_router(routes_connect.router)
     app.include_router(routes_releases.router)
     app.include_router(routes_library.router)
+    app.include_router(routes_opds.router)
     app.include_router(routes_tags.router)
     app.include_router(routes_wanted.router)
     app.include_router(routes_calendar.router)

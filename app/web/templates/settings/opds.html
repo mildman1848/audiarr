@@ -1,0 +1,29 @@
+{% extends "settings/shell.html" %}
+
+{% block settings_content %}
+  <section class="card settings-form">
+    <div class="section-head">
+      <span class="eyebrow">{{ t.settings_eyebrow }}</span>
+      <h2>{{ t.settings_section_opds }}</h2>
+    </div>
+    <p class="section-hint">{{ t.settings_opds_hint }}</p>
+
+    <div class="settings-subsection">
+      <label>{{ t.settings_opds_feed_url_label }}
+        <input type="text" id="opds-feed-url" readonly>
+      </label>
+      <p class="muted small">{{ t.settings_opds_api_key_hint }}</p>
+    </div>
+  </section>
+{% endblock %}
+
+{% block scripts %}
+  <script>
+    (function () {
+      var input = document.getElementById("opds-feed-url");
+      if (input) {
+        input.value = window.location.origin + "/opds";
+      }
+    })();
+  </script>
+{% endblock %}

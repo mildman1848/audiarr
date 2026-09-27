@@ -6,10 +6,12 @@
    changes" + Save). Section pages extend this and fill in
    settings_content with just their own card(s).
 
-   active_section_status (see routes.py::SETTINGS_SECTIONS) is "planned"
-   for sections that are read-only/placeholder this slice — those get a
-   heading badge instead of the advanced toggle and save bar, so a page
-   with nothing to save never implies otherwise. #}
+   active_section_status (see routes.py::SETTINGS_SECTIONS) is "active"
+   (default) for editable sections with real, saveable fields; those are
+   the only ones that get the advanced toggle and save bar. "planned"
+   (placeholder, not built yet) additionally gets a heading badge;
+   "readonly" (implemented but purely informational, e.g. opds) gets
+   neither the badge nor the save machinery. #}
 
 {% block page_title %}{{ t[active_section_label_key] }} — {{ t.settings_title }}{% endblock %}
 {% block page_eyebrow %}{{ t.settings_eyebrow }}{% endblock %}
@@ -17,7 +19,7 @@
 
 {% block page_toolbar %}
   {% include "settings/_nav.html" %}
-  {% if active_section_status != "planned" %}
+  {% if active_section_status == "active" %}
   <div class="toolbar-group toolbar-right">
     <button type="button" class="toolbar-btn settings-advanced-toggle" id="settings-advanced-toggle"
             data-settings-advanced-toggle aria-pressed="false">
@@ -32,7 +34,7 @@
     {% block settings_content %}{% endblock %}
   </form>
 
-  {% if active_section_status != "planned" %}
+  {% if active_section_status == "active" %}
   <div class="settings-save-bar" id="settings-save-bar" data-settings-save-bar>
     <span class="settings-save-status" id="settings-save-status">{{ t.settings_no_changes }}</span>
     <span id="settings-msg" class="muted" role="status"></span>
