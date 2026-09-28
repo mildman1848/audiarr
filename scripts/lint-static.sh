@@ -14,7 +14,7 @@ while IFS= read -r -d '' file; do
     echo "ERROR: empty file: $file" >&2
     fail=1
   fi
-done < <(find . -type f   ! -path './.git/*' ! -path './.venv/*' ! -path './__pycache__/*'   ! -path './config/*' ! -path './data/*' ! -path './logs/*' ! -path './secrets/*'   -print0)
+done < <(find . -type f   ! -path './.git/*' ! -path './.venv/*' ! -path './__pycache__/*'   ! -path './config/*' ! -path './data/*' ! -path './logs/*' ! -path './secrets/*'   ! -path './.hermes/*'   -print0)
 
 bash -n root/usr/local/bin/start-audiarr-api   root/etc/s6-overlay/s6-rc.d/init-audiarr/run   root/etc/s6-overlay/s6-rc.d/audiarr-api/run   scripts/buildx-build.sh scripts/smoke.sh
 

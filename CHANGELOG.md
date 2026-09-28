@@ -1,5 +1,11 @@
 # Changelog
 
+## 1.1.3
+
+- Add New modal gains Starr-style options at add time, including tags, alongside root-folder and quality-profile selection (#68).
+- Book Detail toolbar adds refresh, rescan, search, organize, and delete actions (#68). Rescan triggers a full Audiobookshelf library scan rather than a per-book scan.
+- Library table gains clickable sortable Monitored and Quality Profile columns (#68).
+
 ## 1.1.2
 
 - OPDS 1.2/Atom catalog export (#65): root/new/authors/narrators/search feeds and acquisition links.
