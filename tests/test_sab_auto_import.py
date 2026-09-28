@@ -212,6 +212,43 @@ async def test_no_storage_path_recorded_as_skipped(tmp_path, db, stub_chain, ena
     assert state["status"] == "skipped"
 
 
+async def test_remote_path_mapping_resolves_before_import(tmp_path, db, stub_chain, enabled_sab):
+    """Issue #69: SABnzbd reports a "storage" path only valid on its own
+    filesystem (e.g. a different container mount); the configured remote
+    path mapping must translate it to the real, Audiarr-visible path before
+    the is_dir()/scan_folder/import checks run."""
+    from app.config import load_settings, save_settings
+    from app.models.settings import RemotePathMapping
+
+    real_folder = _asin_book_folder(tmp_path)
+    remote_style_path = "/downloads/complete/" + real_folder.name
+
+    settings = load_settings()
+    settings.remote_path_mappings = [
+        RemotePathMapping(
+            host="SABnzbd",
+            remote_path="/downloads/complete",
+            local_path=str(real_folder.parent),
+            enabled=True,
+        )
+    ]
+    save_settings(settings)
+
+    StubSabClient.HISTORY = [_history_item(real_folder, storage=remote_style_path)]
+
+    scheduler = SabAutoImportScheduler()
+    ran = await scheduler.run_once()
+
+    assert ran is True
+    assert db.execute("SELECT COUNT(*) FROM books").fetchone()[0] == 1
+    state = db.execute(
+        "SELECT status, folder_path FROM sab_import_state WHERE nzo_key = 'nzo_1'"
+    ).fetchone()
+    assert state["status"] == "imported"
+    # The recorded path is the resolved local one, not the raw remote path.
+    assert state["folder_path"] == str(real_folder)
+
+
 async def test_run_once_noop_without_enabled_sab_client(tmp_path, db, stub_chain, monkeypatch):
     monkeypatch.setattr("app.sab_auto_import._enabled_sabnzbd", lambda: None)
 

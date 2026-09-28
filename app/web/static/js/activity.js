@@ -134,13 +134,12 @@ async function refreshQueue() {
           <td>${progressBar(s.progress_percent)}</td>
           <td>${esc(humanSize(s.size_left))}</td>
           <td>${esc(s.time_left || "—")}</td>
-          <td>${queueControlsHtml()}</td>
+          <td>${queueControlsHtml(s.nzo_id)}</td>
         </tr>`
       )
       .join("");
 
     container.innerHTML = `
-      <p class="muted small">${esc(T.activity_queue_controls_unavailable)}</p>
       <div class="table-scroll">
         <table class="table">
           <thead>
@@ -157,22 +156,93 @@ async function refreshQueue() {
           <tbody>${rows}</tbody>
         </table>
       </div>`;
+    bindQueueActionEvents(container);
   } catch (err) {
     container.innerHTML = `<p class="muted">${esc(T.activity_queue_error)} (${esc(err.message)})</p>`;
   }
 }
 
-// Starr-style per-row pause/remove controls (issue #50) -- rendered
-// disabled with an explanatory tooltip, since Audiarr's SABnzbdClient (see
-// app/connections/sabnzbd.py) only implements queue()/history()/add_nzb(),
-// not pause/resume/remove/priority. Do not wire these up without a real
-// backend control endpoint behind them.
-function queueControlsHtml() {
-  const title = esc(T.activity_queue_controls_unavailable);
+// Starr-style per-row queue controls (issue #69). Only "remove" is wired up:
+// SABnzbd has no documented API action for "retry" or "mark failed" against
+// a still-queued (not yet failed) job, so those aren't offered here (see
+// app/connections/sabnzbd.py).
+function queueControlsHtml(nzoId) {
+  if (!nzoId) return "";
   return `
     <div class="button-row">
-      <button type="button" class="btn btn-secondary" disabled title="${title}" aria-label="${esc(T.activity_queue_pause)}">⏸</button>
-      <button type="button" class="btn btn-danger" disabled title="${title}" aria-label="${esc(T.activity_queue_remove)}">✕</button>
+      <button type="button" class="btn btn-danger" data-queue-remove="${esc(nzoId)}" aria-label="${esc(T.activity_queue_remove)}">${esc(T.activity_queue_remove)}</button>
+    </div>`;
+}
+
+async function runActivityAction(button, url, confirmMessage) {
+  if (confirmMessage && !window.confirm(confirmMessage)) return;
+  button.disabled = true;
+  try {
+    const resp = await fetch(url, { method: "POST" });
+    const data = await resp.json().catch(() => ({}));
+    if (!resp.ok) throw new Error(data.message || `HTTP ${resp.status}`);
+    if (window.AudiarrToast) {
+      (data.ok ? window.AudiarrToast.success : window.AudiarrToast.error)(
+        data.message || (data.ok ? "" : T.activity_action_error)
+      );
+    }
+    if (data.ok) {
+      refreshQueue();
+      refreshHistory();
+    }
+  } catch (err) {
+    if (window.AudiarrToast) window.AudiarrToast.error(`${T.activity_action_error} (${err.message})`);
+  } finally {
+    button.disabled = false;
+  }
+}
+
+function bindQueueActionEvents(container) {
+  container.querySelectorAll("[data-queue-remove]").forEach((btn) => {
+    btn.addEventListener("click", () => {
+      const nzoId = btn.dataset.queueRemove;
+      runActivityAction(
+        btn,
+        `/api/v1/activity/queue/${encodeURIComponent(nzoId)}/remove`,
+        T.activity_queue_remove_confirm
+      );
+    });
+  });
+}
+
+function bindHistoryActionEvents(container) {
+  container.querySelectorAll("[data-history-remove]").forEach((btn) => {
+    btn.addEventListener("click", () => {
+      const nzoId = btn.dataset.historyRemove;
+      runActivityAction(
+        btn,
+        `/api/v1/activity/history/${encodeURIComponent(nzoId)}/remove`,
+        T.activity_history_remove_confirm
+      );
+    });
+  });
+  container.querySelectorAll("[data-history-retry]").forEach((btn) => {
+    btn.addEventListener("click", () => {
+      const nzoId = btn.dataset.historyRetry;
+      runActivityAction(btn, `/api/v1/activity/history/${encodeURIComponent(nzoId)}/retry`);
+    });
+  });
+}
+
+// History actions (issue #69): retry only makes sense for a failed job, and
+// SABnzbd's retry API requires the original NZB to still be stored, which
+// Audiarr can't verify ahead of time -- the button is offered for any
+// "failed" row and simply reports SABnzbd's own answer via the toast.
+function historyControlsHtml(nzoId, status) {
+  if (!nzoId) return "";
+  const isFailed = String(status || "").toLowerCase() === "failed";
+  const retryBtn = isFailed
+    ? `<button type="button" class="btn btn-secondary" data-history-retry="${esc(nzoId)}" aria-label="${esc(T.activity_history_retry)}">${esc(T.activity_history_retry)}</button>`
+    : "";
+  return `
+    <div class="button-row">
+      ${retryBtn}
+      <button type="button" class="btn btn-danger" data-history-remove="${esc(nzoId)}" aria-label="${esc(T.activity_history_remove)}">${esc(T.activity_history_remove)}</button>
     </div>`;
 }
 
@@ -208,6 +278,7 @@ async function refreshHistory() {
           <td>${esc(humanSize(s.size))}</td>
           <td>${esc(humanTime(s.completed_at))}</td>
           <td>${importStatusBadge(s.import_status, s.import_reason)}</td>
+          <td>${historyControlsHtml(s.nzo_id, s.status)}</td>
         </tr>`
       )
       .join("");
@@ -223,11 +294,13 @@ async function refreshHistory() {
               <th>${esc(T.activity_col_size)}</th>
               <th>${esc(T.activity_col_completed_at)}</th>
               <th>${esc(T.activity_col_import)}</th>
+              <th>${esc(T.library_col_actions)}</th>
             </tr>
           </thead>
           <tbody>${rows}</tbody>
         </table>
       </div>`;
+    bindHistoryActionEvents(container);
   } catch (err) {
     container.innerHTML = `<p class="muted">${esc(T.activity_history_error)} (${esc(err.message)})</p>`;
   }

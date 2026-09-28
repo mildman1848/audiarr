@@ -628,3 +628,89 @@ def test_queue_endpoint_503_without_sabnzbd(app_client):
     _configure(app_client, sabnzbd=False)
     resp = app_client.get("/api/v1/activity/queue")
     assert resp.status_code == 503
+
+
+def test_queue_remove_endpoint_success(app_client, monkeypatch):
+    _configure(app_client)
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        assert request.url.params["mode"] == "queue"
+        assert request.url.params["name"] == "delete"
+        assert request.url.params["value"] == "nzo_1"
+        return httpx.Response(200, json={"status": True})
+
+    monkeypatch.setattr(
+        "app.api.routes_releases.SABnzbdClient", _factory(SABnzbdClient, handler)
+    )
+
+    resp = app_client.post("/api/v1/activity/queue/nzo_1/remove")
+    assert resp.status_code == 200
+    body = resp.json()
+    assert body["ok"] is True
+    assert body["message"]
+
+
+def test_queue_remove_endpoint_reports_failure_without_501(app_client, monkeypatch):
+    """SABnzbd rejecting the action is not a 5xx -- the UI gets a normal
+    ok=False JSON body with a clear message to show inline/as a toast."""
+    _configure(app_client)
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        return httpx.Response(200, json={"status": False})
+
+    monkeypatch.setattr(
+        "app.api.routes_releases.SABnzbdClient", _factory(SABnzbdClient, handler)
+    )
+
+    resp = app_client.post("/api/v1/activity/queue/nzo_1/remove")
+    assert resp.status_code == 200
+    body = resp.json()
+    assert body["ok"] is False
+    assert body["message"]
+
+
+def test_queue_remove_endpoint_503_without_sabnzbd(app_client):
+    _configure(app_client, sabnzbd=False)
+    resp = app_client.post("/api/v1/activity/queue/nzo_1/remove")
+    assert resp.status_code == 503
+
+
+def test_history_remove_endpoint_success(app_client, monkeypatch):
+    _configure(app_client)
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        assert request.url.params["mode"] == "history"
+        assert request.url.params["name"] == "delete"
+        assert request.url.params["value"] == "nzo_9"
+        return httpx.Response(200, json={"status": True})
+
+    monkeypatch.setattr(
+        "app.api.routes_releases.SABnzbdClient", _factory(SABnzbdClient, handler)
+    )
+
+    resp = app_client.post("/api/v1/activity/history/nzo_9/remove")
+    assert resp.status_code == 200
+    assert resp.json()["ok"] is True
+
+
+def test_history_retry_endpoint_success(app_client, monkeypatch):
+    _configure(app_client)
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        assert request.url.params["mode"] == "retry"
+        assert request.url.params["value"] == "nzo_9"
+        return httpx.Response(200, json={"status": True})
+
+    monkeypatch.setattr(
+        "app.api.routes_releases.SABnzbdClient", _factory(SABnzbdClient, handler)
+    )
+
+    resp = app_client.post("/api/v1/activity/history/nzo_9/retry")
+    assert resp.status_code == 200
+    assert resp.json()["ok"] is True
+
+
+def test_history_remove_endpoint_503_without_sabnzbd(app_client):
+    _configure(app_client, sabnzbd=False)
+    resp = app_client.post("/api/v1/activity/history/nzo_9/remove")
+    assert resp.status_code == 503

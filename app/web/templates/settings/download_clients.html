@@ -33,4 +33,23 @@
       </div>
     </div>
   </section>
+
+  <section class="card settings-form">
+    <div class="section-head">
+      <span class="eyebrow">{{ t.settings_eyebrow }}</span>
+      <h2>{{ t.settings_rpm_heading }}</h2>
+    </div>
+    <p class="section-hint">{{ t.settings_rpm_hint }}</p>
+
+    <div id="rpm-list"></div>
+
+    <div class="button-row">
+      <button type="button" id="rpm-add-btn" class="btn btn-primary">{{ t.settings_rpm_add }}</button>
+    </div>
+  </section>
+{% endblock %}
+
+{% block scripts %}
+  <script src="/static/js/settings.js?v={{ version }}-remotepathmappings"></script>
+  <script src="/static/js/remote_path_mappings.js?v={{ version }}-remotepathmappings"></script>
 {% endblock %}

@@ -445,6 +445,10 @@ function populate(s) {
   setValue("sab-category", sab.category || "audiobooks");
   setPlaceholder("sab-api-key", sab.api_key ? MASK : "");
 
+  if ($("rpm-list") && window.AudiarrRemotePathMappings) {
+    window.AudiarrRemotePathMappings.populate(s.remote_path_mappings);
+  }
+
   const prowlarr = readProwlarr(s);
   setChecked("prowlarr-enabled", prowlarr.enabled);
   setValue("prowlarr-name", prowlarr.name || "Prowlarr");
@@ -689,6 +693,10 @@ async function saveSettings(event) {
 
     if ($("connect-list") && window.AudiarrConnect) {
       doc.connect = window.AudiarrConnect.collectForSave(doc.connect);
+    }
+
+    if ($("rpm-list") && window.AudiarrRemotePathMappings) {
+      doc.remote_path_mappings = window.AudiarrRemotePathMappings.collectForSave();
     }
 
     await putSettings(doc);
