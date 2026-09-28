@@ -37,7 +37,9 @@ from app.connections.sabnzbd import SABnzbdClient
 from app.db import migrate
 from app.library.importer import ImportMatchError, import_single_folder, run_import
 from app.library.scanner import scan_folder
+from app.models.settings import RemotePathMapping
 from app.providers.chain import ProviderChain
+from app.remote_path_mapping import resolve_remote_path
 
 log = logging.getLogger("audiarr.sab_auto_import")
 
@@ -137,7 +139,9 @@ class SabAutoImportScheduler:
                 ).fetchone()
                 if already is not None:
                     continue
-                await self._process_item(conn, chain, item, key, locale)
+                await self._process_item(
+                    conn, chain, item, key, locale, settings.remote_path_mappings
+                )
                 conn.commit()
                 imported += 1
             except Exception:  # noqa: BLE001 — one bad item must not stop the tick
@@ -161,6 +165,7 @@ class SabAutoImportScheduler:
         item: dict[str, Any],
         key: str,
         locale: str,
+        remote_path_mappings: list[RemotePathMapping],
     ) -> None:
         name = str(item.get("name") or "")
         folder = str(item.get("storage") or "").strip()
@@ -168,6 +173,16 @@ class SabAutoImportScheduler:
             log.warning("sab auto-import: history item %r has no storage path", name)
             self._record_state(conn, key, item, "skipped", "no storage path reported by SABnzbd")
             return
+
+        mapped_folder = resolve_remote_path(folder, remote_path_mappings)
+        if mapped_folder != folder:
+            log.debug("sab auto-import: mapped remote path %r -> %r", folder, mapped_folder)
+            # Mutate in place: every downstream use of this item (including
+            # _record_state below) reads item["storage"], so this is the
+            # single point where the rest of the pipeline switches to the
+            # Audiarr-local path.
+            item["storage"] = mapped_folder
+            folder = mapped_folder
 
         folder_path = Path(folder)
         if not folder_path.is_dir():

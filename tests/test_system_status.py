@@ -22,6 +22,48 @@ def test_runtime_version_matches_dockerfile_arg_version():
     assert __version__ == match.group(1)
 
 
+def test_version_defaults_match_across_release_tooling():
+    """Guards against release-tooling version drift (issue #69): every tracked
+    default that mirrors app.__version__ must be bumped together, or CI/deploy
+    can build, publish, or pull a stale tag."""
+    makefile = (REPO_ROOT / "Makefile").read_text(encoding="utf-8")
+    match = re.search(r"^APP_VERSION \?= (\S+)$", makefile, re.MULTILINE)
+    assert match, "Makefile must declare `APP_VERSION ?= <version>`"
+    assert match.group(1) == __version__, "Makefile APP_VERSION drifted from app.__version__"
+
+    smoke_sh = (REPO_ROOT / "scripts" / "smoke.sh").read_text(encoding="utf-8")
+    match = re.search(r'IMAGE="\$\{IMAGE:-local/audiarr:([^}]+)\}"', smoke_sh)
+    assert match, "scripts/smoke.sh must declare a local/audiarr:<version> default IMAGE"
+    assert match.group(1) == __version__, "scripts/smoke.sh default image tag drifted from app.__version__"
+
+    buildx_sh = (REPO_ROOT / "scripts" / "buildx-build.sh").read_text(encoding="utf-8")
+    for var in ("IMAGE_TAG", "VERSION", "APP_VERSION"):
+        match = re.search(rf'{var}="\$\{{{var}:-([^}}]+)\}}"', buildx_sh)
+        assert match, f"scripts/buildx-build.sh must declare a default for {var}"
+        assert match.group(1) == __version__, (
+            f"scripts/buildx-build.sh {var} default drifted from app.__version__"
+        )
+
+    compose = (REPO_ROOT / "docker-compose.yml").read_text(encoding="utf-8")
+    match = re.search(r"^\s*image: local/audiarr:(\S+)$", compose, re.MULTILINE)
+    assert match, "docker-compose.yml must pin a local/audiarr:<version> image tag"
+    assert match.group(1) == __version__, "docker-compose.yml image tag drifted from app.__version__"
+    for arg in ("APP_VERSION", "VERSION"):
+        match = re.search(rf"^\s*{arg}: (\S+)$", compose, re.MULTILINE)
+        assert match, f"docker-compose.yml must declare build arg {arg}"
+        assert match.group(1) == __version__, (
+            f"docker-compose.yml build arg {arg} drifted from app.__version__"
+        )
+
+    readme = (REPO_ROOT / "README.md").read_text(encoding="utf-8")
+    match = re.search(r"ghcr\.io/mildman1848/audiarr:(\S+)", readme)
+    assert match, "README.md must show a ghcr.io/mildman1848/audiarr:<version> image example"
+    assert match.group(1) == __version__, "README.md ghcr image tag drifted from app.__version__"
+    match = re.search(r"\| Version \| `([^`]+)` \|", readme)
+    assert match, "README.md must have a `| Version | ... |` table row"
+    assert match.group(1) == __version__, "README.md version table drifted from app.__version__"
+
+
 def test_system_status_includes_update_state(app_client):
     body = app_client.get("/api/v1/system/status").json()
     updates = body["updates"]

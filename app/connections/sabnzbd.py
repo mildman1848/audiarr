@@ -184,6 +184,62 @@ class SABnzbdClient:
             if owns_client:
                 await client.aclose()
 
+    async def _simple_action(self, mode: str, nzo_id: str, extra: dict[str, str]) -> bool:
+        """Shared plumbing for the queue/history/retry action endpoints.
+
+        All three are GET requests against ``/api`` that report success via
+        ``{"status": true}`` in the JSON body, same envelope as add_nzb().
+        Never raises; failures are logged (never including the API key or
+        any other request param) and return False.
+        """
+        client, owns_client = await self._get_client()
+        try:
+            params = self._base_params(mode)
+            params.update(extra)
+            response = await client.get("/api", params=params)
+            if response.status_code != 200:
+                log.warning("SABnzbd %s: HTTP %s (nzo_id=%s)", mode, response.status_code, nzo_id)
+                return False
+            try:
+                data = response.json()
+            except ValueError:
+                log.warning("SABnzbd %s: response was not JSON (nzo_id=%s)", mode, nzo_id)
+                return False
+            ok = isinstance(data, dict) and bool(data.get("status"))
+            if ok:
+                log.debug("SABnzbd %s succeeded (nzo_id=%s)", mode, nzo_id)
+            else:
+                log.warning("SABnzbd %s: status not true in response (nzo_id=%s)", mode, nzo_id)
+            return ok
+        except httpx.HTTPError as exc:
+            log.warning("SABnzbd %s failed: %s (nzo_id=%s)", mode, exc, nzo_id)
+            return False
+        finally:
+            if owns_client:
+                await client.aclose()
+
+    async def queue_remove(self, nzo_id: str) -> bool:
+        """Remove one job from the live queue.
+
+        Sends ``del_files=0`` explicitly: this removes the queue entry only
+        and never deletes any partially-downloaded data (SABnzbd's own
+        "delete download data too" option) -- actions here never touch
+        files on disk, only Audiarr's own import pipeline does that.
+        """
+        return await self._simple_action(
+            "queue", nzo_id, {"name": "delete", "value": nzo_id, "del_files": "0"}
+        )
+
+    async def history_remove(self, nzo_id: str) -> bool:
+        """Remove one entry from history. Never deletes the download's files on disk."""
+        return await self._simple_action(
+            "history", nzo_id, {"name": "delete", "value": nzo_id, "del_files": "0"}
+        )
+
+    async def history_retry(self, nzo_id: str) -> bool:
+        """Retry one failed history job (SABnzbd re-queues it from its stored NZB, if retained)."""
+        return await self._simple_action("retry", nzo_id, {"value": nzo_id})
+
     async def version(self) -> str | None:
         """Return the SABnzbd version string, or None if it can't be read.
 

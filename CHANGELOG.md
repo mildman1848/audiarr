@@ -1,5 +1,10 @@
 # Changelog
 
+## 1.1.4
+
+- Remote path mappings (#69): configurable Settings > Download Clients editor to translate a download client's completed-download path to the path Audiarr sees (Docker/NAS setups with different mounts), resolved via deterministic longest-remote-path-prefix matching and applied before the SABnzbd auto-import pipeline touches the filesystem.
+- Activity queue/history actions (#69): queue "Remove" and history "Retry"/"Remove" are now real, backed by SABnzbd's documented queue/history/retry API actions (never deletes on-disk data); queue retry/mark-failed remain unimplemented since SABnzbd has no supported API action for either.
+
 ## 1.1.3
 
 - Add New modal gains Starr-style options at add time, including tags, alongside root-folder and quality-profile selection (#68).

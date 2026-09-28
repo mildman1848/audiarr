@@ -87,6 +87,16 @@ class HistoryResponse(BaseModel):
     slots: list[dict]
 
 
+class QueueActionResponse(BaseModel):
+    ok: bool
+    message: str
+
+
+class HistoryActionResponse(BaseModel):
+    ok: bool
+    message: str
+
+
 def _enabled_prowlarr() -> Indexer | None:
     """Return the first enabled Prowlarr indexer from settings, if any."""
     for indexer in load_settings().indexers:
@@ -227,6 +237,24 @@ async def activity_queue() -> QueueResponse:
     return QueueResponse(slots=await client.queue())
 
 
+@router.post("/api/v1/activity/queue/{nzo_id}/remove", response_model=QueueActionResponse)
+async def activity_queue_remove(nzo_id: str) -> QueueActionResponse:
+    """Remove one job from the live SABnzbd queue.
+
+    Never deletes on-disk data (see SABnzbdClient.queue_remove). Queue
+    "retry" and "mark failed" are not exposed: SABnzbd has no documented
+    API action for either against a still-queued (not-yet-failed) job.
+    """
+    sab = _require_sabnzbd()
+    client = SABnzbdClient(base_url=sab.base_url(), api_key=sab.api_key or None)
+    ok = await client.queue_remove(nzo_id)
+    log.info("Activity queue remove nzo_id=%s -> %s", nzo_id, ok)
+    return QueueActionResponse(
+        ok=ok,
+        message="Removed from queue" if ok else "SABnzbd did not confirm the removal",
+    )
+
+
 def _attach_import_state(slots: list[dict]) -> None:
     """Merge auto-import status/reason (see app.sab_auto_import) onto history slots.
 
@@ -264,3 +292,29 @@ async def activity_history(limit: int = 50) -> HistoryResponse:
     slots = await client.history(limit=limit)
     _attach_import_state(slots)
     return HistoryResponse(slots=slots)
+
+
+@router.post("/api/v1/activity/history/{nzo_id}/remove", response_model=HistoryActionResponse)
+async def activity_history_remove(nzo_id: str) -> HistoryActionResponse:
+    """Remove one entry from SABnzbd history. Never deletes files on disk."""
+    sab = _require_sabnzbd()
+    client = SABnzbdClient(base_url=sab.base_url(), api_key=sab.api_key or None)
+    ok = await client.history_remove(nzo_id)
+    log.info("Activity history remove nzo_id=%s -> %s", nzo_id, ok)
+    return HistoryActionResponse(
+        ok=ok,
+        message="Removed from history" if ok else "SABnzbd did not confirm the removal",
+    )
+
+
+@router.post("/api/v1/activity/history/{nzo_id}/retry", response_model=HistoryActionResponse)
+async def activity_history_retry(nzo_id: str) -> HistoryActionResponse:
+    """Retry one failed SABnzbd history job."""
+    sab = _require_sabnzbd()
+    client = SABnzbdClient(base_url=sab.base_url(), api_key=sab.api_key or None)
+    ok = await client.history_retry(nzo_id)
+    log.info("Activity history retry nzo_id=%s -> %s", nzo_id, ok)
+    return HistoryActionResponse(
+        ok=ok,
+        message="Retry requested" if ok else "SABnzbd did not confirm the retry",
+    )

@@ -235,7 +235,7 @@ def test_release_polish_pages_have_actionable_empty_state_copy(
     assert activity.status_code == 200
     assert activity_marker in activity.text
     assert "activity.js" in activity.text
-    assert "releasepolish" in activity.text
+    assert "activityactions" in activity.text
 
     import_page = app_client.get("/import")
     assert import_page.status_code == 200

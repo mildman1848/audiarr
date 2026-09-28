@@ -94,6 +94,115 @@ async def test_version_omits_apikey_when_not_set():
     await mock_client.aclose()
 
 
+@pytest.mark.asyncio
+async def test_queue_remove_success():
+    def handler(request: httpx.Request) -> httpx.Response:
+        assert request.url.params["mode"] == "queue"
+        assert request.url.params["name"] == "delete"
+        assert request.url.params["value"] == "nzo_1"
+        assert request.url.params["del_files"] == "0"
+        assert request.url.params["apikey"] == "sab-key"
+        return httpx.Response(200, json={"status": True})
+
+    mock_client = httpx.AsyncClient(
+        transport=httpx.MockTransport(handler), base_url="http://sab.local"
+    )
+    client = SABnzbdClient(base_url="http://sab.local", api_key="sab-key", client=mock_client)
+
+    assert await client.queue_remove("nzo_1") is True
+    await mock_client.aclose()
+
+
+@pytest.mark.asyncio
+async def test_queue_remove_false_when_status_false():
+    def handler(request: httpx.Request) -> httpx.Response:
+        return httpx.Response(200, json={"status": False})
+
+    mock_client = httpx.AsyncClient(
+        transport=httpx.MockTransport(handler), base_url="http://sab.local"
+    )
+    client = SABnzbdClient(base_url="http://sab.local", client=mock_client)
+
+    assert await client.queue_remove("nzo_1") is False
+    await mock_client.aclose()
+
+
+@pytest.mark.asyncio
+async def test_queue_remove_false_on_non_200():
+    def handler(request: httpx.Request) -> httpx.Response:
+        return httpx.Response(403, json={"error": "API Key Incorrect"})
+
+    mock_client = httpx.AsyncClient(
+        transport=httpx.MockTransport(handler), base_url="http://sab.local"
+    )
+    client = SABnzbdClient(base_url="http://sab.local", client=mock_client)
+
+    assert await client.queue_remove("nzo_1") is False
+    await mock_client.aclose()
+
+
+@pytest.mark.asyncio
+async def test_queue_remove_false_on_transport_error():
+    def handler(request: httpx.Request) -> httpx.Response:
+        raise httpx.ConnectError("refused", request=request)
+
+    mock_client = httpx.AsyncClient(
+        transport=httpx.MockTransport(handler), base_url="http://sab.local"
+    )
+    client = SABnzbdClient(base_url="http://sab.local", client=mock_client)
+
+    assert await client.queue_remove("nzo_1") is False
+    await mock_client.aclose()
+
+
+@pytest.mark.asyncio
+async def test_history_remove_success():
+    def handler(request: httpx.Request) -> httpx.Response:
+        assert request.url.params["mode"] == "history"
+        assert request.url.params["name"] == "delete"
+        assert request.url.params["value"] == "nzo_9"
+        assert request.url.params["del_files"] == "0"
+        return httpx.Response(200, json={"status": True})
+
+    mock_client = httpx.AsyncClient(
+        transport=httpx.MockTransport(handler), base_url="http://sab.local"
+    )
+    client = SABnzbdClient(base_url="http://sab.local", client=mock_client)
+
+    assert await client.history_remove("nzo_9") is True
+    await mock_client.aclose()
+
+
+@pytest.mark.asyncio
+async def test_history_retry_success():
+    def handler(request: httpx.Request) -> httpx.Response:
+        assert request.url.params["mode"] == "retry"
+        assert request.url.params["value"] == "nzo_9"
+        return httpx.Response(200, json={"status": True})
+
+    mock_client = httpx.AsyncClient(
+        transport=httpx.MockTransport(handler), base_url="http://sab.local"
+    )
+    client = SABnzbdClient(base_url="http://sab.local", client=mock_client)
+
+    assert await client.history_retry("nzo_9") is True
+    await mock_client.aclose()
+
+
+@pytest.mark.asyncio
+async def test_history_retry_false_on_non_json_body():
+    def handler(request: httpx.Request) -> httpx.Response:
+        return httpx.Response(200, text="<html>login</html>")
+
+    mock_client = httpx.AsyncClient(
+        transport=httpx.MockTransport(handler), base_url="http://sab.local"
+    )
+    client = SABnzbdClient(base_url="http://sab.local", client=mock_client)
+
+    assert await client.history_retry("nzo_9") is False
+    await mock_client.aclose()
+
+
 def test_api_key_via_file_env(tmp_path, monkeypatch):
     secret_file = tmp_path / "sab_key"
     secret_file.write_text("from-file-secret\n", encoding="utf-8")

@@ -225,6 +225,29 @@ class DownloadClient(BaseModel):
         return host
 
 
+class RemotePathMapping(BaseModel):
+    """Translates a download client's filesystem path to Audiarr's own view.
+
+    Mirrors Radarr/Sonarr's "Remote Path Mappings": in Docker/NAS setups the
+    download client (SABnzbd) and Audiarr often mount the same physical
+    storage at different paths, so a completed-download path SABnzbd
+    reports (``remote_path``, e.g. ``/downloads/complete``) needs
+    translating to the path Audiarr can actually read (``local_path``, e.g.
+    ``/data/usenet/complete``) before any import/filesystem check. ``host``
+    is an optional free-text label (e.g. the download client name) for the
+    user's own bookkeeping; resolution itself does not filter by it, since
+    the MVP only supports one active SABnzbd client at a time. ``id`` is a
+    stable client-generated key, same pattern as ConnectNotification.id.
+    See app/remote_path_mapping.py for the longest-prefix resolution logic.
+    """
+
+    id: str = ""
+    host: str = ""
+    remote_path: str = ""
+    local_path: str = ""
+    enabled: bool = True
+
+
 class Indexer(BaseModel):
     """Indexer entry, mirrors Radarr/Sonarr's "Indexers" tab.
 
@@ -480,6 +503,7 @@ class Settings(BaseModel):
         default_factory=lambda: [RootFolder(path="/data/audiobooks")]
     )
     download_clients: list[DownloadClient] = Field(default_factory=list)
+    remote_path_mappings: list[RemotePathMapping] = Field(default_factory=list)
     indexers: list[Indexer] = Field(default_factory=list)
     connect: list[ConnectNotification] = Field(default_factory=list)
     metadata: MetadataSettings = Field(default_factory=MetadataSettings)
