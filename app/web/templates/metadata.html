@@ -51,6 +51,10 @@
           <div id="add-book-narrators-chips" class="library-badge-row"></div>
           <input type="text" id="add-book-narrator-input" placeholder="{{ t.add_book_add_placeholder }}">
         </label>
+        <label style="flex:1 1 100%;">{{ t.add_book_tags_label }}
+          <div id="add-book-tags-chips" class="library-badge-row"></div>
+          <input type="text" id="add-book-tag-input" placeholder="{{ t.add_book_add_placeholder }}">
+        </label>
         <label>{{ t.add_book_root_folder_label }}
           <select id="add-book-root-folder" required></select>
         </label>
@@ -72,5 +76,5 @@
 {% endblock %}
 
 {% block scripts %}
-  <script src="/static/js/metadata.js?v={{ version }}-addwizard"></script>
+  <script src="/static/js/metadata.js?v={{ version }}-addwizard-tags"></script>
 {% endblock %}

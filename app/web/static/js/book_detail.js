@@ -403,6 +403,41 @@ function searchForBook(book) {
   window.location.href = `/search?q=${encodeURIComponent(query)}`;
 }
 
+// Toolbar "Rescan" action (#68): triggers the existing Audiobookshelf
+// library-scan connection endpoint. There is no per-book filesystem rescan
+// route, so this asks the configured Audiobookshelf server to rescan its
+// whole library (see app/api/routes_connections.py); the toolbar hint/title
+// makes that scope explicit rather than implying a book-only rescan.
+async function rescanLibrary(btn) {
+  const originalLabel = btn.textContent;
+  btn.disabled = true;
+  btn.textContent = T.book_detail_rescanning;
+  try {
+    const resp = await fetch("/api/v1/connections/audiobookshelf/scan", { method: "POST" });
+    const body = await resp.json().catch(() => ({}));
+    if (!resp.ok) {
+      const detail = typeof body.detail === "string" ? body.detail : `HTTP ${resp.status}`;
+      throw new Error(detail);
+    }
+    if (window.AudiarrToast) window.AudiarrToast.success(body.message || T.book_detail_rescan_success);
+  } catch (err) {
+    if (window.AudiarrToast) window.AudiarrToast.error(`${T.book_detail_rescan_error} (${err.message})`);
+  } finally {
+    btn.disabled = false;
+    btn.textContent = originalLabel;
+  }
+}
+
+// Toolbar "Organize" action (#68): scrolls to and focuses the existing
+// Organize Files panel instead of duplicating its preview/apply logic.
+function focusOrganizePanel() {
+  const panel = document.getElementById("book-detail-organize-panel");
+  if (!panel) return;
+  panel.scrollIntoView({ behavior: "smooth", block: "start" });
+  const previewBtn = document.getElementById("book-detail-organize-preview-btn");
+  if (previewBtn) previewBtn.focus();
+}
+
 // -- organize (issue #29: preview/apply pattern-driven file moves) ----------
 
 let organizePreviewSafe = false;
@@ -541,6 +576,10 @@ async function loadBook() {
     if (refreshBtn) refreshBtn.disabled = false;
     const searchBtn = document.getElementById("book-detail-search-btn");
     if (searchBtn) searchBtn.disabled = false;
+    const rescanBtn = document.getElementById("book-detail-rescan-btn");
+    if (rescanBtn) rescanBtn.disabled = false;
+    const organizeToolbarBtn = document.getElementById("book-detail-organize-toolbar-btn");
+    if (organizeToolbarBtn) organizeToolbarBtn.disabled = false;
     const organizePreviewBtn = document.getElementById("book-detail-organize-preview-btn");
     if (organizePreviewBtn) organizePreviewBtn.disabled = false;
   } catch (err) {
@@ -567,6 +606,14 @@ document.addEventListener("DOMContentLoaded", () => {
     searchBtn.addEventListener("click", () => {
       if (currentBook) searchForBook(currentBook);
     });
+  }
+  const rescanBtn = document.getElementById("book-detail-rescan-btn");
+  if (rescanBtn) {
+    rescanBtn.addEventListener("click", () => rescanLibrary(rescanBtn));
+  }
+  const organizeToolbarBtn = document.getElementById("book-detail-organize-toolbar-btn");
+  if (organizeToolbarBtn) {
+    organizeToolbarBtn.addEventListener("click", focusOrganizePanel);
   }
   const organizePreviewBtn = document.getElementById("book-detail-organize-preview-btn");
   if (organizePreviewBtn) {

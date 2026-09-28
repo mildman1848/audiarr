@@ -588,6 +588,32 @@ def test_api_book_create_with_invalid_quality_profile_returns_422_and_creates_no
     assert app_client.get("/api/v1/library/books").json() == []
 
 
+def test_api_book_create_with_tags(app_client):
+    """The Add wizard (#68) sends tags as part of the create payload, same
+    as root_folder_id/quality_profile -- unknown labels are created on the
+    fly, same as the existing book/root-folder tag PATCH/PUT endpoints."""
+    resp = app_client.post(
+        "/api/v1/library/books",
+        json={
+            "title": "Der Vorleser",
+            "authors": ["Bernhard Schlink"],
+            "tags": ["Favorites", "German"],
+        },
+    )
+    assert resp.status_code == 201
+    book = resp.json()
+    assert sorted(t["label"] for t in book["tags"]) == ["Favorites", "German"]
+
+    single = app_client.get(f"/api/v1/library/books/{book['id']}")
+    assert sorted(t["label"] for t in single.json()["tags"]) == ["Favorites", "German"]
+
+
+def test_api_book_create_without_tags_has_no_tags(app_client):
+    resp = app_client.post("/api/v1/library/books", json={"title": "Der Vorleser"})
+    assert resp.status_code == 201
+    assert resp.json()["tags"] == []
+
+
 def test_api_book_organize_falls_back_to_book_root_folder_preference(app_client, tmp_path):
     """Organize preview picks the book's own root_folder_id (set at add
     time, #50) over the "first configured folder" default when the request

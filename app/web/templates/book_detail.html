@@ -8,7 +8,9 @@
   <div class="toolbar-group toolbar-left" id="book-detail-toolbar">
     <a href="/library" id="book-detail-back-btn" class="toolbar-btn">{{ t.book_detail_toolbar_back }}</a>
     <button type="button" id="book-detail-refresh-btn" class="toolbar-btn" disabled>{{ t.book_detail_refresh }}</button>
+    <button type="button" id="book-detail-rescan-btn" class="toolbar-btn" disabled title="{{ t.book_detail_rescan_hint }}">{{ t.book_detail_rescan }}</button>
     <button type="button" id="book-detail-search-btn" class="toolbar-btn" disabled>{{ t.book_detail_search }}</button>
+    <button type="button" id="book-detail-organize-toolbar-btn" class="toolbar-btn" disabled>{{ t.book_detail_toolbar_organize }}</button>
   </div>
   <div class="toolbar-group toolbar-right">
     <button type="button" id="book-detail-delete-btn" class="toolbar-btn" disabled>{{ t.book_detail_delete }}</button>
@@ -20,7 +22,7 @@
     <p class="muted">{{ t.book_detail_loading }}</p>
   </div>
 
-  <section class="panel">
+  <section class="panel" id="book-detail-organize-panel">
     <div class="section-head">
       <span class="eyebrow">{{ t.book_detail_eyebrow }}</span>
       <h2>{{ t.book_detail_organize_heading }}</h2>
@@ -37,5 +39,5 @@
 {% endblock %}
 
 {% block scripts %}
-  <script src="/static/js/book_detail.js?v={{ version }}-toolbaractions"></script>
+  <script src="/static/js/book_detail.js?v={{ version }}-toolbaractions-rescan"></script>
 {% endblock %}

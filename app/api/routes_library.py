@@ -99,6 +99,7 @@ class BookIn(BaseModel):
     monitored: bool = True
     quality_profile: str = ""
     root_folder_id: int | None = None
+    tags: list[str] = Field(default_factory=list)
 
 
 class BookPatch(BaseModel):
@@ -522,8 +523,8 @@ async def get_library_stats() -> LibraryStatsOut:
 
 @router.post("/api/v1/library/books", response_model=BookOut, status_code=201)
 async def post_book(data: BookIn) -> BookOut:
-    """Create a book, optionally with a root folder / quality profile chosen
-    up front (Add wizard, #50). Both are validated before anything is
+    """Create a book, optionally with a root folder / quality profile / tags
+    chosen up front (Add wizard, #68). All are validated before anything is
     persisted so an invalid choice never leaves a half-configured book row
     behind (see review note on the original PATCH-after-create flow)."""
     _ensure_schema()
@@ -539,7 +540,10 @@ async def post_book(data: BookIn) -> BookOut:
                     409,
                     f"Book with {data.provider} id {data.provider_id!r} already exists",
                 )
-        book_id = create_book(conn, BookCreate(**data.model_dump()))
+        fields = data.model_dump(exclude={"tags"})
+        book_id = create_book(conn, BookCreate(**fields))
+        if data.tags:
+            _sync_entity_tags(conn, "book_tags", "book_id", book_id, data.tags)
         result = _book_out(conn, book_id)
     return result
 

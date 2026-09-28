@@ -85,6 +85,21 @@ def test_metadata_page_uses_add_new_labels(app_client, language, nav_label, head
     assert f'<h1 class="page-title">{heading_marker}</h1>' in page.text
 
 
+def test_metadata_add_modal_has_root_folder_quality_monitored_and_tags(app_client):
+    """Add New parity (#68): the Add modal collects root folder, quality
+    profile, monitored state, and tags before the book is created, instead
+    of a one-click POST with no per-book settings."""
+    _set_ui_language(app_client, "en")
+
+    page = app_client.get("/metadata")
+    assert page.status_code == 200
+    assert 'id="add-book-root-folder"' in page.text
+    assert 'id="add-book-quality-profile"' in page.text
+    assert 'id="add-book-monitored"' in page.text
+    assert 'id="add-book-tags-chips"' in page.text
+    assert 'id="add-book-tag-input"' in page.text
+
+
 @pytest.mark.parametrize("language", ["en", "de"])
 def test_search_page_uses_releases_label(app_client, language):
     """The release/download search page is labeled Releases (issue #10),
@@ -260,6 +275,21 @@ def test_book_detail_page_has_toolbar_and_root_marker(app_client):
     assert 'id="book-detail-delete-btn"' in page.text
     # Detail root, populated client-side once the book is fetched.
     assert 'id="book-detail"' in page.text
+
+
+def test_book_detail_page_has_rescan_and_organize_toolbar_actions(app_client):
+    """Book Detail toolbar parity (#68): Rescan wires the existing
+    Audiobookshelf scan connection endpoint, and the toolbar Organize
+    button scrolls to the existing Organize Files panel rather than
+    duplicating its preview/apply logic."""
+    _set_ui_language(app_client, "en")
+
+    page = app_client.get("/library/books/1")
+    assert page.status_code == 200
+    assert 'id="book-detail-rescan-btn"' in page.text
+    assert "Rescan" in page.text
+    assert 'id="book-detail-organize-toolbar-btn"' in page.text
+    assert 'id="book-detail-organize-panel"' in page.text
 
 
 def test_book_detail_page_has_organize_controls(app_client):
@@ -1004,6 +1034,19 @@ def test_library_page_has_filter_and_sort_controls(app_client):
     assert 'id="library-refresh-top"' in page.text
     assert 'id="view-grid-btn"' in page.text
     assert 'id="view-table-btn"' in page.text
+
+
+def test_library_page_sort_dropdown_includes_monitored_and_quality(app_client):
+    """Library table parity (#68): monitored/quality-profile join the other
+    Starr-style sortable columns (library.js renders the clickable <th>
+    headers client-side; the toolbar <select> options are server-rendered
+    and checkable here)."""
+    _set_ui_language(app_client, "en")
+
+    page = app_client.get("/library")
+    assert page.status_code == 200
+    assert '<option value="monitored">' in page.text
+    assert '<option value="quality">' in page.text
 
 
 @pytest.mark.parametrize(

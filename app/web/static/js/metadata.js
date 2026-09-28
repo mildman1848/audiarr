@@ -137,6 +137,15 @@ function chipEditorHtml(containerId, names) {
     .join("") || `<span class="muted small">${esc(T.add_book_none)}</span>`;
 }
 
+// Chip lists keyed by name, shared by authors/narrators/tags editors -- all
+// three follow the same "type a value, press Enter, click × to remove"
+// pattern, just against a different addModalState array.
+const CHIP_LISTS = {
+  authors: () => addModalState.authors,
+  narrators: () => addModalState.narrators,
+  tags: () => addModalState.tags,
+};
+
 function renderPersonChips() {
   document.getElementById("add-book-authors-chips").innerHTML = chipEditorHtml(
     "authors",
@@ -146,13 +155,17 @@ function renderPersonChips() {
     "narrators",
     addModalState.narrators
   );
+  document.getElementById("add-book-tags-chips").innerHTML = chipEditorHtml(
+    "tags",
+    addModalState.tags
+  );
   wirePersonChipRemoval();
 }
 
 function wirePersonChipRemoval() {
   document.querySelectorAll("[data-remove-person]").forEach((el) => {
     el.addEventListener("click", () => {
-      const list = el.dataset.chipList === "authors" ? addModalState.authors : addModalState.narrators;
+      const list = CHIP_LISTS[el.dataset.chipList]();
       list.splice(Number(el.dataset.removePerson), 1);
       renderPersonChips();
     });
@@ -191,6 +204,7 @@ function openAddModal(index) {
     row,
     authors: [...(row.authors || [])],
     narrators: [...(row.narrators || [])],
+    tags: [],
   };
 
   document.getElementById("add-book-summary").innerHTML = `
@@ -250,6 +264,7 @@ async function confirmAddBook() {
     monitored,
     root_folder_id: rootFolderId,
     quality_profile: qualityProfile,
+    tags: addModalState.tags,
   };
 
   try {
@@ -308,6 +323,11 @@ document.addEventListener("DOMContentLoaded", () => {
     if (event.key !== "Enter") return;
     event.preventDefault();
     addPerson(addModalState.narrators, event.target);
+  });
+  document.getElementById("add-book-tag-input").addEventListener("keydown", (event) => {
+    if (event.key !== "Enter") return;
+    event.preventDefault();
+    addPerson(addModalState.tags, event.target);
   });
   document.getElementById("add-book-confirm").addEventListener("click", confirmAddBook);
   document.getElementById("add-book-cancel").addEventListener("click", closeAddModal);
