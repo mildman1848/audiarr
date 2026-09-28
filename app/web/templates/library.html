@@ -24,6 +24,8 @@
       <option value="files">{{ t.toolbar_sort_files }}</option>
       <option value="size">{{ t.toolbar_sort_size }}</option>
       <option value="added">{{ t.toolbar_sort_added }}</option>
+      <option value="monitored">{{ t.toolbar_sort_monitored }}</option>
+      <option value="quality">{{ t.toolbar_sort_quality }}</option>
     </select>
     <button type="button" id="library-sort-dir" class="toolbar-btn icon-only" aria-label="{{ t.library_sort_dir_asc }}" title="{{ t.library_sort_dir_asc }}">▴</button>
   </div>
@@ -116,5 +118,5 @@
 {% endblock %}
 
 {% block scripts %}
-  <script src="/static/js/library.js?v={{ version }}-sortheaders"></script>
+  <script src="/static/js/library.js?v={{ version }}-sortheaders-monitored"></script>
 {% endblock %}

@@ -25,6 +25,8 @@ const SORT_ACCESSORS = {
   files: (b) => b.file_count || 0,
   size: (b) => b.size_bytes || 0,
   added: (b) => b.added_at || "",
+  monitored: (b) => (b.monitored ? 1 : 0),
+  quality: (b) => (b.quality_profile || "").toLowerCase(),
 };
 
 // Reads ?sort=&dir= from the current URL so a reloaded/shared link keeps
@@ -289,6 +291,10 @@ function renderGrid(books) {
   return `<div class="library-grid">${cards}</div>`;
 }
 
+function monitoredToggleHtml(b) {
+  return `<input type="checkbox" data-monitored-toggle="${b.id}" ${b.monitored ? "checked" : ""} aria-label="${esc(T.library_col_monitored)}">`;
+}
+
 function renderTable(books) {
   const rows = books
     .map(
@@ -301,6 +307,8 @@ function renderTable(books) {
         <td class="nowrap">${esc(formatDuration(b.duration_seconds))}</td>
         <td class="nowrap">${b.file_count}</td>
         <td class="nowrap">${esc(humanSize(b.size_bytes))}</td>
+        <td class="nowrap">${monitoredToggleHtml(b)}</td>
+        <td class="nowrap">${esc(b.quality_profile || T.book_detail_quality_profile_default)}</td>
         <td>${tagChipsHtml(b.tags) || "—"}</td>
         <td class="nowrap">${bookActionsHtml(b)}</td>
       </tr>`
@@ -318,6 +326,8 @@ function renderTable(books) {
             ${sortHeaderHtml("duration", T.library_col_duration)}
             ${sortHeaderHtml("files", T.library_col_files)}
             ${sortHeaderHtml("size", T.library_col_size)}
+            ${sortHeaderHtml("monitored", T.library_col_monitored)}
+            ${sortHeaderHtml("quality", T.library_col_quality)}
             <th>${esc(T.library_col_tags)}</th>
             <th>${esc(T.library_col_actions)}</th>
           </tr>
@@ -334,6 +344,33 @@ function wireBookActions(container) {
   container.querySelectorAll("[data-sort-key]").forEach((btn) => {
     btn.addEventListener("click", () => setSort(btn.dataset.sortKey));
   });
+  container.querySelectorAll("[data-monitored-toggle]").forEach((input) => {
+    input.addEventListener("change", () => toggleMonitored(input));
+  });
+}
+
+// Reuses the existing library PATCH endpoint, same pattern as the calendar
+// agenda's monitored toggle (calendar.js).
+async function toggleMonitored(input) {
+  const bookId = input.dataset.monitoredToggle;
+  const monitored = input.checked;
+  input.disabled = true;
+  try {
+    const resp = await fetch(`/api/v1/library/books/${bookId}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ monitored }),
+    });
+    if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+    const book = allBooks.find((b) => String(b.id) === String(bookId));
+    if (book) book.monitored = monitored;
+    if (window.AudiarrToast) window.AudiarrToast.success(T.calendar_monitored_updated);
+  } catch (err) {
+    input.checked = !monitored;
+    if (window.AudiarrToast) window.AudiarrToast.error(`${T.calendar_monitored_error} (${err.message})`);
+  } finally {
+    input.disabled = false;
+  }
 }
 
 async function loadBooks() {
