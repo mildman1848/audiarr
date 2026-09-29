@@ -1,5 +1,15 @@
 # Changelog
 
+## 1.1.6
+
+- Listenarr/Chaptarr audio metadata harvest (#71): read-only `ffprobe` enrichment around the existing external m4b-convertarr/command conversion backend (no embedded converter, originals never modified) — duration, bitrate, codec, container, and chapter data for every imported file.
+- `app/library/audio_probe.py`: a new async `probe_file()` wrapper runs `ffprobe` as a subprocess and normalizes its JSON into duration/bitrate/codec/container/chapters; never raises — a missing binary, unreadable file, or malformed output all resolve to a non-fatal `probe_status` (`ok`/`error`/`unavailable`) that the importer persists instead of blocking the import.
+- Schema v15 (`015_file_audio_metadata.sql`): `library_files` gains nullable `duration_seconds`/`bitrate_kbps`/`codec`/`container`/`chapter_count`/`probe_status`/`probe_error` columns, plus a new `library_file_chapters` table (one row per chapter, cascade-deleted with its file).
+- The import pipeline (`_persist_files`) probes every placed file before inserting its `library_files` row — read-only, and never fails an import when ffprobe is missing or a file can't be probed.
+- Book Detail's file table now groups files by edition and shows format/abridgement/locale badges, a file count, and the book's narrators per edition (edition/multi-file/narrator clarity); per-file Duration/Bitrate/Codec columns; and a per-file expandable chapter table where chapter data exists. Probe failures/pending state show as a visible badge instead of blank cells.
+- Naming/organize tokens gain `{codec}` and `{bitrate}` (opportunistic verification against Chaptarr's token set, #71) — empty string for a file that hasn't been probed yet, same as any other optional token.
+- The production Docker image now installs `ffmpeg` (provides `ffprobe`) alongside the existing runtime dependencies.
+
 ## 1.1.5
 
 - Custom release preferences / audiobook custom formats MVP (#70): a new persisted `release_preferences` settings section (preferred terms with scores, blocked terms, a `minimum_preference_score` threshold) adapts Radarr/Sonarr's Custom Formats, Release Profiles, and Delay Profiles into one small, audiobook-first slice — no condition DSL, no time-based delay page. Ships with audiobook-specific defaults (`unabridged` preferred, `abridged`/`dramatized` blocked).

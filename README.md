@@ -55,8 +55,8 @@ Docker Compose quick start:
 ```yaml
 services:
   audiarr:
-    image: ghcr.io/mildman1848/audiarr:1.1.5
-    # or: docker.io/mildman1848/audiarr:1.1.5
+    image: ghcr.io/mildman1848/audiarr:1.1.6
+    # or: docker.io/mildman1848/audiarr:1.1.6
     container_name: audiarr
     restart: unless-stopped
     ports:
@@ -85,7 +85,7 @@ Important defaults:
 | Audible locale | `us` |
 | UI language | `en`, with `de` available |
 | Optional translation backend | `none` by default; LibreTranslate-compatible backend optional |
-| Version | `1.1.5` |
+| Version | `1.1.6` |
 
 Versioning follows the Audiarr roadmap, not the household/fork `mldm<N>`
 suffix used for image revisions:

@@ -2,9 +2,9 @@ ARG LSIO_BASE_VERSION=noble
 FROM ghcr.io/linuxserver/baseimage-ubuntu:${LSIO_BASE_VERSION}
 
 ARG LSIO_BASE_VERSION
-ARG APP_VERSION=1.1.5
+ARG APP_VERSION=1.1.6
 ARG IMAGE_REVISION=release
-ARG VERSION=1.1.5
+ARG VERSION=1.1.6
 ARG BUILD_DATE=unknown
 ARG VCS_REF=unknown
 
@@ -28,7 +28,7 @@ LABEL org.opencontainers.image.title="audiarr" \
       build_version="Mildman1848 audiarr version:- ${VERSION} Upstream:- ${APP_VERSION} Revision:- ${IMAGE_REVISION}"
 
 RUN apt-get update && apt-get install -y --no-install-recommends \
-      ca-certificates curl python3 python3-pip python3-venv \
+      ca-certificates curl python3 python3-pip python3-venv ffmpeg \
     && rm -rf /var/lib/apt/lists/*
 
 COPY app /app/audiarr/app

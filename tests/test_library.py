@@ -702,9 +702,65 @@ def test_book_endpoints_include_file_stats(app_client):
     assert len(files) == 2
     assert {f["format"] for f in files} == {"m4b"}
     assert all(f["edition_id"] == edition_id for f in files)
+    # ffprobe metadata (#71) defaults to "not probed yet" until the importer
+    # (or a future rescan) actually runs a probe -- never invented data.
+    assert all(f["probe_status"] == "pending" for f in files)
+    assert all(f["duration_seconds"] is None for f in files)
+    assert all(f["chapters"] == [] for f in files)
+    # Edition clarity (#71): the editions table's own fields, surfaced here.
+    assert all(f["edition_format"] == "m4b" for f in files)
+    assert all(f["edition_locale"] == "de" for f in files)
+    assert all(f["edition_abridged"] is False for f in files)
 
     missing = app_client.get("/api/v1/library/books/9999/files")
     assert missing.status_code == 404
+
+
+async def test_book_files_expose_probed_audio_metadata_and_chapters(app_client):
+    """Once a file has been probed (#71), the files endpoint surfaces
+    duration/bitrate/codec/chapter data -- persisted exactly as the importer
+    would write it, not recomputed here."""
+    resp = app_client.post("/api/v1/library/books", json={"title": "Probed Book"})
+    book = resp.json()
+
+    with get_conn() as conn:
+        cur = conn.execute(
+            "INSERT INTO editions (book_id, format, abridged, locale) VALUES (?, 'm4b', 1, 'us')",
+            (book["id"],),
+        )
+        edition_id = cur.lastrowid
+        cur = conn.execute(
+            """INSERT INTO library_files
+               (edition_id, path, size_bytes, format, duration_seconds, bitrate_kbps,
+                codec, container, chapter_count, probe_status)
+               VALUES (?, '/data/book/part1.m4b', 1000, 'm4b', 3600, 64, 'aac', 'mov', 2, 'ok')""",
+            (edition_id,),
+        )
+        file_id = cur.lastrowid
+        conn.execute(
+            """INSERT INTO library_file_chapters (library_file_id, idx, title, start_seconds, end_seconds)
+               VALUES (?, 0, 'Chapter One', 0.0, 1800.0)""",
+            (file_id,),
+        )
+        conn.execute(
+            """INSERT INTO library_file_chapters (library_file_id, idx, title, start_seconds, end_seconds)
+               VALUES (?, 1, 'Chapter Two', 1800.0, 3600.0)""",
+            (file_id,),
+        )
+
+    files = app_client.get(f"/api/v1/library/books/{book['id']}/files").json()
+    assert len(files) == 1
+    f = files[0]
+    assert f["probe_status"] == "ok"
+    assert f["duration_seconds"] == 3600
+    assert f["bitrate_kbps"] == 64
+    assert f["codec"] == "aac"
+    assert f["container"] == "mov"
+    assert f["chapter_count"] == 2
+    assert f["edition_abridged"] is True
+    assert [c["title"] for c in f["chapters"]] == ["Chapter One", "Chapter Two"]
+    assert f["chapters"][0]["start_seconds"] == 0.0
+    assert f["chapters"][1]["end_seconds"] == 3600.0
 
 
 def test_api_library_stats(app_client):

@@ -62,6 +62,22 @@ def test_build_context_defaults_for_missing_people():
     assert context["quality"] == "m4b"
 
 
+def test_build_context_codec_and_bitrate_tokens():
+    context = build_context(
+        {"title": "T", "authors": "", "narrators": ""}, 1, "m4b", codec="aac", bitrate_kbps=64
+    )
+    assert context["codec"] == "aac"
+    assert context["bitrate"] == "64"
+
+
+def test_build_context_codec_and_bitrate_empty_when_not_probed():
+    """#71: an unprobed (or probe-failed) file must not block a rename --
+    {codec}/{bitrate} just render empty, like any other missing token."""
+    context = build_context({"title": "T", "authors": "", "narrators": ""}, 1, "m4b")
+    assert context["codec"] == ""
+    assert context["bitrate"] == ""
+
+
 def test_build_context_first_of_multiple_and_full_lists():
     book = {"authors": "Alice, Bob", "narrators": "Carol, Dave", "title": "T"}
     context = build_context(book, book_id=1, quality="mp3")
@@ -205,6 +221,23 @@ def test_preview_ready_when_target_is_free(lib):
     assert item.file_id == file_id
     expected = (root / "Bernhard Schlink" / "Der Vorleser (2008)" / "disc1.m4b").resolve()
     assert Path(item.target_path) == expected
+
+
+def test_preview_renders_codec_and_bitrate_tokens_from_probed_file(lib):
+    """#71: {codec}/{bitrate} come from the file's own ffprobe columns, wired
+    through build_preview -> build_context exactly like {title}/{author}."""
+    book_id, file_id, _source_path = _make_book_with_file(lib)
+    with get_conn() as conn:
+        conn.execute(
+            "UPDATE library_files SET codec = 'aac', bitrate_kbps = 64 WHERE id = ?", (file_id,)
+        )
+    root = lib / "library"
+    root.mkdir()
+    with get_conn() as conn:
+        preview = build_preview(conn, book_id, str(root), "{author}/{title} [{codec} {bitrate}kbps]")
+    assert preview.safe_to_apply
+    expected = (root / "Bernhard Schlink" / "Der Vorleser [aac 64kbps]" / "disc1.m4b").resolve()
+    assert Path(preview.items[0].target_path) == expected
 
 
 def test_preview_unchanged_when_source_already_at_target(lib):

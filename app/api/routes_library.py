@@ -149,6 +149,13 @@ class BookOut(BaseModel):
     tags: list[TagRef]
 
 
+class ChapterOut(BaseModel):
+    index: int
+    title: str
+    start_seconds: float
+    end_seconds: float | None
+
+
 class LibraryFileOut(BaseModel):
     id: int
     edition_id: int
@@ -157,6 +164,21 @@ class LibraryFileOut(BaseModel):
     mtime: str | None
     format: str
     added_at: str
+    # ffprobe-derived audio metadata (#71): nullable/"pending" until a probe
+    # has run, and non-fatal on failure -- see app.library.audio_probe.
+    duration_seconds: int | None = None
+    bitrate_kbps: int | None = None
+    codec: str | None = None
+    container: str | None = None
+    chapter_count: int | None = None
+    probe_status: str = "pending"
+    probe_error: str | None = None
+    chapters: list[ChapterOut] = Field(default_factory=list)
+    # Edition clarity (#71): the editions table already carries these, just
+    # not surfaced in the file table before now.
+    edition_format: str = ""
+    edition_abridged: bool = False
+    edition_locale: str = ""
 
 
 class OrganizeIn(BaseModel):
@@ -558,6 +580,31 @@ async def get_book_endpoint(book_id: int) -> BookOut:
     return result
 
 
+def _file_chapters(conn: Any, file_ids: list[int]) -> dict[int, list[ChapterOut]]:
+    """Chapters for a set of library_files, grouped by file id (#71)."""
+    if not file_ids:
+        return {}
+    placeholders = ",".join("?" * len(file_ids))
+    rows = conn.execute(
+        f"""SELECT library_file_id, idx, title, start_seconds, end_seconds
+              FROM library_file_chapters
+             WHERE library_file_id IN ({placeholders})
+             ORDER BY library_file_id, idx""",
+        file_ids,
+    ).fetchall()
+    chapters_by_file: dict[int, list[ChapterOut]] = {}
+    for r in rows:
+        chapters_by_file.setdefault(r["library_file_id"], []).append(
+            ChapterOut(
+                index=r["idx"],
+                title=r["title"],
+                start_seconds=r["start_seconds"],
+                end_seconds=r["end_seconds"],
+            )
+        )
+    return chapters_by_file
+
+
 @router.get("/api/v1/library/books/{book_id}/files", response_model=list[LibraryFileOut])
 async def get_book_files(book_id: int) -> list[LibraryFileOut]:
     _ensure_schema()
@@ -566,14 +613,25 @@ async def get_book_files(book_id: int) -> list[LibraryFileOut]:
             raise HTTPException(404, "Book not found")
         rows = conn.execute(
             """SELECT lf.id, lf.edition_id, lf.path, lf.size_bytes, lf.mtime,
-                      lf.format, lf.added_at
+                      lf.format, lf.added_at, lf.duration_seconds, lf.bitrate_kbps,
+                      lf.codec, lf.container, lf.chapter_count, lf.probe_status,
+                      lf.probe_error,
+                      e.format AS edition_format, e.abridged AS edition_abridged,
+                      e.locale AS edition_locale
                  FROM library_files lf
                  JOIN editions e ON e.id = lf.edition_id
                 WHERE e.book_id = ?
-                ORDER BY lf.path""",
+                ORDER BY lf.edition_id, lf.path""",
             (book_id,),
         ).fetchall()
-    return [LibraryFileOut(**dict(r)) for r in rows]
+        chapters_by_file = _file_chapters(conn, [r["id"] for r in rows])
+    return [
+        LibraryFileOut(
+            **{**dict(r), "edition_abridged": bool(r["edition_abridged"])},
+            chapters=chapters_by_file.get(r["id"], []),
+        )
+        for r in rows
+    ]
 
 
 def _resolve_organize_root_and_pattern(

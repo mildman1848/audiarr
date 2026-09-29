@@ -25,6 +25,99 @@ function formatDuration(seconds) {
   return hours > 0 ? `${hours}h ${minutes}m` : `${minutes}m`;
 }
 
+// Precise clock-style timestamp for chapter start/end times, distinct from
+// formatDuration's rounded "Xh Ym" badge style.
+function formatTimestamp(seconds) {
+  if (seconds === null || seconds === undefined) return "—";
+  const total = Math.max(0, Math.round(seconds));
+  const h = Math.floor(total / 3600);
+  const m = Math.floor((total % 3600) / 60);
+  const s = total % 60;
+  const pad = (n) => String(n).padStart(2, "0");
+  return h > 0 ? `${h}:${pad(m)}:${pad(s)}` : `${m}:${pad(s)}`;
+}
+
+function tpl(key, values) {
+  let text = T[key] || key;
+  for (const [name, value] of Object.entries(values || {})) {
+    text = text.replace(`{${name}}`, value);
+  }
+  return text;
+}
+
+// Audio-probe status badge (#71): "ok" needs no badge -- the data speaks for
+// itself -- but pending/unavailable/error must stay visible per the
+// non-fatal-but-visible extraction-failure requirement.
+function probeStatusBadge(file) {
+  if (file.probe_status === "ok") return "";
+  if (file.probe_status === "pending") {
+    return `<span class="badge" title="${esc(T.book_detail_files_probe_pending)}">${esc(T.book_detail_files_probe_pending)}</span>`;
+  }
+  if (file.probe_status === "unavailable") {
+    return `<span class="badge badge-quality-below-cutoff" title="${esc(T.book_detail_files_probe_unavailable)}">${esc(T.book_detail_files_probe_unavailable)}</span>`;
+  }
+  const detail = file.probe_error ? `${T.book_detail_files_probe_error}: ${file.probe_error}` : T.book_detail_files_probe_error;
+  return `<span class="badge badge-error" title="${esc(detail)}">${esc(T.book_detail_files_probe_error)}</span>`;
+}
+
+function chaptersCellHtml(file) {
+  if (file.probe_status !== "ok") return probeStatusBadge(file);
+  if (!file.chapter_count) return esc(T.book_detail_files_chapters_none);
+  return `<span class="badge chapters-toggle" data-file-id="${file.id}" role="button" tabindex="0" style="cursor:pointer">${esc(tpl("book_detail_files_chapters_toggle", { count: file.chapter_count }))}</span>`;
+}
+
+function chapterRowsHtml(file) {
+  const rows = (file.chapters || [])
+    .map(
+      (c) => `
+      <tr>
+        <td>${c.index + 1}</td>
+        <td>${esc(c.title || T.book_detail_chapters_untitled)}</td>
+        <td>${esc(formatTimestamp(c.start_seconds))}</td>
+        <td>${esc(formatTimestamp(c.end_seconds))}</td>
+      </tr>`
+    )
+    .join("");
+  return `
+    <tr class="chapters-row" data-file-id="${file.id}" hidden>
+      <td colspan="8">
+        <div class="table-scroll"><table class="table">
+          <thead>
+            <tr>
+              <th>${esc(T.book_detail_chapters_col_index)}</th>
+              <th>${esc(T.book_detail_chapters_col_title)}</th>
+              <th>${esc(T.book_detail_chapters_col_start)}</th>
+              <th>${esc(T.book_detail_chapters_col_end)}</th>
+            </tr>
+          </thead>
+          <tbody>${rows}</tbody>
+        </table></div>
+      </td>
+    </tr>`;
+}
+
+// Edition header row: format/abridgement/locale badges plus the book's
+// narrators (narrators are book-level in the current schema -- shared by
+// every edition/file of this book) so the file table itself communicates
+// "which edition, read by whom" without scrolling back to the hero card.
+function editionHeaderHtml(editionFiles, book) {
+  const edition = editionFiles[0];
+  const abridgedLabel = edition.edition_abridged
+    ? T.book_detail_files_edition_abridged
+    : T.book_detail_files_edition_unabridged;
+  const narrators = (book.narrators || []).join(", ") || T.book_detail_files_narrator_unknown;
+  return `
+    <tr class="edition-row">
+      <td colspan="8">
+        <span class="badge">${esc((edition.edition_format || edition.format || "").toUpperCase())}</span>
+        <span class="badge">${esc(abridgedLabel)}</span>
+        ${edition.edition_locale ? `<span class="badge">${esc(edition.edition_locale)}</span>` : ""}
+        <span class="badge">${esc(tpl("book_detail_files_file_count", { count: editionFiles.length }))}</span>
+        <span class="muted">${esc(T.book_detail_files_narrated_by)}: ${esc(narrators)}</span>
+      </td>
+    </tr>`;
+}
+
 // Human-readable byte size, e.g. 336000000 -> "320.5 MB".
 function humanSize(bytes) {
   const n = Number(bytes);
@@ -140,16 +233,39 @@ function renderBook(book, files, profiles, rootFolders) {
     )
     .join("");
 
-  const fileRows = files
-    .map(
-      (f) => `
-      <tr>
-        <td><code>${esc(f.path)}</code></td>
-        <td>${esc(f.format || "—")}</td>
-        <td>${esc(humanSize(f.size_bytes))}</td>
-        <td>${esc(f.added_at || "—")}</td>
-      </tr>`
-    )
+  // Group files by edition (#71: edition/multi-file/narrator clarity) --
+  // files arrive pre-sorted by edition_id/path (see get_book_files), so a
+  // single pass is enough to detect each edition's boundaries and part count.
+  const editionGroups = [];
+  for (const f of files) {
+    const last = editionGroups[editionGroups.length - 1];
+    if (last && last[0].edition_id === f.edition_id) {
+      last.push(f);
+    } else {
+      editionGroups.push([f]);
+    }
+  }
+
+  const fileRows = editionGroups
+    .map((group) => {
+      const header = editionHeaderHtml(group, book);
+      const rows = group
+        .map(
+          (f, i) => `
+          <tr>
+            <td>${esc(tpl("book_detail_files_part_label", { index: i + 1, total: group.length }))}</td>
+            <td><code>${esc(f.path)}</code></td>
+            <td>${f.probe_status === "ok" ? esc(formatDuration(f.duration_seconds)) : probeStatusBadge(f)}</td>
+            <td>${f.probe_status === "ok" ? esc(f.bitrate_kbps ? `${f.bitrate_kbps} kbps` : "—") : "—"}</td>
+            <td>${f.probe_status === "ok" ? esc(f.codec || "—") : "—"}</td>
+            <td>${chaptersCellHtml(f)}</td>
+            <td>${esc(humanSize(f.size_bytes))}</td>
+            <td>${esc(f.added_at || "—")}</td>
+          </tr>${f.chapter_count ? chapterRowsHtml(f) : ""}`
+        )
+        .join("");
+      return header + rows;
+    })
     .join("");
 
   container.innerHTML = `
@@ -214,8 +330,12 @@ function renderBook(book, files, profiles, rootFolders) {
             ? `<div class="table-scroll"><table class="table">
                  <thead>
                    <tr>
+                     <th>${esc(T.book_detail_files_col_part)}</th>
                      <th>${esc(T.book_detail_files_col_path)}</th>
-                     <th>${esc(T.book_detail_files_col_format)}</th>
+                     <th>${esc(T.book_detail_files_col_duration)}</th>
+                     <th>${esc(T.book_detail_files_col_bitrate)}</th>
+                     <th>${esc(T.book_detail_files_col_codec)}</th>
+                     <th>${esc(T.book_detail_files_col_chapters)}</th>
                      <th>${esc(T.book_detail_files_col_size)}</th>
                      <th>${esc(T.book_detail_files_col_added_at)}</th>
                    </tr>
@@ -368,6 +488,18 @@ function refreshBookView() {
   wireQualityProfileSelect(currentBook.id);
   wireRootFolderSelect(currentBook.id);
   wireTagsEditor(currentBook.id);
+  wireChapterToggles();
+}
+
+// Shows/hides a file's chapter sub-table (#71) -- chapters are already
+// embedded in the files response, so this is a pure DOM toggle, no fetch.
+function wireChapterToggles() {
+  document.querySelectorAll(".chapters-toggle").forEach((el) => {
+    el.addEventListener("click", () => {
+      const row = document.querySelector(`.chapters-row[data-file-id="${el.dataset.fileId}"]`);
+      if (row) row.hidden = !row.hidden;
+    });
+  });
 }
 
 // Re-fetches this book's metadata from its linked provider (toolbar
