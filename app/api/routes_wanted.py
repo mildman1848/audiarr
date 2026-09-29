@@ -25,8 +25,16 @@ from app.connections.prowlarr import ProwlarrClient
 from app.connections.sabnzbd import SABnzbdClient
 from app.db import get_conn, migrate
 from app.library.importer import _resolve_quality_profile
-from app.models.settings import DownloadClient, Indexer, QualityDefinition, QualityProfile, Settings
+from app.models.settings import (
+    DownloadClient,
+    Indexer,
+    QualityDefinition,
+    QualityProfile,
+    ReleasePreferencesSettings,
+    Settings,
+)
 from app.quality import QualityFit, evaluate_quality_for_profile, infer_quality_from_name
+from app.release_preferences import score_release
 
 log = logging.getLogger("audiarr.api.wanted")
 
@@ -279,6 +287,7 @@ async def find_fitting_release(
     profile: QualityProfile,
     indexer: Indexer,
     definitions: list[QualityDefinition],
+    preferences: ReleasePreferencesSettings,
 ) -> dict | None:
     """Search Prowlarr and return the best cutoff-fitting release, or None.
 
@@ -286,25 +295,32 @@ async def find_fitting_release(
     wanted-search scheduler (see app/wanted_scheduler.py) -- the same
     Prowlarr search / evaluate_quality_for_profile logic as the interactive
     release search (routes_releases.py), scoped to one book's own resolved
-    quality profile. Only "preferred"/"accepted" releases are considered.
+    quality profile. Only "preferred"/"accepted" releases are considered,
+    and a release preference score_release() rejects (blocked term, or
+    below minimum_preference_score) is never auto-grabbed here -- this is
+    the unattended path, so a rejected release is dropped rather than just
+    flagged as it is on the interactive Releases page.
     """
     query = f"{title} {' '.join(authors)}".strip()
     client = ProwlarrClient(base_url=indexer.url, api_key=indexer.api_key or None)
     releases = await client.search(query, limit=50)
     log.info("Cutoff search for book %d (%r) -> %d result(s)", book_id, query, len(releases))
 
-    fitting: list[tuple[int, int, dict]] = []
+    fitting: list[tuple[int, int, int, dict]] = []
     for release in releases:
         inferred = infer_quality_from_name(release.get("title") or "")
         fit = evaluate_quality_for_profile(inferred, profile, definitions)
         if fit.status not in ("preferred", "accepted"):
+            continue
+        preference = score_release(release.get("title"), preferences)
+        if preference.status == "rejected":
             continue
         tier_index = (
             profile.quality_ids.index(fit.matched_quality_id)
             if fit.matched_quality_id in profile.quality_ids
             else len(profile.quality_ids)
         )
-        fitting.append((tier_index, -(release.get("seeders") or 0), release))
+        fitting.append((tier_index, -preference.score, -(release.get("seeders") or 0), release))
 
     if not fitting:
         log.debug(
@@ -315,8 +331,8 @@ async def find_fitting_release(
         )
         return None
 
-    fitting.sort(key=lambda t: (t[0], t[1]))
-    return fitting[0][2]
+    fitting.sort(key=lambda t: (t[0], t[1], t[2]))
+    return fitting[0][3]
 
 
 async def grab_cutoff_release(
@@ -408,7 +424,13 @@ async def search_cutoff_upgrade(book_id: int) -> CutoffSearchResponse | JSONResp
         )
 
     release = await find_fitting_release(
-        book_id, book["title"], authors, profile, indexer, settings.quality_definitions
+        book_id,
+        book["title"],
+        authors,
+        profile,
+        indexer,
+        settings.quality_definitions,
+        settings.release_preferences,
     )
     if release is None:
         return JSONResponse(

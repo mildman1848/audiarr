@@ -25,8 +25,15 @@ from app.config import get_db_path, load_settings
 from app.connect import dispatch_event
 from app.connections.prowlarr import ProwlarrClient
 from app.connections.sabnzbd import SABnzbdClient
-from app.models.settings import DownloadClient, Indexer, QualityDefinition, QualityProfile
+from app.models.settings import (
+    DownloadClient,
+    Indexer,
+    QualityDefinition,
+    QualityProfile,
+    ReleasePreferencesSettings,
+)
 from app.quality import evaluate_quality_for_profile, infer_quality_from_name
+from app.release_preferences import score_release
 
 log = logging.getLogger("audiarr.api.releases")
 
@@ -58,6 +65,11 @@ class ReleaseRow(BaseModel):
     matched_quality_id: str | None = None
     quality_status: str = "unknown"
     quality_reason: str = ""
+    # Release preference scoring (see app/release_preferences.py): term
+    # matches against the title, independent of quality fit above.
+    preference_score: int = 0
+    preference_status: str = "accepted"
+    preference_reasons: list[str] = []
 
 
 class ReleaseSearchResponse(BaseModel):
@@ -162,6 +174,16 @@ def _quality_fit_fields(
     }
 
 
+def _preference_fields(title: str | None, preferences: ReleasePreferencesSettings) -> dict:
+    """Build the ReleaseRow preference_* fields for one release title."""
+    result = score_release(title, preferences)
+    return {
+        "preference_score": result.score,
+        "preference_status": result.status,
+        "preference_reasons": result.reasons,
+    }
+
+
 @router.get("/api/v1/releases/search", response_model=ReleaseSearchResponse)
 async def search_releases(query: str, limit: int = 50) -> ReleaseSearchResponse:
     """Interactive release search against the configured Prowlarr."""
@@ -173,7 +195,11 @@ async def search_releases(query: str, limit: int = 50) -> ReleaseSearchResponse:
     settings = load_settings()
     profile = _default_quality_profile()
     rows = [
-        ReleaseRow(**row, **_quality_fit_fields(row.get("title"), profile, settings.quality_definitions))
+        ReleaseRow(
+            **row,
+            **_quality_fit_fields(row.get("title"), profile, settings.quality_definitions),
+            **_preference_fields(row.get("title"), settings.release_preferences),
+        )
         for row in releases
     ]
     return ReleaseSearchResponse(releases=rows, total_results=len(releases))

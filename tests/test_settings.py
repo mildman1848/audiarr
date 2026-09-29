@@ -283,3 +283,39 @@ def test_quality_definitions_and_profiles_persist(app_client):
     assert profile["quality_ids"] == ["custom-tier"]
     assert profile["cutoff_quality_id"] == "custom-tier"
     assert profile["upgrade_allowed"] is False
+
+
+def test_release_preferences_have_audiobook_shaped_defaults(app_client):
+    """Issue #70: default release preferences ship audiobook-specific
+    examples (unabridged preferred, abridged/dramatized blocked), not an
+    empty custom-format DSL."""
+    body = app_client.get("/api/v1/settings").json()
+    prefs = body["release_preferences"]
+    preferred_terms = [t["term"] for t in prefs["preferred_terms"]]
+    blocked_terms = [t["term"] for t in prefs["blocked_terms"]]
+    assert "unabridged" in preferred_terms
+    assert "abridged" in blocked_terms
+    assert "dramatized" in blocked_terms
+    assert prefs["minimum_preference_score"] == 0
+
+
+def test_release_preferences_persist(app_client):
+    current = app_client.get("/api/v1/settings").json()
+    current["release_preferences"] = {
+        "preferred_terms": [
+            {"id": "p1", "term": "full cast", "score": 5, "category": "edition", "enabled": True}
+        ],
+        "blocked_terms": [{"id": "b1", "term": "sample", "enabled": True}],
+        "minimum_preference_score": 3,
+    }
+
+    put_response = app_client.put("/api/v1/settings", json=current)
+    assert put_response.status_code == 200
+
+    body = app_client.get("/api/v1/settings").json()
+    prefs = body["release_preferences"]
+    assert prefs["preferred_terms"] == [
+        {"id": "p1", "term": "full cast", "score": 5, "category": "edition", "enabled": True}
+    ]
+    assert prefs["blocked_terms"] == [{"id": "b1", "term": "sample", "enabled": True}]
+    assert prefs["minimum_preference_score"] == 3

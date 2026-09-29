@@ -1,5 +1,13 @@
 # Changelog
 
+## 1.1.5
+
+- Custom release preferences / audiobook custom formats MVP (#70): a new persisted `release_preferences` settings section (preferred terms with scores, blocked terms, a `minimum_preference_score` threshold) adapts Radarr/Sonarr's Custom Formats, Release Profiles, and Delay Profiles into one small, audiobook-first slice — no condition DSL, no time-based delay page. Ships with audiobook-specific defaults (`unabridged` preferred, `abridged`/`dramatized` blocked).
+- `app/release_preferences.py`: a new pure scoring module (independent of the existing `app/quality.py` container/codec/bitrate fit) matches release titles against preferred/blocked terms and reports a score, accepted/rejected status, and human-readable reasons.
+- Release search (`/search`) now shows a "Preference" badge with score and a reasons tooltip next to the existing Quality badge, so a release visibly explains why it scored well or poorly; existing quality-fit behavior and fields are unchanged.
+- The unattended Wanted upgrade search (manual button and periodic scheduler) now drops any release whose preference score is rejected (blocked term match, or below the minimum score) before grabbing — release preferences are enforced there, not just displayed. The interactive Releases page stays informational only; a human can still grab a flagged release.
+- New Settings > Release Preferences page: editable preferred/blocked term rows plus the minimum score field, following the same GET → merge → PUT pattern as every other settings section.
+
 ## 1.1.4
 
 - Remote path mappings (#69): configurable Settings > Download Clients editor to translate a download client's completed-download path to the path Audiarr sees (Docker/NAS setups with different mounts), resolved via deterministic longest-remote-path-prefix matching and applied before the SABnzbd auto-import pipeline touches the filesystem.

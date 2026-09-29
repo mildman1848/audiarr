@@ -380,6 +380,52 @@ def test_search_endpoint_reports_quality_fit_for_recognizable_titles(app_client,
     assert row["quality_status"] == "preferred"
 
 
+def test_search_endpoint_reports_release_preference_score_and_reasons(app_client, monkeypatch):
+    """Issue #70: search results carry a visible preference score/status/
+    reasons explanation, independent of quality fit. The default
+    preferences score "unabridged" positively."""
+    _configure(app_client)
+
+    release = dict(_RAW_RELEASE, title="Some Audiobook Unabridged")
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        return httpx.Response(200, json=[release])
+
+    monkeypatch.setattr(
+        "app.api.routes_releases.ProwlarrClient", _factory(ProwlarrClient, handler)
+    )
+
+    resp = app_client.get("/api/v1/releases/search", params={"query": "vorleser"})
+    assert resp.status_code == 200
+    row = resp.json()["releases"][0]
+    assert row["preference_status"] == "accepted"
+    assert row["preference_score"] == 10
+    assert any("unabridged" in r for r in row["preference_reasons"])
+
+
+def test_search_endpoint_reports_blocked_release_as_rejected(app_client, monkeypatch):
+    """A default-blocked term (abridged) is visibly flagged as rejected,
+    with a reason, but is still returned (manual search stays informational
+    -- only the unattended Wanted path drops rejected releases, see
+    tests/test_wanted.py)."""
+    _configure(app_client)
+
+    release = dict(_RAW_RELEASE, title="Some Audiobook Abridged")
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        return httpx.Response(200, json=[release])
+
+    monkeypatch.setattr(
+        "app.api.routes_releases.ProwlarrClient", _factory(ProwlarrClient, handler)
+    )
+
+    resp = app_client.get("/api/v1/releases/search", params={"query": "vorleser"})
+    assert resp.status_code == 200
+    row = resp.json()["releases"][0]
+    assert row["preference_status"] == "rejected"
+    assert any("abridged" in r for r in row["preference_reasons"])
+
+
 def test_search_endpoint_503_without_prowlarr(app_client):
     _configure(app_client, prowlarr=False)
     resp = app_client.get("/api/v1/releases/search", params={"query": "x"})

@@ -390,6 +390,152 @@ function bindProfilesEvents() {
   });
 }
 
+// ------------------------------------------------- Release preferences
+// Editable preferred/blocked term lists (Release Preferences page, issue
+// #70). Each row edits one ReleasePreferenceTerm/ReleaseBlockedTerm (see
+// app/models/settings.py); same paint/bind/state pattern as Quality and
+// Profiles above.
+let releasePreferredState = null;
+let releaseBlockedState = null;
+
+function paintReleasePreferredTerms() {
+  const el = $("release-preferred-terms");
+  if (!el || !releasePreferredState) return;
+  if (!releasePreferredState.length) {
+    el.innerHTML = `<p class="muted">${T.settings_release_preferences_preferred_empty}</p>`;
+    return;
+  }
+  const categoryOption = (item, value, label) =>
+    `<option value="${value}" ${item.category === value ? "selected" : ""}>${label}</option>`;
+  el.innerHTML = releasePreferredState
+    .map(
+      (item, i) => `
+    <div class="settings-subsection repeat-row" data-row="${i}">
+      <div class="repeat-row-head">
+        <h3>${escapeHtml(item.term) || T.settings_release_preferences_untitled}</h3>
+        <button type="button" class="btn btn-secondary" data-remove-preferred="${i}">${T.settings_remove}</button>
+      </div>
+      <label>${T.settings_release_preferences_term_label}
+        <input type="text" data-preferred-field="term" data-row="${i}" value="${escapeHtml(item.term)}">
+      </label>
+      <label>${T.settings_release_preferences_score_label}
+        <input type="number" step="1" data-preferred-field="score" data-row="${i}" value="${item.score}">
+      </label>
+      <label>${T.settings_release_preferences_category_label}
+        <select data-preferred-field="category" data-row="${i}">
+          ${categoryOption(item, "general", T.settings_release_preferences_category_general)}
+          ${categoryOption(item, "narrator", T.settings_release_preferences_category_narrator)}
+          ${categoryOption(item, "publisher", T.settings_release_preferences_category_publisher)}
+          ${categoryOption(item, "language", T.settings_release_preferences_category_language)}
+          ${categoryOption(item, "edition", T.settings_release_preferences_category_edition)}
+        </select>
+      </label>
+      <label class="inline-check">
+        <input type="checkbox" data-preferred-field="enabled" data-row="${i}" ${item.enabled ? "checked" : ""}>
+        ${T.settings_release_preferences_enabled_label}
+      </label>
+    </div>`
+    )
+    .join("");
+}
+
+function renderReleasePreferredTerms(terms) {
+  const el = $("release-preferred-terms");
+  if (!el) return;
+  releasePreferredState = (terms || []).map((t) => ({ ...t }));
+  paintReleasePreferredTerms();
+}
+
+function bindReleasePreferredEvents() {
+  const el = $("release-preferred-terms");
+  if (!el || el.dataset.bound) return;
+  el.dataset.bound = "1";
+
+  const applyFieldChange = (target) => {
+    const field = target.dataset.preferredField;
+    const row = target.dataset.row;
+    if (field == null || row == null || !releasePreferredState) return;
+    const item = releasePreferredState[Number(row)];
+    if (!item) return;
+    if (target.type === "checkbox") {
+      item[field] = target.checked;
+    } else if (target.type === "number") {
+      item[field] = Number(target.value) || 0;
+    } else {
+      item[field] = target.value;
+    }
+  };
+
+  el.addEventListener("input", (e) => applyFieldChange(e.target));
+  el.addEventListener("change", (e) => applyFieldChange(e.target));
+  el.addEventListener("click", (e) => {
+    const idx = e.target.dataset.removePreferred;
+    if (idx == null || !releasePreferredState) return;
+    releasePreferredState.splice(Number(idx), 1);
+    paintReleasePreferredTerms();
+    setDirty(true);
+  });
+}
+
+function paintReleaseBlockedTerms() {
+  const el = $("release-blocked-terms");
+  if (!el || !releaseBlockedState) return;
+  if (!releaseBlockedState.length) {
+    el.innerHTML = `<p class="muted">${T.settings_release_preferences_blocked_empty}</p>`;
+    return;
+  }
+  el.innerHTML = releaseBlockedState
+    .map(
+      (item, i) => `
+    <div class="settings-subsection repeat-row" data-row="${i}">
+      <div class="repeat-row-head">
+        <h3>${escapeHtml(item.term) || T.settings_release_preferences_untitled}</h3>
+        <button type="button" class="btn btn-secondary" data-remove-blocked="${i}">${T.settings_remove}</button>
+      </div>
+      <label>${T.settings_release_preferences_term_label}
+        <input type="text" data-blocked-field="term" data-row="${i}" value="${escapeHtml(item.term)}">
+      </label>
+      <label class="inline-check">
+        <input type="checkbox" data-blocked-field="enabled" data-row="${i}" ${item.enabled ? "checked" : ""}>
+        ${T.settings_release_preferences_enabled_label}
+      </label>
+    </div>`
+    )
+    .join("");
+}
+
+function renderReleaseBlockedTerms(terms) {
+  const el = $("release-blocked-terms");
+  if (!el) return;
+  releaseBlockedState = (terms || []).map((t) => ({ ...t }));
+  paintReleaseBlockedTerms();
+}
+
+function bindReleaseBlockedEvents() {
+  const el = $("release-blocked-terms");
+  if (!el || el.dataset.bound) return;
+  el.dataset.bound = "1";
+
+  const applyFieldChange = (target) => {
+    const field = target.dataset.blockedField;
+    const row = target.dataset.row;
+    if (field == null || row == null || !releaseBlockedState) return;
+    const item = releaseBlockedState[Number(row)];
+    if (!item) return;
+    item[field] = target.type === "checkbox" ? target.checked : target.value;
+  };
+
+  el.addEventListener("input", (e) => applyFieldChange(e.target));
+  el.addEventListener("change", (e) => applyFieldChange(e.target));
+  el.addEventListener("click", (e) => {
+    const idx = e.target.dataset.removeBlocked;
+    if (idx == null || !releaseBlockedState) return;
+    releaseBlockedState.splice(Number(idx), 1);
+    paintReleaseBlockedTerms();
+    setDirty(true);
+  });
+}
+
 // Populate whichever of these fields exist on the current settings page.
 function populate(s) {
   setText("host-port", s.host.port ?? "—");
@@ -427,6 +573,15 @@ function populate(s) {
     renderProfilesEditor(s.quality_profiles, s.quality_definitions);
     bindProfilesEvents();
   }
+  if ($("release-preferred-terms")) {
+    renderReleasePreferredTerms(s.release_preferences.preferred_terms);
+    bindReleasePreferredEvents();
+  }
+  if ($("release-blocked-terms")) {
+    renderReleaseBlockedTerms(s.release_preferences.blocked_terms);
+    bindReleaseBlockedEvents();
+  }
+  setValue("release-min-score", s.release_preferences.minimum_preference_score ?? 0);
   if ($("connect-list") && window.AudiarrConnect) {
     window.AudiarrConnect.populate(s.connect);
   }
@@ -682,6 +837,33 @@ async function saveSettings(event) {
         .filter((p) => p.name);
     }
 
+    if ($("release-preferred-terms") && releasePreferredState) {
+      doc.release_preferences.preferred_terms = releasePreferredState
+        .map((t) => ({
+          id: (t.id || "").trim(),
+          term: (t.term || "").trim(),
+          score: Number(t.score) || 0,
+          category: t.category || "general",
+          enabled: Boolean(t.enabled),
+        }))
+        .filter((t) => t.term);
+    }
+    if ($("release-blocked-terms") && releaseBlockedState) {
+      doc.release_preferences.blocked_terms = releaseBlockedState
+        .map((t) => ({
+          id: (t.id || "").trim(),
+          term: (t.term || "").trim(),
+          enabled: Boolean(t.enabled),
+        }))
+        .filter((t) => t.term);
+    }
+    if ($("release-min-score")) {
+      const minScore = Number(getValue("release-min-score"));
+      doc.release_preferences.minimum_preference_score = Number.isFinite(minScore)
+        ? Math.trunc(minScore)
+        : 0;
+    }
+
     if ($("prowlarr-url") || $("prowlarr-enabled")) {
       const prowlarr = mergeProwlarr(doc);
       prowlarr.enabled = getChecked("prowlarr-enabled");
@@ -894,6 +1076,26 @@ document.addEventListener("DOMContentLoaded", () => {
         upgrade_allowed: true,
       });
       paintProfiles();
+      setDirty(true);
+    });
+  }
+
+  const releasePreferredAddBtn = $("release-preferred-add-btn");
+  if (releasePreferredAddBtn) {
+    releasePreferredAddBtn.addEventListener("click", () => {
+      if (!releasePreferredState) releasePreferredState = [];
+      releasePreferredState.push({ id: "", term: "", score: 10, category: "general", enabled: true });
+      paintReleasePreferredTerms();
+      setDirty(true);
+    });
+  }
+
+  const releaseBlockedAddBtn = $("release-blocked-add-btn");
+  if (releaseBlockedAddBtn) {
+    releaseBlockedAddBtn.addEventListener("click", () => {
+      if (!releaseBlockedState) releaseBlockedState = [];
+      releaseBlockedState.push({ id: "", term: "", enabled: true });
+      paintReleaseBlockedTerms();
       setDirty(true);
     });
   }

@@ -296,6 +296,56 @@ def test_cutoff_search_returns_202_when_no_release_fits(app_client, monkeypatch)
     assert body["reason"]
 
 
+def test_cutoff_search_skips_blocked_term_release_even_when_quality_fits(app_client, monkeypatch):
+    """Issue #70: a release matching a default blocked term (abridged) must
+    never be auto-grabbed by the unattended Wanted upgrade search, even
+    though it fits the quality profile -- release preferences make it
+    "not grabbable", not just visually flagged (contrast with the
+    interactive search endpoint, tests/test_releases.py, which still
+    returns/flags it for a human to decide)."""
+    _set_profile()
+    _configure_connections()
+    book = _create_book(app_client)
+
+    def prowlarr_handler(request: httpx.Request) -> httpx.Response:
+        return httpx.Response(
+            200,
+            json=[
+                {
+                    "guid": "blocked-1",
+                    "indexerId": 4,
+                    "indexer": "Idx",
+                    "title": "Der Vorleser Abridged M4B AAC 128kbps Chaptered",
+                    "size": 100,
+                    "seeders": 50,
+                    "leechers": 0,
+                    "publishDate": "2026-09-01T12:00:00Z",
+                    "downloadUrl": "https://indexer.example/download/blocked-1.nzb",
+                    "magnetUrl": None,
+                    "protocol": "usenet",
+                    "age": 1,
+                    "categories": [],
+                }
+            ],
+        )
+
+    def sab_handler(request: httpx.Request) -> httpx.Response:  # pragma: no cover
+        raise AssertionError("SABnzbd must not be called for a blocked-term release")
+
+    monkeypatch.setattr(
+        "app.api.routes_wanted.ProwlarrClient", _factory(ProwlarrClient, prowlarr_handler)
+    )
+    monkeypatch.setattr(
+        "app.api.routes_wanted.SABnzbdClient", _factory(SABnzbdClient, sab_handler)
+    )
+
+    resp = app_client.post(f"/api/v1/wanted/cutoff/{book['id']}/search")
+    assert resp.status_code == 202
+    body = resp.json()
+    assert body["ok"] is False
+    assert body["found"] is False
+
+
 def test_cutoff_search_404_for_unknown_book(app_client):
     resp = app_client.post("/api/v1/wanted/cutoff/999999/search")
     assert resp.status_code == 404
