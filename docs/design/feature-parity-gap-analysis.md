@@ -37,9 +37,9 @@ against Audiarr's current implementation.
 | Custom Formats (conditions, scoring, import/update) | Missing. Audiobook release selection today is quality-fit only, no scoring language for "prefer dramatized," "prefer this narrator," "avoid abridged." | Gap, real value. | 1.1.5 — audiobook custom-format MVP (see below). |
 | Indexers (multiple, native definitions, usenet/torrent, interactive/RSS search) | Prowlarr-only by design (`docs/design/architecture.md`); interactive search exists (`/search`), RSS-style background search exists via Wanted. | Deliberate architectural choice, not a gap. | Keep Prowlarr-first. Revisit native multi-indexer UI only if Prowlarr proves insufficient; not scheduled in 1.1.x. |
 | Download clients (multiple, usenet/torrent, completed/failed handling, remove completed, remote path mappings) | SABnzbd only; queue view is read-only; no remote path mappings. | Gap — remote path mappings and queue actions have real Docker/NAS value; multi-client is lower urgency. | 1.1.4 — remote path mappings + queue actions (remove/retry/mark failed). Multi-client (qBittorrent/Transmission/NZBGet) stays a later idea, not committed to 1.1.x yet. |
-| Import lists | Missing as a generic concept. Liberatarr (1.1.0) is a bespoke Wanted-sync source; OPDS/Hardcover are tracked separately (#65, #66). | Gap, but partially covered by point integrations. | 1.1.7 — generalize into an import-list abstraction once OPDS/Hardcover exist, so future sources don't each need bespoke wiring. |
+| Import lists | Was missing as a generic concept; Liberatarr (1.1.0) was a bespoke Wanted-sync source. | Gap, now covered by groundwork. | 1.1.7 — Done. `app/import_lists.py` generalizes Liberatarr behind a normalized `ImportListSource`/`ImportListSyncResult` shape (`GET /api/v1/import-lists`, `POST /api/v1/import-lists/{id}/sync`, Settings → Import Lists status page); OPDS/Hardcover (#65/#66) can register here instead of bespoke wiring, but neither was changed in this slice. |
 | Connect (notifications) | Implemented: configurable webhooks for grab/import/health/test events, secret masking. | Adapted, done. | None. |
-| Metadata (provider priority, refresh) | Implemented: Audible/Audnexus chain, refresh interval/batch size. Metadata *profiles* (language/content restrictions) are an explicit placeholder. | Partial. | 1.1.7 — metadata profiles groundwork alongside import lists. |
+| Metadata (provider priority, refresh) | Implemented: Audible/Audnexus chain, refresh interval/batch size. Metadata *profiles* (language/content restrictions) were an explicit placeholder. | Partial, now has groundwork. | 1.1.7 — Done. `MetadataProfile` settings model (languages, content-warning-term placeholder, enabled/default) replaces the placeholder with a real editable list; not yet enforced by search/matching. |
 | Tags | Implemented: CRUD, book/root-folder assignment, filtering. | Adapted, done. | None. |
 | General — host/security/proxy/logging/backups/updates | Mostly implemented; Security is nested under General instead of its own section; no proxy setting; UI theme/date-format are read-only placeholders. | Partial. | 1.1.8 — System tabs + UI settings parity pass (Security as its own page is optional/low priority). |
 | UI — calendar, dates, theme, color-impaired mode, language | Calendar implemented (month grid + agenda + day modal, no iCal link). Theme/date-format are placeholders. Language (EN/DE) is a deliberate Audiarr feature beyond Starr's typical scope. | Partial. | 1.1.8 for theme/date-format; iCal/webcal link reconsidered in 1.1.2 alongside OPDS if it's cheap to add. |
@@ -73,7 +73,7 @@ fits Audiarr's architecture and audiobook-first product direction.
 | Audio formats: M4B, MP3 chapters, multi-file audiobooks | Audiarr's conversion pipeline already targets M4B; multi-file MP3 handling nuances (e.g., chapter numbering across files) benefit from the ffprobe enrichment above. | Fit, incremental. | 1.1.6. Done — per-file probing works for any ffprobe-readable format; multi-file editions show part N of M in the file table. |
 | MP3 → M4B conversion with chapter preservation via m4b-tool | Chaptarr embeds this; Audiarr deliberately delegates to an external m4b-convertarr/command backend. | Do not copy the embedding; strengthen the *metadata visibility* around the existing external step instead. | See "Do not copy blindly" below. Covered by 1.1.6's ffprobe enrichment, not a converter rewrite. |
 | Dual media libraries (audiobook + eBook roots or colocated roots) | Chaptarr manages both media types in one instance. | Out of scope — Audiarr is audiobook-only by product direction; adding eBook modeling would be a scope change requiring explicit user sign-off, not a documentation-driven addition. | Skip; flag as a "Do not copy blindly" item. |
-| Metadata profiles (language/content restrictions) | Lets a user restrict which languages/editions are considered a match. | Fit, matches the already-planned "Metadata profiles" placeholder in Audiarr's settings. | 1.1.7. |
+| Metadata profiles (language/content restrictions) | Lets a user restrict which languages/editions are considered a match. | Fit, matches the already-planned "Metadata profiles" placeholder in Audiarr's settings. | 1.1.7 — Done, groundwork only (model + editable settings list; not yet enforced by matching). |
 | Flexible renaming with audiobook-specific tokens | Audiarr already has `file_name_pattern` with tokens; verify parity against Chaptarr's token set (narrator, series, edition) during 1.1.6 edition work rather than as a separate exercise. | Mostly covered. | Verify/extend tokens opportunistically during 1.1.6, not a dedicated slice. Done — added `{codec}`/`{bitrate}`, backed by the new ffprobe columns; no other gaps found. |
 | `ImportList`, `CustomFormat`, `MetadataProfile`, `BookInteractiveSearch`, `IndexerFlags` (code evidence from Chaptarr, itself a Readarr fork) | Confirms these are load-bearing concepts in the broader Servarr ecosystem, reinforcing the Radarr/Sonarr-side gaps already identified (Custom Formats, Import Lists, Metadata Profiles). | Cross-validates the matrix above rather than introducing new items. | No separate action; already reflected in 1.1.5/1.1.7 above. |
 | `Bookshelf` UI concept, `MediaTypeToggle`, `BookEditionSelect` | UI patterns for a mixed audiobook/eBook shelf. | Only `BookEditionSelect` is relevant (edition disambiguation); `MediaTypeToggle`/mixed-shelf concepts don't apply since Audiarr is audiobook-only. | Edition selection folded into 1.1.6; skip the rest. |
@@ -127,10 +127,13 @@ fits Audiarr's architecture and audiobook-first product direction.
 6. **1.1.6 — Listenarr/Chaptarr audio metadata harvest (#71). Done.** ffprobe-based
    chapter/duration/bitrate metadata, edition/multi-file clarity in the file
    table, opportunistic naming-token verification (`{codec}`/`{bitrate}`).
-7. **1.1.7 — Import lists / Hardcover (#66) / metadata profiles groundwork (#72).**
-   Generalize the import-list concept once OPDS and Hardcover exist as
-   concrete sources; stand up metadata profiles (language/content
-   restrictions).
+7. **1.1.7 — Import lists / metadata profiles groundwork (#72). Done.**
+   Generalized the import-list concept with Liberatarr as the first
+   concrete source (`app/import_lists.py`, generic status/sync API and
+   settings page), so a future #66 Hardcover addition can plug into it
+   instead of inventing a parallel system; stood up a minimal, unenforced
+   `MetadataProfile` settings model (language/content-warning
+   restrictions) replacing the placeholder.
 8. **1.1.8 — System tabs/tasks/events/logs and UI settings parity (#73).** Tasks
    list, Events log, in-UI log viewer, functional theme/date-format settings.
 

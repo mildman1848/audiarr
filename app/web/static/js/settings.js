@@ -536,6 +536,92 @@ function bindReleaseBlockedEvents() {
   });
 }
 
+// ------------------------------------------------------ Metadata profiles
+// Editable list of metadata profiles (Metadata page, issue #72 groundwork).
+// Each row edits one MetadataProfile (see app/models/settings.py):
+// language allowlist + content-warning-blocklist placeholder, both edited
+// as comma-separated text and split into arrays at save time, same
+// pattern as Profiles' allowed_formats/quality_ids above.
+let metadataProfilesState = null;
+
+function paintMetadataProfiles() {
+  const el = $("metadata-profiles-editor");
+  if (!el || !metadataProfilesState) return;
+  if (!metadataProfilesState.length) {
+    el.innerHTML = `<p class="muted">${T.settings_metadata_profiles_empty}</p>`;
+    return;
+  }
+  el.innerHTML = metadataProfilesState
+    .map(
+      (p, i) => `
+    <div class="settings-subsection repeat-row" data-row="${i}">
+      <div class="repeat-row-head">
+        <h3>${escapeHtml(p.name) || T.settings_profiles_untitled}</h3>
+        <button type="button" class="btn btn-secondary" data-remove-metadata-profile="${i}">${T.settings_remove}</button>
+      </div>
+      <label>${T.settings_field_name}
+        <input type="text" data-metadata-profile-field="name" data-row="${i}" value="${escapeHtml(p.name)}">
+      </label>
+      <label>${T.settings_metadata_profiles_languages_label}
+        <input type="text" data-metadata-profile-field="languages" data-row="${i}" value="${escapeHtml(p.languages)}">
+      </label>
+      <p class="muted small">${T.settings_metadata_profiles_languages_hint}</p>
+      <label>${T.settings_metadata_profiles_blocked_terms_label}
+        <input type="text" data-metadata-profile-field="blocked_terms" data-row="${i}" value="${escapeHtml(p.blocked_terms)}">
+      </label>
+      <p class="muted small">${T.settings_metadata_profiles_blocked_terms_hint}</p>
+      <label class="inline-check">
+        <input type="checkbox" data-metadata-profile-field="enabled" data-row="${i}" ${p.enabled ? "checked" : ""}>
+        ${T.settings_enabled_label}
+      </label>
+      <label class="inline-check">
+        <input type="checkbox" data-metadata-profile-field="is_default" data-row="${i}" ${p.is_default ? "checked" : ""}>
+        ${T.settings_metadata_profiles_default_label}
+      </label>
+    </div>`
+    )
+    .join("");
+}
+
+function renderMetadataProfilesEditor(profiles) {
+  const el = $("metadata-profiles-editor");
+  if (!el) return;
+  metadataProfilesState = (profiles || []).map((p) => ({
+    id: p.id || "",
+    name: p.name || "",
+    languages: (p.languages || []).join(", "),
+    blocked_terms: (p.blocked_terms || []).join(", "),
+    enabled: p.enabled !== false,
+    is_default: Boolean(p.is_default),
+  }));
+  paintMetadataProfiles();
+}
+
+function bindMetadataProfilesEvents() {
+  const el = $("metadata-profiles-editor");
+  if (!el || el.dataset.bound) return;
+  el.dataset.bound = "1";
+
+  const applyFieldChange = (target) => {
+    const field = target.dataset.metadataProfileField;
+    const row = target.dataset.row;
+    if (field == null || row == null || !metadataProfilesState) return;
+    const item = metadataProfilesState[Number(row)];
+    if (!item) return;
+    item[field] = target.type === "checkbox" ? target.checked : target.value;
+  };
+
+  el.addEventListener("input", (e) => applyFieldChange(e.target));
+  el.addEventListener("change", (e) => applyFieldChange(e.target));
+  el.addEventListener("click", (e) => {
+    const idx = e.target.dataset.removeMetadataProfile;
+    if (idx == null || !metadataProfilesState) return;
+    metadataProfilesState.splice(Number(idx), 1);
+    paintMetadataProfiles();
+    setDirty(true);
+  });
+}
+
 // Populate whichever of these fields exist on the current settings page.
 function populate(s) {
   setText("host-port", s.host.port ?? "—");
@@ -560,6 +646,10 @@ function populate(s) {
   setText("metadata-refresh-updated", s.metadata.last_refresh_updated ?? 0);
   setText("metadata-refresh-failed", s.metadata.last_refresh_failed ?? 0);
   setText("metadata-refresh-remaining", s.metadata.last_refresh_remaining ?? 0);
+  if ($("metadata-profiles-editor")) {
+    renderMetadataProfilesEditor(s.metadata_profiles);
+    bindMetadataProfilesEvents();
+  }
   setValue("wanted-search-interval", s.wanted.search_interval_minutes ?? 0);
   setText("wanted-search-last-run", formatDate(s.wanted.last_scheduled_search_at) || "—");
   setText("wanted-search-grabbed", s.wanted.last_search_grabbed ?? 0);
@@ -857,6 +947,19 @@ async function saveSettings(event) {
         }))
         .filter((t) => t.term);
     }
+
+    if ($("metadata-profiles-editor") && metadataProfilesState) {
+      doc.metadata_profiles = metadataProfilesState
+        .map((p) => ({
+          id: p.id || crypto.randomUUID(),
+          name: (p.name || "").trim(),
+          languages: splitList(p.languages),
+          blocked_terms: splitList(p.blocked_terms),
+          enabled: Boolean(p.enabled),
+          is_default: Boolean(p.is_default),
+        }))
+        .filter((p) => p.name);
+    }
     if ($("release-min-score")) {
       const minScore = Number(getValue("release-min-score"));
       doc.release_preferences.minimum_preference_score = Number.isFinite(minScore)
@@ -1096,6 +1199,23 @@ document.addEventListener("DOMContentLoaded", () => {
       if (!releaseBlockedState) releaseBlockedState = [];
       releaseBlockedState.push({ id: "", term: "", enabled: true });
       paintReleaseBlockedTerms();
+      setDirty(true);
+    });
+  }
+
+  const metadataProfilesAddBtn = $("metadata-profiles-add-btn");
+  if (metadataProfilesAddBtn) {
+    metadataProfilesAddBtn.addEventListener("click", () => {
+      if (!metadataProfilesState) metadataProfilesState = [];
+      metadataProfilesState.push({
+        id: crypto.randomUUID(),
+        name: "",
+        languages: "",
+        blocked_terms: "",
+        enabled: true,
+        is_default: false,
+      });
+      paintMetadataProfiles();
       setDirty(true);
     });
   }

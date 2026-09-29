@@ -1,0 +1,34 @@
+{% extends "settings/shell.html" %}
+
+{% block settings_content %}
+  <section class="card settings-form">
+    <div class="section-head">
+      <span class="eyebrow">{{ t.settings_eyebrow }}</span>
+      <h2>{{ t.settings_section_import_lists }}</h2>
+    </div>
+    <p class="section-hint">{{ t.settings_import_lists_hint }}</p>
+
+    <div class="table-scroll">
+      <table class="table" id="import-lists-table">
+        <thead>
+          <tr>
+            <th>{{ t.import_lists_col_name }}</th>
+            <th>{{ t.import_lists_col_enabled }}</th>
+            <th>{{ t.import_lists_col_status }}</th>
+            <th>{{ t.import_lists_col_last_sync }}</th>
+            <th>{{ t.import_lists_col_last_result }}</th>
+            <th>{{ t.import_lists_col_actions }}</th>
+          </tr>
+        </thead>
+        <tbody id="import-lists-tbody">
+          <tr><td colspan="6" class="muted table-loading-row">{{ t.import_lists_loading }}</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <p class="muted small">{{ t.import_lists_hint_configure }}</p>
+  </section>
+{% endblock %}
+
+{% block scripts %}
+  <script src="/static/js/import_lists.js?v={{ version }}-importlists72"></script>
+{% endblock %}

@@ -544,11 +544,45 @@ class LiberatarrSettings(BaseModel):
     and is only used when non-empty (see app/connections/liberatarr.py).
     This is a read-only integration: Audiarr only ever calls Liberatarr's
     GET /health and GET /api/library endpoints.
+
+    The ``sync_status``/``last_sync_*`` fields track Liberatarr's status as
+    an import-list source in Starr terms (issue #72), same pattern as
+    ConnectNotification's last_event/last_status/last_error: written after
+    every sync, from either the legacy /api/v1/liberatarr/sync route or the
+    generic /api/v1/import-lists/{id}/sync route (see app/import_lists.py).
     """
 
     base_url: str = ""
     token: str = ""
     enabled: bool = False
+    sync_status: Literal["unknown", "ok", "error"] = "unknown"
+    last_sync_at: str = ""
+    last_sync_error: str = ""
+    last_sync_created: int = 0
+    last_sync_skipped: int = 0
+
+
+class MetadataProfile(BaseModel):
+    """A named metadata profile: language allowlist + content-warning
+    blocklist placeholder (issue #72 groundwork).
+
+    Deliberately minimal -- mirrors Radarr/Sonarr's "Metadata Profile"
+    concept just enough to restrict which languages/editions count as a
+    match and to note content warnings, without building a full
+    parental-control/content-rating engine. ``languages`` holds
+    AudibleLocale-style codes; an empty list means "allow any language".
+    ``blocked_terms`` is a placeholder content-warning/blocklist field, not
+    yet enforced anywhere -- future work (e.g. #66 Hardcover) can read it
+    instead of inventing a parallel restriction list. ``id`` is a stable
+    client-generated key, same pattern as ConnectNotification.id.
+    """
+
+    id: str = ""
+    name: str
+    languages: list[str] = Field(default_factory=list)
+    blocked_terms: list[str] = Field(default_factory=list)
+    enabled: bool = True
+    is_default: bool = False
 
 
 class ConnectionsSettings(BaseModel):
@@ -580,6 +614,11 @@ class Settings(BaseModel):
     indexers: list[Indexer] = Field(default_factory=list)
     connect: list[ConnectNotification] = Field(default_factory=list)
     metadata: MetadataSettings = Field(default_factory=MetadataSettings)
+    metadata_profiles: list[MetadataProfile] = Field(
+        default_factory=lambda: [
+            MetadataProfile(id="default", name="Standard", languages=[], enabled=True, is_default=True)
+        ]
+    )
     wanted: WantedSettings = Field(default_factory=WantedSettings)
     conversion: ConversionSettings = Field(default_factory=ConversionSettings)
     ui: UiSettings = Field(default_factory=UiSettings)

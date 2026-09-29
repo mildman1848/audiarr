@@ -79,6 +79,13 @@ SETTINGS_SECTIONS: list[dict[str, str]] = [
         "desc_key": "settings_overview_connect_desc",
     },
     {
+        "slug": "import-lists",
+        "template": "settings/import_lists.html",
+        "label_key": "settings_section_import_lists",
+        "desc_key": "settings_overview_import_lists_desc",
+        "status": "readonly",
+    },
+    {
         "slug": "metadata",
         "template": "settings/metadata.html",
         "label_key": "settings_section_metadata",

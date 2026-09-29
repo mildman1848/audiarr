@@ -15,15 +15,14 @@ from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
 
 from app.config import load_settings
-from app.connections.liberatarr import LiberatarrError, fetch_library, is_not_liberated, test_connection
-from app.library import BookCreate, create_book, get_conn
+from app.connections.liberatarr import LiberatarrError, fetch_library, test_connection
+from app.import_lists import ImportListSyncResult, record_liberatarr_sync, sync_liberatarr_rows
+from app.library import get_conn
 from app.models.settings import LiberatarrSettings
 
 log = logging.getLogger("audiarr.api.liberatarr")
 
 router = APIRouter()
-
-PROVIDER = "audible"
 
 
 class LiberatarrTestResponse(BaseModel):
@@ -82,77 +81,31 @@ async def sync_liberatarr() -> LiberatarrSyncResponse:
     no second enrichment pipeline. Idempotent: running this twice creates
     nothing new on the second run.
     """
-    settings = load_settings().connections.liberatarr
+    settings_doc = load_settings()
+    settings = settings_doc.connections.liberatarr
     try:
         rows = await fetch_library(settings)
     except LiberatarrError as exc:
+        record_liberatarr_sync(settings_doc, ImportListSyncResult(), error=str(exc))
         raise HTTPException(status_code=502, detail=str(exc)) from exc
 
-    created = 0
-    skipped_existing = 0
-    skipped_no_asin = 0
-    errors: list[str] = []
-
+    # Row-processing loop lives in app.import_lists so the legacy route
+    # here and the generic /api/v1/import-lists/{id}/sync route share
+    # exactly one place that decides which rows become books (issue #72).
     with get_conn() as conn:
-        for row in rows:
-            asin = row.get("asin", "")
-            if not asin:
-                skipped_no_asin += 1
-                log.debug("Liberatarr sync: skipping row with no ASIN (title=%r)", row.get("title"))
-                continue
-            if not is_not_liberated(row.get("status", "")):
-                log.debug("Liberatarr sync: ASIN %s is already liberated, skipping", asin)
-                continue
-
-            # Ignore locale in this lookup (mirrors app/library/importer.py's
-            # duplicate check): a book already known under any locale for
-            # this ASIN must not be recreated just because Liberatarr
-            # reports a different/blank locale on a later sync.
-            existing = conn.execute(
-                "SELECT entity_id FROM provider_ids "
-                "WHERE entity_type = 'book' AND provider = ? AND provider_id = ?",
-                (PROVIDER, asin),
-            ).fetchone()
-            if existing is not None:
-                skipped_existing += 1
-                log.debug(
-                    "Liberatarr sync: ASIN %s already known (book %s), skipping",
-                    asin,
-                    existing["entity_id"],
-                )
-                continue
-
-            try:
-                book_id = create_book(
-                    conn,
-                    BookCreate(
-                        title=row.get("title") or asin,
-                        authors=row.get("authors") or [],
-                        narrators=row.get("narrators") or [],
-                        provider=PROVIDER,
-                        provider_id=asin,
-                        locale=row.get("locale") or "",
-                        monitored=True,
-                    ),
-                )
-                created += 1
-                log.info(
-                    "Liberatarr sync: created book %s for ASIN %s (%r)", book_id, asin, row.get("title")
-                )
-            except Exception as exc:  # noqa: BLE001 -- one bad row must not abort the whole sync
-                errors.append(f"{asin}: {exc}")
-                log.warning("Liberatarr sync: failed to create book for ASIN %s: %s", asin, exc)
+        result = sync_liberatarr_rows(conn, rows)
+    record_liberatarr_sync(settings_doc, result)
 
     log.info(
         "Liberatarr sync complete: created=%d skipped_existing=%d skipped_no_asin=%d errors=%d",
-        created,
-        skipped_existing,
-        skipped_no_asin,
-        len(errors),
+        result.created,
+        result.skipped_existing,
+        result.skipped_no_id,
+        len(result.errors),
     )
     return LiberatarrSyncResponse(
-        created=created,
-        skipped_existing=skipped_existing,
-        skipped_no_asin=skipped_no_asin,
-        errors=errors,
+        created=result.created,
+        skipped_existing=result.skipped_existing,
+        skipped_no_asin=result.skipped_no_id,
+        errors=result.errors,
     )
