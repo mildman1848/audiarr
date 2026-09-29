@@ -116,6 +116,7 @@ class WantedSearchScheduler:
                         candidate.profile,
                         indexer,
                         settings.quality_definitions,
+                        settings.release_preferences,
                     )
                 except Exception:  # noqa: BLE001 -- one bad book must not stop the tick
                     log.warning(

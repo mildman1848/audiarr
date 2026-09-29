@@ -55,6 +55,12 @@ SETTINGS_SECTIONS: list[dict[str, str]] = [
         "desc_key": "settings_overview_quality_desc",
     },
     {
+        "slug": "release-preferences",
+        "template": "settings/release_preferences.html",
+        "label_key": "settings_section_release_preferences",
+        "desc_key": "settings_overview_release_preferences_desc",
+    },
+    {
         "slug": "indexers",
         "template": "settings/indexers.html",
         "label_key": "settings_section_indexers",

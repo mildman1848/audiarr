@@ -183,6 +183,76 @@ class QualityProfile(BaseModel):
     upgrade_allowed: bool = True
 
 
+ReleasePreferenceCategory = Literal["general", "narrator", "publisher", "language", "edition"]
+
+
+class ReleasePreferenceTerm(BaseModel):
+    """One positive-scoring release preference signal (issue #70).
+
+    Audiobook-adapted, cut-down version of a Radarr/Sonarr "Custom Format"
+    condition: instead of a full condition DSL, a term is matched
+    case-insensitively as a whole word against a release title. ``category``
+    is a display/organizational label only (narrator/publisher/language/
+    edition preferences are all just term matches for this MVP -- see
+    docs/design/release-preferences.md for why real metadata-driven
+    matching is deferred). ``id`` is a stable client-generated key, same
+    pattern as ConnectNotification.id.
+    """
+
+    id: str = ""
+    term: str = ""
+    score: int = 10
+    category: ReleasePreferenceCategory = "general"
+    enabled: bool = True
+
+
+class ReleaseBlockedTerm(BaseModel):
+    """A release title term that rejects the release outright if matched."""
+
+    id: str = ""
+    term: str = ""
+    enabled: bool = True
+
+
+def _default_preferred_terms() -> list[ReleasePreferenceTerm]:
+    """Audiobook-specific starter preference: unabridged editions score higher."""
+    return [
+        ReleasePreferenceTerm(id="pref-unabridged", term="unabridged", score=10, category="edition"),
+    ]
+
+
+def _default_blocked_terms() -> list[ReleaseBlockedTerm]:
+    """Audiobook-specific starter blocks: abridged/dramatized editions are
+    usually not what a listener building a library actually wants."""
+    return [
+        ReleaseBlockedTerm(id="block-abridged", term="abridged"),
+        ReleaseBlockedTerm(id="block-dramatized", term="dramatized"),
+    ]
+
+
+class ReleasePreferencesSettings(BaseModel):
+    """Audiobook release scoring preferences (issue #70).
+
+    Adapts Radarr/Sonarr's Custom Formats + Release Profiles + Delay
+    Profiles into a small, audiobook-first slice: term-based scoring
+    against a release title, not a condition DSL, and a single
+    ``minimum_preference_score`` gate instead of a full delay-profile page.
+    See docs/design/release-preferences.md for the rationale and what's
+    wired up vs. deferred. Used by app/release_preferences.py, which is
+    independent of app/quality.py (container/codec/bitrate fit) -- the two
+    are combined by callers, not merged into one engine.
+    """
+
+    preferred_terms: list[ReleasePreferenceTerm] = Field(default_factory=_default_preferred_terms)
+    blocked_terms: list[ReleaseBlockedTerm] = Field(default_factory=_default_blocked_terms)
+    # A release whose total preferred-term score falls below this is treated
+    # as rejected, same as a blocked-term match. 0 (default) means "no
+    # minimum" -- every release that isn't explicitly blocked is accepted.
+    # This is the MVP's "wait for a better release" rule (see issue #70):
+    # deliberately not a time-based delay profile.
+    minimum_preference_score: int = 0
+
+
 class RootFolder(BaseModel):
     """A library root path under the /data mount."""
 
@@ -498,6 +568,9 @@ class Settings(BaseModel):
     )
     quality_profiles: list[QualityProfile] = Field(
         default_factory=lambda: [QualityProfile(name="Standard")]
+    )
+    release_preferences: ReleasePreferencesSettings = Field(
+        default_factory=ReleasePreferencesSettings
     )
     root_folders: list[RootFolder] = Field(
         default_factory=lambda: [RootFolder(path="/data/audiobooks")]

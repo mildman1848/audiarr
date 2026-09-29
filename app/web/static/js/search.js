@@ -148,6 +148,34 @@ function qualityBadge(r) {
   return `<span class="${badgeClass}"${titleAttr}>${esc(label)}</span>${compactHtml}`;
 }
 
+// preference_status (from app/release_preferences.py, via
+// /api/v1/releases/search) -> i18n label key and badge modifier class.
+const PREFERENCE_STATUS_KEYS = {
+  accepted: "search_preference_accepted",
+  rejected: "search_preference_rejected",
+};
+
+const PREFERENCE_STATUS_CLASSES = {
+  accepted: "badge-quality-accepted",
+  rejected: "badge-quality-rejected",
+};
+
+// Tooltip text: the reasons list from app/release_preferences.py, shown
+// as-is (not translated), same pattern as qualityTooltip.
+function preferenceTooltip(r) {
+  return (r.preference_reasons || []).join("; ");
+}
+
+function preferenceBadge(r) {
+  const status = r.preference_status === "rejected" ? "rejected" : "accepted";
+  const cls = PREFERENCE_STATUS_CLASSES[status] || "";
+  const label = T[PREFERENCE_STATUS_KEYS[status]] || status;
+  const tooltip = preferenceTooltip(r);
+  const titleAttr = tooltip ? ` title="${esc(tooltip)}"` : "";
+  const score = Number.isFinite(r.preference_score) ? r.preference_score : 0;
+  return `<span class="badge ${cls}"${titleAttr}>${esc(label)} (${score})</span>`;
+}
+
 // Inline 503 warning: config missing, point the user at /settings. Same
 // emptyState + Settings-CTA pattern as activity.js's renderConfigWarning.
 function renderConfigWarning(container) {
@@ -232,6 +260,7 @@ function renderResults() {
           <th>${esc(T.search_col_protocol)}</th>
           <th>${esc(T.search_col_title)}</th>
           <th>${esc(T.search_col_quality)}</th>
+          <th>${esc(T.search_col_preference)}</th>
           <th>${esc(T.search_col_indexer)}</th>
           <th>${esc(T.search_col_size)}</th>
           <th>${esc(T.search_col_age)}</th>
@@ -259,6 +288,7 @@ function renderRow(r, i) {
       <td>${protocolBadge(r.protocol)}</td>
       <td>${esc(r.title)}</td>
       <td>${qualityBadge(r)}</td>
+      <td>${preferenceBadge(r)}</td>
       <td>${esc(r.indexer || "—")}</td>
       <td>${esc(humanSize(r.size))}</td>
       <td>${esc(humanAge(r.age))}</td>
