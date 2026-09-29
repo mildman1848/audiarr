@@ -27,6 +27,7 @@ from app.config import load_settings
 from app.connect import dispatch_event
 from app.library import BookCreate
 from app.library import create_book as library_create_book
+from app.library.audio_probe import probe_file
 from app.library.import_strategy import ImportStrategyError, PlacedFile, place_candidate_files
 from app.library.matcher import MatchResult, match_candidate_to_hits
 from app.library.scanner import BookCandidate, scan_folder
@@ -267,7 +268,7 @@ async def _import_one(
 
     # Persist book via library store, with the files' actual final paths.
     book_id = _persist_book(conn, hit, locale)
-    _persist_files(conn, book_id, placed_files, candidate.dominant_format, locale)
+    await _persist_files(conn, book_id, placed_files, candidate.dominant_format, locale)
 
     # Offer the candidate to the conversion backend if the quality profile
     # wants it (no-op when conversion is disabled; the backend owns file
@@ -418,7 +419,7 @@ async def import_single_folder(
         final_folder = candidate.folder_path
 
     book_id = _persist_book(conn, hit, locale)
-    _persist_files(conn, book_id, placed_files, candidate.dominant_format, locale)
+    await _persist_files(conn, book_id, placed_files, candidate.dominant_format, locale)
 
     await _maybe_enqueue_conversion(conn, book_id, candidate, source_path=final_folder)
 
@@ -455,7 +456,7 @@ def _persist_book(conn: Any, hit: BookQuickInfo, locale: str) -> int:
     return library_create_book(conn, data)
 
 
-def _persist_files(
+async def _persist_files(
     conn: Any, book_id: int, placed_files: list[PlacedFile], dominant_format: str, locale: str
 ) -> None:
     """Record a candidate's files against the book's edition.
@@ -463,6 +464,12 @@ def _persist_files(
     ``placed_files`` carries each file's actual final filesystem path (see
     _place_files/_unplaced_files) so library_files.path is always openable
     later, never a stale scanner-relative fragment.
+
+    Each file is probed with ffprobe (#71) for duration/bitrate/codec/
+    container/chapters before its row is inserted; probing is read-only,
+    never touches the original file, and never blocks or fails the import --
+    a missing binary or unreadable file just leaves probe_status non-'ok'
+    (see app.library.audio_probe.probe_file).
     """
     cur = conn.execute(
         """INSERT INTO editions (book_id, format, locale) VALUES (?, ?, ?)""",
@@ -470,11 +477,34 @@ def _persist_files(
     )
     edition_id = cur.lastrowid
     for pf in placed_files:
-        conn.execute(
+        probe = await probe_file(pf.final_path)
+        cur = conn.execute(
             """INSERT INTO library_files
-               (edition_id, path, size_bytes, format) VALUES (?, ?, ?, ?)""",
-            (edition_id, pf.final_path, pf.size_bytes, pf.format),
+               (edition_id, path, size_bytes, format, duration_seconds, bitrate_kbps,
+                codec, container, chapter_count, probe_status, probe_error)
+               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+            (
+                edition_id,
+                pf.final_path,
+                pf.size_bytes,
+                pf.format,
+                probe.duration_seconds,
+                probe.bitrate_kbps,
+                probe.codec,
+                probe.container,
+                probe.chapter_count,
+                probe.probe_status,
+                probe.probe_error or None,
+            ),
         )
+        file_id = cur.lastrowid
+        for chapter in probe.chapters:
+            conn.execute(
+                """INSERT INTO library_file_chapters
+                   (library_file_id, idx, title, start_seconds, end_seconds)
+                   VALUES (?, ?, ?, ?, ?)""",
+                (file_id, chapter.index, chapter.title, chapter.start_seconds, chapter.end_seconds),
+            )
 
 
 def _find_root_folder_for_path(conn: Any, folder_path: str) -> Any:

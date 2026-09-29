@@ -3,6 +3,8 @@
 from __future__ import annotations
 
 import importlib
+import shutil
+import subprocess
 from pathlib import Path
 
 import pytest
@@ -197,6 +199,108 @@ async def test_run_import_duplicate_provider_id_skips(tmp_path, db, chain):
 
     assert summary.results[0].status == "skipped-duplicate"
     assert db.execute("SELECT COUNT(*) FROM books").fetchone()[0] == 1
+
+
+# ---------------------------------------------------------------------------
+# ffprobe audio metadata enrichment (#71): non-fatal on failure, real data
+# on success. See tests/test_audio_probe.py for the probe module's own unit
+# tests; these exercise the full import -> persist wiring.
+# ---------------------------------------------------------------------------
+
+FFMPEG_AVAILABLE = shutil.which("ffmpeg") is not None and shutil.which("ffprobe") is not None
+
+
+def _make_tree_with_real_audio(tmp_path: Path) -> Path:
+    """Same book folder shape as _make_tree, but with one real ffprobe-able
+    M4B file (two chapters) instead of junk bytes."""
+    root = tmp_path / "audiobooks"
+    book = root / "Bernhard Schlink - Der Vorleser [B004UWRY6M]"
+    book.mkdir(parents=True)
+    _write_chaptered_m4b(book / "Der Vorleser.m4b")
+    return root
+
+
+def _write_chaptered_m4b(path: Path) -> None:
+    meta = path.parent / "chapters.txt"
+    meta.write_text(
+        ";FFMETADATA1\n"
+        "[CHAPTER]\nTIMEBASE=1/1000\nSTART=0\nEND=1000\ntitle=Chapter One\n"
+        "[CHAPTER]\nTIMEBASE=1/1000\nSTART=1000\nEND=2000\ntitle=Chapter Two\n",
+        encoding="utf-8",
+    )
+    subprocess.run(
+        [
+            "ffmpeg", "-y", "-v", "error",
+            "-f", "lavfi", "-i", "sine=frequency=440:duration=2",
+            "-i", str(meta),
+            "-map_metadata", "1",
+            "-c:a", "aac",
+            "-f", "mp4",
+            str(path),
+        ],
+        check=True,
+    )
+    meta.unlink()
+
+
+@pytest.mark.skipif(not FFMPEG_AVAILABLE, reason="ffmpeg/ffprobe not installed")
+async def test_run_import_probes_chaptered_audio(tmp_path, db, chain):
+    root = _make_tree_with_real_audio(tmp_path)
+    folder_id = db.execute(
+        "INSERT INTO root_folders (path) VALUES (?)", (str(root),)
+    ).lastrowid
+    db.commit()
+
+    summary = await run_import(
+        conn=db, chain=chain, root_folder_id=folder_id, dry_run=False, locale="de"
+    )
+
+    assert summary.matched == 1
+    row = db.execute(
+        """SELECT id, duration_seconds, chapter_count, codec, probe_status, probe_error
+             FROM library_files"""
+    ).fetchone()
+    assert row["probe_status"] == "ok"
+    assert row["probe_error"] is None
+    assert row["duration_seconds"] == 2
+    assert row["chapter_count"] == 2
+    assert row["codec"] == "aac"
+
+    chapters = db.execute(
+        """SELECT idx, title, start_seconds, end_seconds FROM library_file_chapters
+            WHERE library_file_id = ? ORDER BY idx""",
+        (row["id"],),
+    ).fetchall()
+    assert [c["title"] for c in chapters] == ["Chapter One", "Chapter Two"]
+    assert chapters[0]["start_seconds"] == 0.0
+    assert chapters[1]["start_seconds"] == 1.0
+
+
+async def test_run_import_probe_failure_is_non_fatal(tmp_path, db, chain):
+    """Garbage audio bytes (see _make_tree) must not block the import --
+    probe_status records the failure instead of raising, and the book/files
+    are still persisted (#71 acceptance: extraction failures are non-fatal
+    and visible)."""
+    root = _make_tree(tmp_path)
+    folder_id = db.execute(
+        "INSERT INTO root_folders (path) VALUES (?)", (str(root),)
+    ).lastrowid
+    db.commit()
+
+    summary = await run_import(
+        conn=db, chain=chain, root_folder_id=folder_id, dry_run=False, locale="de"
+    )
+
+    assert summary.matched == 1
+    rows = db.execute(
+        "SELECT duration_seconds, chapter_count, probe_status, probe_error FROM library_files"
+    ).fetchall()
+    assert len(rows) == 2
+    for row in rows:
+        assert row["probe_status"] in ("error", "unavailable")
+        assert row["probe_error"]
+        assert row["duration_seconds"] is None
+        assert row["chapter_count"] is None
 
 
 # ---------------------------------------------------------------------------

@@ -70,11 +70,20 @@ def sanitize_component(value: str) -> str:
     return cleaned
 
 
-def build_context(book: dict[str, Any], book_id: int, quality: str) -> dict[str, str]:
+def build_context(
+    book: dict[str, Any],
+    book_id: int,
+    quality: str,
+    codec: str | None = None,
+    bitrate_kbps: int | None = None,
+) -> dict[str, str]:
     """Build the token -> value map for one library file of one book.
 
     ``book`` is the dict shape returned by ``app.library.get_book`` (comma-
-    joined ``authors``/``narrators`` strings, ``series_name``).
+    joined ``authors``/``narrators`` strings, ``series_name``). ``codec`` and
+    ``bitrate_kbps`` are per-file ffprobe results (#71); they render as an
+    empty string when the file hasn't been probed yet, same as any other
+    optional token, rather than blocking a rename.
     """
     authors = [a for a in (book.get("authors") or "").split(", ") if a]
     narrators = [n for n in (book.get("narrators") or "").split(", ") if n]
@@ -91,6 +100,8 @@ def build_context(book: dict[str, Any], book_id: int, quality: str) -> dict[str,
         "year": release_date[:4] if release_date else "",
         "quality": quality or "",
         "book_id": str(book_id),
+        "codec": codec or "",
+        "bitrate": "" if bitrate_kbps in (None, "") else str(bitrate_kbps),
     }
 
 
@@ -151,7 +162,7 @@ class OrganizeApplyResult:
 
 def _book_files(conn: sqlite3.Connection, book_id: int) -> list[sqlite3.Row]:
     return conn.execute(
-        """SELECT lf.id, lf.path, lf.format
+        """SELECT lf.id, lf.path, lf.format, lf.codec, lf.bitrate_kbps
              FROM library_files lf
              JOIN editions e ON e.id = lf.edition_id
             WHERE e.book_id = ?
@@ -179,7 +190,7 @@ def build_preview(
 
     for f in files:
         try:
-            context = build_context(book, book_id, f["format"])
+            context = build_context(book, book_id, f["format"], f["codec"], f["bitrate_kbps"])
             relative = render_target_relative_path(pattern, context, f["path"])
             target_resolved = (root / relative).resolve()
         except Exception as exc:  # pragma: no cover -- defensive, no known trigger

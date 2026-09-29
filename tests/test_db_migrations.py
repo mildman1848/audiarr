@@ -13,7 +13,7 @@ from app.db import SCHEMA_VERSION, migrate
 def test_fresh_db_reaches_latest_schema(tmp_path: Path) -> None:
     db = tmp_path / "fresh.db"
     version = migrate(db)
-    assert version == SCHEMA_VERSION == 14
+    assert version == SCHEMA_VERSION == 15
 
     conn = sqlite3.connect(db)
     tables = {
@@ -24,8 +24,8 @@ def test_fresh_db_reaches_latest_schema(tmp_path: Path) -> None:
     expected = {
         "schema_version", "root_folders", "authors", "narrators", "series",
         "books", "book_authors", "book_narrators", "editions", "provider_ids",
-        "library_files", "import_jobs", "conversion_jobs", "import_ignores",
-        "sab_import_state", "wanted_search_state",
+        "library_files", "library_file_chapters", "import_jobs", "conversion_jobs",
+        "import_ignores", "sab_import_state", "wanted_search_state",
         "tags", "book_tags", "root_folder_tags",
     }
     assert expected <= tables
@@ -73,7 +73,7 @@ def test_migration_is_idempotent(tmp_path: Path) -> None:
     conn = sqlite3.connect(db)
     rows = conn.execute("SELECT version FROM schema_version ORDER BY version").fetchall()
     conn.close()
-    assert [r[0] for r in rows] == [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14]
+    assert [r[0] for r in rows] == [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15]
 
 
 def test_v1_db_upgrades_to_latest(tmp_path: Path) -> None:
@@ -118,6 +118,14 @@ def test_v3_db_upgrades_to_v4(tmp_path: Path) -> None:
     conn.execute("ALTER TABLE books DROP COLUMN quality_profile")
     conn.execute("ALTER TABLE root_folders DROP COLUMN import_strategy")
     conn.execute("ALTER TABLE books DROP COLUMN root_folder_id")
+    conn.execute("DROP TABLE library_file_chapters")
+    conn.execute("ALTER TABLE library_files DROP COLUMN duration_seconds")
+    conn.execute("ALTER TABLE library_files DROP COLUMN bitrate_kbps")
+    conn.execute("ALTER TABLE library_files DROP COLUMN codec")
+    conn.execute("ALTER TABLE library_files DROP COLUMN container")
+    conn.execute("ALTER TABLE library_files DROP COLUMN chapter_count")
+    conn.execute("ALTER TABLE library_files DROP COLUMN probe_status")
+    conn.execute("ALTER TABLE library_files DROP COLUMN probe_error")
     conn.execute("DELETE FROM schema_version WHERE version >= 4")
     conn.commit()
     conn.close()
@@ -151,12 +159,20 @@ def test_v6_db_upgrades_to_v7(tmp_path: Path) -> None:
     conn.execute("ALTER TABLE books DROP COLUMN quality_profile")
     conn.execute("ALTER TABLE root_folders DROP COLUMN import_strategy")
     conn.execute("ALTER TABLE books DROP COLUMN root_folder_id")
+    conn.execute("DROP TABLE library_file_chapters")
+    conn.execute("ALTER TABLE library_files DROP COLUMN duration_seconds")
+    conn.execute("ALTER TABLE library_files DROP COLUMN bitrate_kbps")
+    conn.execute("ALTER TABLE library_files DROP COLUMN codec")
+    conn.execute("ALTER TABLE library_files DROP COLUMN container")
+    conn.execute("ALTER TABLE library_files DROP COLUMN chapter_count")
+    conn.execute("ALTER TABLE library_files DROP COLUMN probe_status")
+    conn.execute("ALTER TABLE library_files DROP COLUMN probe_error")
     conn.execute("DELETE FROM schema_version WHERE version >= 7")
     conn.commit()
     conn.close()
 
     version = migrate(db)
-    assert version == SCHEMA_VERSION == 14
+    assert version == SCHEMA_VERSION == 15
 
     conn = sqlite3.connect(db)
     cols = {r[1] for r in conn.execute("PRAGMA table_info(books)")}
@@ -174,12 +190,20 @@ def test_v7_db_upgrades_to_v8(tmp_path: Path) -> None:
     conn.execute("ALTER TABLE books DROP COLUMN quality_profile")
     conn.execute("ALTER TABLE root_folders DROP COLUMN import_strategy")
     conn.execute("ALTER TABLE books DROP COLUMN root_folder_id")
+    conn.execute("DROP TABLE library_file_chapters")
+    conn.execute("ALTER TABLE library_files DROP COLUMN duration_seconds")
+    conn.execute("ALTER TABLE library_files DROP COLUMN bitrate_kbps")
+    conn.execute("ALTER TABLE library_files DROP COLUMN codec")
+    conn.execute("ALTER TABLE library_files DROP COLUMN container")
+    conn.execute("ALTER TABLE library_files DROP COLUMN chapter_count")
+    conn.execute("ALTER TABLE library_files DROP COLUMN probe_status")
+    conn.execute("ALTER TABLE library_files DROP COLUMN probe_error")
     conn.execute("DELETE FROM schema_version WHERE version >= 8")
     conn.commit()
     conn.close()
 
     version = migrate(db)
-    assert version == SCHEMA_VERSION == 14
+    assert version == SCHEMA_VERSION == 15
 
     conn = sqlite3.connect(db)
     cols = {r[1]: r for r in conn.execute("PRAGMA table_info(books)")}
@@ -198,12 +222,20 @@ def test_v8_db_upgrades_to_v9(tmp_path: Path) -> None:
     conn.execute("DROP TABLE wanted_search_state")
     conn.execute("ALTER TABLE root_folders DROP COLUMN import_strategy")
     conn.execute("ALTER TABLE books DROP COLUMN root_folder_id")
+    conn.execute("DROP TABLE library_file_chapters")
+    conn.execute("ALTER TABLE library_files DROP COLUMN duration_seconds")
+    conn.execute("ALTER TABLE library_files DROP COLUMN bitrate_kbps")
+    conn.execute("ALTER TABLE library_files DROP COLUMN codec")
+    conn.execute("ALTER TABLE library_files DROP COLUMN container")
+    conn.execute("ALTER TABLE library_files DROP COLUMN chapter_count")
+    conn.execute("ALTER TABLE library_files DROP COLUMN probe_status")
+    conn.execute("ALTER TABLE library_files DROP COLUMN probe_error")
     conn.execute("DELETE FROM schema_version WHERE version >= 9")
     conn.commit()
     conn.close()
 
     version = migrate(db)
-    assert version == SCHEMA_VERSION == 14
+    assert version == SCHEMA_VERSION == 15
 
     conn = sqlite3.connect(db)
     tables = {
@@ -221,12 +253,20 @@ def test_v9_db_upgrades_to_v10(tmp_path: Path) -> None:
     conn.execute("DROP TABLE wanted_search_state")
     conn.execute("ALTER TABLE root_folders DROP COLUMN import_strategy")
     conn.execute("ALTER TABLE books DROP COLUMN root_folder_id")
+    conn.execute("DROP TABLE library_file_chapters")
+    conn.execute("ALTER TABLE library_files DROP COLUMN duration_seconds")
+    conn.execute("ALTER TABLE library_files DROP COLUMN bitrate_kbps")
+    conn.execute("ALTER TABLE library_files DROP COLUMN codec")
+    conn.execute("ALTER TABLE library_files DROP COLUMN container")
+    conn.execute("ALTER TABLE library_files DROP COLUMN chapter_count")
+    conn.execute("ALTER TABLE library_files DROP COLUMN probe_status")
+    conn.execute("ALTER TABLE library_files DROP COLUMN probe_error")
     conn.execute("DELETE FROM schema_version WHERE version >= 10")
     conn.commit()
     conn.close()
 
     version = migrate(db)
-    assert version == SCHEMA_VERSION == 14
+    assert version == SCHEMA_VERSION == 15
 
     conn = sqlite3.connect(db)
     tables = {
@@ -246,12 +286,20 @@ def test_v10_db_upgrades_to_v11(tmp_path: Path) -> None:
     conn.execute("DROP TABLE tags")
     conn.execute("ALTER TABLE root_folders DROP COLUMN import_strategy")
     conn.execute("ALTER TABLE books DROP COLUMN root_folder_id")
+    conn.execute("DROP TABLE library_file_chapters")
+    conn.execute("ALTER TABLE library_files DROP COLUMN duration_seconds")
+    conn.execute("ALTER TABLE library_files DROP COLUMN bitrate_kbps")
+    conn.execute("ALTER TABLE library_files DROP COLUMN codec")
+    conn.execute("ALTER TABLE library_files DROP COLUMN container")
+    conn.execute("ALTER TABLE library_files DROP COLUMN chapter_count")
+    conn.execute("ALTER TABLE library_files DROP COLUMN probe_status")
+    conn.execute("ALTER TABLE library_files DROP COLUMN probe_error")
     conn.execute("DELETE FROM schema_version WHERE version >= 11")
     conn.commit()
     conn.close()
 
     version = migrate(db)
-    assert version == SCHEMA_VERSION == 14
+    assert version == SCHEMA_VERSION == 15
 
     conn = sqlite3.connect(db)
     tables = {
@@ -270,12 +318,20 @@ def test_v11_db_upgrades_to_v12(tmp_path: Path) -> None:
     conn = sqlite3.connect(db)
     conn.execute("ALTER TABLE root_folders DROP COLUMN import_strategy")
     conn.execute("ALTER TABLE books DROP COLUMN root_folder_id")
+    conn.execute("DROP TABLE library_file_chapters")
+    conn.execute("ALTER TABLE library_files DROP COLUMN duration_seconds")
+    conn.execute("ALTER TABLE library_files DROP COLUMN bitrate_kbps")
+    conn.execute("ALTER TABLE library_files DROP COLUMN codec")
+    conn.execute("ALTER TABLE library_files DROP COLUMN container")
+    conn.execute("ALTER TABLE library_files DROP COLUMN chapter_count")
+    conn.execute("ALTER TABLE library_files DROP COLUMN probe_status")
+    conn.execute("ALTER TABLE library_files DROP COLUMN probe_error")
     conn.execute("DELETE FROM schema_version WHERE version >= 12")
     conn.commit()
     conn.close()
 
     version = migrate(db)
-    assert version == SCHEMA_VERSION == 14
+    assert version == SCHEMA_VERSION == 15
 
     conn = sqlite3.connect(db)
     cols = {r[1]: r for r in conn.execute("PRAGMA table_info(root_folders)")}
@@ -305,12 +361,20 @@ def test_v12_db_upgrades_to_v13(tmp_path: Path) -> None:
         ("/data/hardlink-explicit", "hardlink"),
     )
     conn.execute("ALTER TABLE books DROP COLUMN root_folder_id")
+    conn.execute("DROP TABLE library_file_chapters")
+    conn.execute("ALTER TABLE library_files DROP COLUMN duration_seconds")
+    conn.execute("ALTER TABLE library_files DROP COLUMN bitrate_kbps")
+    conn.execute("ALTER TABLE library_files DROP COLUMN codec")
+    conn.execute("ALTER TABLE library_files DROP COLUMN container")
+    conn.execute("ALTER TABLE library_files DROP COLUMN chapter_count")
+    conn.execute("ALTER TABLE library_files DROP COLUMN probe_status")
+    conn.execute("ALTER TABLE library_files DROP COLUMN probe_error")
     conn.execute("DELETE FROM schema_version WHERE version >= 13")
     conn.commit()
     conn.close()
 
     version = migrate(db)
-    assert version == SCHEMA_VERSION == 14
+    assert version == SCHEMA_VERSION == 15
 
     conn = sqlite3.connect(db)
     strategies = {
@@ -332,12 +396,20 @@ def test_v13_db_upgrades_to_v14(tmp_path: Path) -> None:
     conn = sqlite3.connect(db)
     conn.execute("INSERT INTO books (title) VALUES ('Untitled')")
     conn.execute("ALTER TABLE books DROP COLUMN root_folder_id")
+    conn.execute("DROP TABLE library_file_chapters")
+    conn.execute("ALTER TABLE library_files DROP COLUMN duration_seconds")
+    conn.execute("ALTER TABLE library_files DROP COLUMN bitrate_kbps")
+    conn.execute("ALTER TABLE library_files DROP COLUMN codec")
+    conn.execute("ALTER TABLE library_files DROP COLUMN container")
+    conn.execute("ALTER TABLE library_files DROP COLUMN chapter_count")
+    conn.execute("ALTER TABLE library_files DROP COLUMN probe_status")
+    conn.execute("ALTER TABLE library_files DROP COLUMN probe_error")
     conn.execute("DELETE FROM schema_version WHERE version >= 14")
     conn.commit()
     conn.close()
 
     version = migrate(db)
-    assert version == SCHEMA_VERSION == 14
+    assert version == SCHEMA_VERSION == 15
 
     conn = sqlite3.connect(db)
     cols = {r[1] for r in conn.execute("PRAGMA table_info(books)")}
@@ -347,6 +419,112 @@ def test_v13_db_upgrades_to_v14(tmp_path: Path) -> None:
     conn.close()
     assert "root_folder_id" in cols
     assert root_folder_id is None
+
+
+def test_v14_db_upgrades_to_v15(tmp_path: Path) -> None:
+    """A v14 (prod-shaped) DB gains ffprobe audio metadata columns and the
+    library_file_chapters table on upgrade (#71); existing library_files
+    rows are unaffected (NULL/'pending', same as "not probed yet")."""
+    db = tmp_path / "v14.db"
+    migrate(db)
+    conn = sqlite3.connect(db)
+    conn.execute("INSERT INTO books (title) VALUES ('Untitled')")
+    edition_id = conn.execute(
+        "INSERT INTO editions (book_id) VALUES (last_insert_rowid())"
+    ).lastrowid
+    conn.execute(
+        "INSERT INTO library_files (edition_id, path) VALUES (?, '/data/book.mp3')",
+        (edition_id,),
+    )
+    conn.execute("DROP TABLE library_file_chapters")
+    conn.execute("ALTER TABLE library_files DROP COLUMN duration_seconds")
+    conn.execute("ALTER TABLE library_files DROP COLUMN bitrate_kbps")
+    conn.execute("ALTER TABLE library_files DROP COLUMN codec")
+    conn.execute("ALTER TABLE library_files DROP COLUMN container")
+    conn.execute("ALTER TABLE library_files DROP COLUMN chapter_count")
+    conn.execute("ALTER TABLE library_files DROP COLUMN probe_status")
+    conn.execute("ALTER TABLE library_files DROP COLUMN probe_error")
+    conn.execute("DELETE FROM schema_version WHERE version >= 15")
+    conn.commit()
+    conn.close()
+
+    version = migrate(db)
+    assert version == SCHEMA_VERSION == 15
+
+    conn = sqlite3.connect(db)
+    tables = {r[0] for r in conn.execute("SELECT name FROM sqlite_master WHERE type='table'")}
+    cols = {r[1] for r in conn.execute("PRAGMA table_info(library_files)")}
+    probe_status = conn.execute(
+        "SELECT probe_status FROM library_files WHERE path = '/data/book.mp3'"
+    ).fetchone()[0]
+    conn.close()
+    assert "library_file_chapters" in tables
+    assert {"duration_seconds", "bitrate_kbps", "codec", "container", "chapter_count",
+            "probe_status", "probe_error"} <= cols
+    assert probe_status == "pending"
+
+
+def test_fresh_db_library_files_have_audio_metadata_columns(tmp_path: Path) -> None:
+    db = tmp_path / "fresh_audio_metadata.db"
+    migrate(db)
+
+    conn = sqlite3.connect(db)
+    cols = {r[1] for r in conn.execute("PRAGMA table_info(library_files)")}
+    conn.close()
+    assert {"duration_seconds", "bitrate_kbps", "codec", "container", "chapter_count",
+            "probe_status", "probe_error"} <= cols
+
+
+def test_library_file_chapters_check_constraint_rejects_unknown_probe_status(
+    tmp_path: Path,
+) -> None:
+    db = tmp_path / "probe_status_check.db"
+    migrate(db)
+
+    conn = sqlite3.connect(db)
+    conn.execute("INSERT INTO books (title) VALUES ('Untitled')")
+    edition_id = conn.execute(
+        "INSERT INTO editions (book_id) VALUES (last_insert_rowid())"
+    ).lastrowid
+    conn.commit()
+
+    with pytest.raises(sqlite3.IntegrityError):
+        conn.execute(
+            """INSERT INTO library_files (edition_id, path, probe_status)
+               VALUES (?, '/data/bogus.mp3', 'not-a-real-status')""",
+            (edition_id,),
+        )
+    conn.close()
+
+
+def test_library_file_chapters_cascade_deletes_with_file(tmp_path: Path) -> None:
+    db = tmp_path / "chapters_cascade.db"
+    migrate(db)
+
+    conn = sqlite3.connect(db)
+    conn.execute("PRAGMA foreign_keys = ON")
+    conn.execute("INSERT INTO books (title) VALUES ('Untitled')")
+    edition_id = conn.execute(
+        "INSERT INTO editions (book_id) VALUES (last_insert_rowid())"
+    ).lastrowid
+    file_id = conn.execute(
+        "INSERT INTO library_files (edition_id, path) VALUES (?, '/data/book.m4b')",
+        (edition_id,),
+    ).lastrowid
+    conn.execute(
+        """INSERT INTO library_file_chapters (library_file_id, idx, title, start_seconds)
+           VALUES (?, 0, 'Chapter One', 0.0)""",
+        (file_id,),
+    )
+    conn.commit()
+
+    conn.execute("DELETE FROM library_files WHERE id = ?", (file_id,))
+    conn.commit()
+    remaining = conn.execute(
+        "SELECT COUNT(*) FROM library_file_chapters WHERE library_file_id = ?", (file_id,)
+    ).fetchone()[0]
+    conn.close()
+    assert remaining == 0
 
 
 def test_fresh_db_root_folders_default_to_copy_strategy(tmp_path: Path) -> None:
@@ -391,4 +569,4 @@ def test_version_history_is_preserved(tmp_path: Path) -> None:
     conn = sqlite3.connect(db)
     rows = conn.execute("SELECT version FROM schema_version ORDER BY version").fetchall()
     conn.close()
-    assert [r[0] for r in rows] == [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14]
+    assert [r[0] for r in rows] == [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15]
