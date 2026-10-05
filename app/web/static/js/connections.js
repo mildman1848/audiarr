@@ -59,6 +59,24 @@ function populate(settings) {
   document.getElementById("liberatarr-url").value = liberatarr.base_url || "";
   document.getElementById("liberatarr-enabled").checked = Boolean(liberatarr.enabled);
   document.getElementById("liberatarr-token").placeholder = liberatarr.token ? MASK : "";
+
+  // Starr-style status/last-sync summary (issue #72), same fields the
+  // generic /api/v1/import-lists status endpoint reports.
+  const statusEl = document.getElementById("liberatarr-status");
+  if (statusEl) {
+    if (!liberatarr.last_sync_at) {
+      statusEl.textContent = T.connections_liberatarr_status_never || "Never synced";
+    } else {
+      const statusLabel = T[`import_lists_status_${liberatarr.sync_status}`] || liberatarr.sync_status;
+      let text = `${statusLabel} · ${liberatarr.last_sync_at}`;
+      if (liberatarr.sync_status === "error" && liberatarr.last_sync_error) {
+        text += ` (${liberatarr.last_sync_error})`;
+      } else {
+        text += ` · ${liberatarr.last_sync_created} ${T.connections_liberatarr_status_added || "added"}`;
+      }
+      statusEl.textContent = text;
+    }
+  }
 }
 
 async function loadConnections() {
@@ -192,6 +210,7 @@ async function syncLiberatarr() {
       .replace("{skipped}", data.skipped_existing);
     msg.textContent = text;
     if (window.AudiarrToast) window.AudiarrToast.success(text);
+    await loadConnections(); // refresh the status/last-sync summary
   } catch (err) {
     const text = `${T.connections_liberatarr_sync_error} (${err.message})`;
     msg.textContent = text;

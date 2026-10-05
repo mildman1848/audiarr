@@ -1,5 +1,13 @@
 # Changelog
 
+## 1.1.7
+
+- Import lists / metadata profiles groundwork (#72): a new `app/import_lists.py` module gives Liberatarr (#64) -- and any future pull-style source such as a later #66 Hardcover addition -- one shared, normalized status/sync shape (`ImportListSource`, `ImportListSyncResult`) instead of each source inventing its own plumbing. The existing `/api/v1/liberatarr/*` routes and their behavior are unchanged; they now share the row-processing loop internally with the new generic routes.
+- New generic `GET /api/v1/import-lists` (status per configured source) and `POST /api/v1/import-lists/{id}/sync` API, plus a Settings → Import Lists page: a dense Starr-style status table (name, enabled, status, last sync, last result) with a per-source Sync action. The Connections page's Liberatarr card also now shows a persisted status/last-sync summary instead of only the last in-page test/sync message.
+- `LiberatarrSettings` gains `sync_status`/`last_sync_at`/`last_sync_error`/`last_sync_created`/`last_sync_skipped` fields, written after every sync from either entry point (settings-only, no DB migration -- same pattern as `ConnectNotification`'s `last_event`/`last_status`/`last_error`).
+- Metadata profiles (#72 groundwork): a new `MetadataProfile` settings model (name, allowed languages, a content-warning-term placeholder, enabled/default flags) replaces the Settings → Metadata "coming next" placeholder with a real, editable profile list (Standard profile seeded by default). Deliberately minimal and not yet enforced anywhere -- not a parental-control/content-rating engine.
+- New i18n keys (`import_lists_*`, `settings_metadata_profiles_*`, `settings_section_import_lists`, `connections_liberatarr_status_*`) added in both English and German.
+
 ## 1.1.6
 
 - Listenarr/Chaptarr audio metadata harvest (#71): read-only `ffprobe` enrichment around the existing external m4b-convertarr/command conversion backend (no embedded converter, originals never modified) — duration, bitrate, codec, container, and chapter data for every imported file.
