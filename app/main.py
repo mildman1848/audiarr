@@ -43,6 +43,13 @@ from app.auth import AuthMiddleware
 from app.config import get_db_path, load_settings, save_settings
 from app.db import init_db
 from app.logging_conf import configure_logging
+from app.scheduler_status import (
+    TASK_BACKUP,
+    TASK_IMPORT_SCAN,
+    TASK_METADATA_REFRESH,
+    TASK_SAB_AUTO_IMPORT,
+    TASK_WANTED_SEARCH,
+)
 from app.web import routes as web_routes
 
 configure_logging()
@@ -151,7 +158,12 @@ async def lifespan(app: FastAPI):
         from app.import_scheduler import ImportScheduler, scheduler_loop
 
         import_scan_task = asyncio.create_task(
-            scheduler_loop(ImportScheduler(), scan_interval_minutes, import_scan_stop_event)
+            scheduler_loop(
+                ImportScheduler(),
+                scan_interval_minutes,
+                import_scan_stop_event,
+                task_id=TASK_IMPORT_SCAN,
+            )
         )
         log.info("import scheduler enabled (interval=%d minute(s))", scan_interval_minutes)
 
@@ -168,7 +180,12 @@ async def lifespan(app: FastAPI):
         if _enabled_sabnzbd() is not None:
             interval = settings.media_management.sab_auto_import_interval_minutes
             sab_import_task = asyncio.create_task(
-                scheduler_loop(SabAutoImportScheduler(), interval, sab_import_stop_event)
+                scheduler_loop(
+                    SabAutoImportScheduler(),
+                    interval,
+                    sab_import_stop_event,
+                    task_id=TASK_SAB_AUTO_IMPORT,
+                )
             )
             log.info("SABnzbd auto-import enabled (interval=%d minute(s))", interval)
         else:
@@ -187,7 +204,10 @@ async def lifespan(app: FastAPI):
 
         metadata_refresh_task = asyncio.create_task(
             scheduler_loop(
-                MetadataRefreshScheduler(), refresh_interval_minutes, metadata_refresh_stop_event
+                MetadataRefreshScheduler(),
+                refresh_interval_minutes,
+                metadata_refresh_stop_event,
+                task_id=TASK_METADATA_REFRESH,
             )
         )
         log.info("metadata refresh scheduler enabled (interval=%d minute(s))", refresh_interval_minutes)
@@ -207,7 +227,10 @@ async def lifespan(app: FastAPI):
         if _enabled_prowlarr() is not None and _enabled_sabnzbd() is not None:
             wanted_search_task = asyncio.create_task(
                 scheduler_loop(
-                    WantedSearchScheduler(), search_interval_minutes, wanted_search_stop_event
+                    WantedSearchScheduler(),
+                    search_interval_minutes,
+                    wanted_search_stop_event,
+                    task_id=TASK_WANTED_SEARCH,
                 )
             )
             log.info("wanted search scheduler enabled (interval=%d minute(s))", search_interval_minutes)
@@ -234,6 +257,7 @@ async def lifespan(app: FastAPI):
                 backup_interval_hours * 60,
                 backup_stop_event,
                 delay_first=True,
+                task_id=TASK_BACKUP,
             )
         )
         log.info("backup scheduler enabled (interval=%d hour(s))", backup_interval_hours)
