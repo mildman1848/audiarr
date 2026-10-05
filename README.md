@@ -31,8 +31,11 @@ is implemented and tested, not just modeled in a settings page.
   enforced by middleware, login rate limiting, PBKDF2 password hashing, and
   automatic config backups with retention rotation.
 - 🖥️ **UI** — server-rendered, Starr-family dark UI (dense data pages,
-  System Status/Tasks/Events, Activity queue/history) with full English and
-  German i18n.
+  System Status/Tasks/Events/Logs tabs, Activity queue/history) with full
+  English and German i18n. System Logs is a bounded, redacted, in-memory
+  view (last 1000 records, cleared on restart), not a persistent log file;
+  Tasks shows process-local scheduler state that also resets on restart.
+  Theme and date format are functional UI settings.
 - 🐳 **Docker** — LSIO/s6-style image using `/config`, `/data`, `PUID`,
   `PGID`, `TZ`, `UMASK`, and `FILE__`-prefixed secrets.
 
@@ -55,8 +58,8 @@ Docker Compose quick start:
 ```yaml
 services:
   audiarr:
-    image: ghcr.io/mildman1848/audiarr:1.1.7
-    # or: docker.io/mildman1848/audiarr:1.1.7
+    image: ghcr.io/mildman1848/audiarr:1.1.8
+    # or: docker.io/mildman1848/audiarr:1.1.8
     container_name: audiarr
     restart: unless-stopped
     ports:
@@ -85,7 +88,7 @@ Important defaults:
 | Audible locale | `us` |
 | UI language | `en`, with `de` available |
 | Optional translation backend | `none` by default; LibreTranslate-compatible backend optional |
-| Version | `1.1.7` |
+| Version | `1.1.8` |
 
 Versioning follows the Audiarr roadmap, not the household/fork `mldm<N>`
 suffix used for image revisions:

@@ -41,14 +41,14 @@ against Audiarr's current implementation.
 | Connect (notifications) | Implemented: configurable webhooks for grab/import/health/test events, secret masking. | Adapted, done. | None. |
 | Metadata (provider priority, refresh) | Implemented: Audible/Audnexus chain, refresh interval/batch size. Metadata *profiles* (language/content restrictions) were an explicit placeholder. | Partial, now has groundwork. | 1.1.7 — Done. `MetadataProfile` settings model (languages, content-warning-term placeholder, enabled/default) replaces the placeholder with a real editable list; not yet enforced by search/matching. |
 | Tags | Implemented: CRUD, book/root-folder assignment, filtering. | Adapted, done. | None. |
-| General — host/security/proxy/logging/backups/updates | Mostly implemented; Security is nested under General instead of its own section; no proxy setting; UI theme/date-format are read-only placeholders. | Partial. | 1.1.8 — System tabs + UI settings parity pass (Security as its own page is optional/low priority). |
-| UI — calendar, dates, theme, color-impaired mode, language | Calendar implemented (month grid + agenda + day modal, no iCal link). Theme/date-format are placeholders. Language (EN/DE) is a deliberate Audiarr feature beyond Starr's typical scope. | Partial. | 1.1.8 for theme/date-format; iCal/webcal link reconsidered in 1.1.2 alongside OPDS if it's cheap to add. |
+| General — host/security/proxy/logging/backups/updates | Mostly implemented; Security is nested under General instead of its own section; no proxy setting; theme/date-format controls persist and affect the UI. | Partial. | 1.1.8 — Done for System tabs and UI settings parity (Logs is an in-memory view, not a log-file browser). Security as its own page and a proxy setting remain open (optional/low priority). |
+| UI — calendar, dates, theme, color-impaired mode, language | Calendar implemented (month grid + agenda + day modal, no iCal link). Theme/date-format are functional and persisted. Language (EN/DE) is a deliberate Audiarr feature beyond Starr's typical scope. | Partial. | 1.1.8 — Done for theme/date-format. Color-impaired mode was not added and remains deferred; no iCal/webcal link. |
 | Analytics | Not implemented. | Deliberate omission. | Do not add unless explicitly requested, and then only local-only/opt-in. See "Do not copy blindly." |
 | Sonarr episode/season monitoring model | N/A — Audiarr has no episode concept. Series/author/book monitoring is the correct audiobook analog and already exists at the book level. | Adapted at the right altitude. | Series-level monitoring (monitor all future books by an author/series) is worth checking as part of 1.1.3 Add New parity, not a Sonarr-episode copy. |
 | Add New flow (root folder/quality profile/monitored/tags chosen at add time) | `/metadata` search → one-click add, no root folder/profile/tags/monitor choice at add time. | Gap, the single biggest structural difference from Starr's add flow (also flagged in `starr-ui-parity.md`, P0). | 1.1.3. |
 | Book Detail toolbar actions (refresh/rescan/search/organize/delete) | Toolbar has Back + Delete only; organize exists as a separate page section, not a toolbar action; no refresh/rescan/search-from-detail. | Gap (also flagged in `starr-ui-parity.md`, P0). | 1.1.3. |
 | Library table parity (sortable headers, richer filters, mass editor) | Sort is a dropdown (title/author only), one text filter, one tag filter; no column-header sort, no bulk/mass edit. | Gap. | 1.1.3, as part of the same UI parity slice as Add New/Book Detail (shared table component). |
-| System tabs (Tasks, Events, Log Files) | Single scrolling `/system/status` page with Health/About/Updates/Backup/Logging cards; no Tasks (scheduled jobs) list, no Events log, no in-UI log viewer. | Gap (also flagged in `starr-ui-parity.md`, P0). | 1.1.8. |
+| System tabs (Tasks, Events, Log Files) | `/system/status` has Status/Tasks/Events/Logs tabs; Updates and Backup remain cards within Status. Tasks reports process-local scheduler state (only Backup has a manual action), Events is the existing read-only import-job audit list, and Logs is a bounded redacted in-memory buffer (1000 records, cleared on restart), not a file browser. | Done for the #73 scope (with documented limits). | 1.1.8 — Done. |
 
 ## Listenarr/Chaptarr harvest matrix
 
@@ -134,8 +134,10 @@ fits Audiarr's architecture and audiobook-first product direction.
    instead of inventing a parallel system; stood up a minimal, unenforced
    `MetadataProfile` settings model (language/content-warning
    restrictions) replacing the placeholder.
-8. **1.1.8 — System tabs/tasks/events/logs and UI settings parity (#73).** Tasks
-   list, Events log, in-UI log viewer, functional theme/date-format settings.
+8. **1.1.8 — System tabs/tasks/events/logs and UI settings parity (#73). Done.**
+   Tasks list (process-local scheduler state), Events (existing import-job audit
+   list), in-UI Logs viewer (bounded, redacted, in-memory), functional
+   theme/date-format settings. Color-impaired mode deferred.
 
 Each slice above should land as its own issue → branch → PR → CI cycle,
 consistent with this project's "small verified milestones" principle. None of
