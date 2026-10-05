@@ -127,13 +127,13 @@ async function runUpdateCheck() {
   }
 }
 
-// -- Status/Tasks/Events tabs (issue #49) ------------------------------
+// -- Status/Tasks/Events/Logs tabs (issue #49, #73) ------------------------------
 //
 // Client-side only, ARIA tablist pattern with arrow-key navigation, active
 // tab persisted via ?tab= so it survives reloads and is directly hittable
 // by browser smoke (e.g. /system/status?tab=events).
 
-const SYSTEM_TAB_IDS = ["status", "tasks", "events"];
+const SYSTEM_TAB_IDS = ["status", "tasks", "events", "logs"];
 
 function tabFromUrl() {
   const tab = new URLSearchParams(window.location.search).get("tab");
@@ -172,6 +172,7 @@ function setSystemTab(tab, { updateUrl = true } = {}) {
 
   if (target === "tasks") refreshTasks();
   if (target === "events") refreshEvents();
+  if (target === "logs") refreshLogs();
 }
 
 function setupSystemTabs() {
@@ -204,9 +205,14 @@ function setupSystemTabs() {
   setSystemTab(tabFromUrl(), { updateUrl: false });
 }
 
-// -- Tasks tab: read-only view of the five schedulers already configurable
-// under Settings (issue #49). No new backend data -- everything here comes
-// from the existing GET /api/v1/settings document and GET /api/v1/system/backup.
+// -- Tasks tab: schedule overview for the five background schedulers (issues
+// #49, #73). Interval/historical last-run come from GET /api/v1/settings and
+// GET /api/v1/system/backup; live state (status, next run, last completed run)
+// comes from GET /api/v1/system/tasks, which reports what the running process
+// actually scheduled. Next run is shown only when the process reports one --
+// never guessed from settings -- and runtime timestamps reset on restart.
+// The only manual action is "Backup now" (existing POST /api/v1/system/backup);
+// imports, SAB grabs and wanted searches are never triggered from the UI.
 
 function formatIntervalMinutes(minutes) {
   return minutes > 0 ? `${minutes} ${T.tasks_unit_minutes || "min"}` : T.tasks_interval_disabled || "—";
@@ -216,63 +222,166 @@ function formatIntervalHours(hours) {
   return hours > 0 ? `${hours} ${T.tasks_unit_hours || "h"}` : T.tasks_interval_disabled || "—";
 }
 
+// Persisted timestamps are "YYYY-MM-DD HH:MM:SS" (UTC, no zone); the API and
+// backup manifests use ISO-8601 with an offset. Parse both to a Date.
+function parseUtcTimestamp(value) {
+  if (!value) return null;
+  let text = String(value).trim().replace(" ", "T");
+  if (!/(Z|[+-]\d{2}:\d{2})$/.test(text)) text += "Z";
+  const date = new Date(text);
+  return Number.isNaN(date.getTime()) ? null : date;
+}
+
+function formatUtcTimestamp(date) {
+  return date ? date.toISOString().slice(0, 19).replace("T", " ") : "—";
+}
+
+// Latest valid timestamp among live and historical candidates.
+function latestTimestamp(...values) {
+  const dates = values.map(parseUtcTimestamp).filter(Boolean);
+  if (!dates.length) return null;
+  return new Date(Math.max(...dates.map((d) => d.getTime())));
+}
+
+// Live intervals are reported in minutes (backups: hours * 60); show whole
+// hours as hours so the value matches the configured interval.
+function formatLiveInterval(minutes) {
+  return minutes >= 60 && minutes % 60 === 0
+    ? formatIntervalHours(minutes / 60)
+    : formatIntervalMinutes(minutes);
+}
+
+function taskStatusLabel(state) {
+  switch (state) {
+    case "scheduled":
+      return T.tasks_status_scheduled || "Scheduled";
+    case "running":
+      return T.tasks_status_running || "Running";
+    case "stopped":
+      return T.tasks_status_stopped || "Stopped";
+    default:
+      return T.tasks_status_not_started || "Not running";
+  }
+}
+
+function setTasksMessage(text) {
+  const msg = document.getElementById("system-tasks-msg");
+  if (!msg) return;
+  msg.hidden = !text;
+  msg.textContent = text || "";
+}
+
 async function refreshTasks() {
   const tbody = document.getElementById("system-tasks-tbody");
   if (!tbody) return;
-  tbody.innerHTML = `<tr><td colspan="3" class="muted table-loading-row">${esc(T.system_tasks_loading)}</td></tr>`;
+  tbody.innerHTML = `<tr><td colspan="6" class="muted table-loading-row">${esc(T.system_tasks_loading)}</td></tr>`;
   try {
-    const [settingsResp, backupResp] = await Promise.all([
+    const [settingsResp, backupResp, tasksResp] = await Promise.all([
       fetch("/api/v1/settings"),
       fetch("/api/v1/system/backup"),
+      fetch("/api/v1/system/tasks"),
     ]);
     if (!settingsResp.ok) throw new Error(`HTTP ${settingsResp.status}`);
+    if (!tasksResp.ok) throw new Error(`HTTP ${tasksResp.status}`);
     const s = await settingsResp.json();
     const backupData = backupResp.ok ? await backupResp.json() : { backups: [] };
     const lastBackup = (backupData.backups || [])[0];
+    const live = {};
+    ((await tasksResp.json()).tasks || []).forEach((task) => {
+      live[task.id] = task;
+    });
 
+    // Configured interval and persisted last-run per task; the live state
+    // is merged in below.
     const rows = [
       {
+        id: "import_scan",
         name: T.tasks_task_import_scan || "Import scan",
         interval: formatIntervalMinutes(s.media_management.import_scan_interval_minutes),
-        lastRun: s.media_management.last_scheduled_scan_at || "—",
+        historical: s.media_management.last_scheduled_scan_at,
       },
       {
+        id: "sab_auto_import",
         name: T.tasks_task_sab_auto_import || "SAB auto-import",
         interval: s.media_management.sab_auto_import_enabled
           ? formatIntervalMinutes(s.media_management.sab_auto_import_interval_minutes)
           : T.tasks_interval_disabled || "—",
-        lastRun: "—",
+        historical: null,
       },
       {
+        id: "metadata_refresh",
         name: T.tasks_task_metadata_backfill || "Metadata backfill",
         interval: formatIntervalMinutes(s.metadata.refresh_interval_minutes),
-        lastRun: s.metadata.last_scheduled_refresh_at || "—",
+        historical: s.metadata.last_scheduled_refresh_at,
       },
       {
+        id: "wanted_search",
         name: T.tasks_task_wanted_search || "Wanted search",
         interval: formatIntervalMinutes(s.wanted.search_interval_minutes),
-        lastRun: s.wanted.last_scheduled_search_at || "—",
+        historical: s.wanted.last_scheduled_search_at,
       },
       {
+        id: "backup",
         name: T.tasks_task_backups || "Backups",
         interval: formatIntervalHours(s.backup.interval_hours),
-        lastRun: lastBackup ? lastBackup.created_at : "—",
+        historical: lastBackup ? lastBackup.created_at : null,
       },
     ];
 
     tbody.innerHTML = rows
-      .map(
-        (r) => `
-        <tr>
+      .map((r) => {
+        const task = live[r.id] || { state: "not_started" };
+        const interval = task.intervalMinutes > 0 ? formatLiveInterval(task.intervalMinutes) : r.interval;
+        const lastRun = formatUtcTimestamp(latestTimestamp(task.lastRunAt, r.historical));
+        const nextRun = formatUtcTimestamp(parseUtcTimestamp(task.nextRunAt));
+        const action = task.manualTrigger
+          ? `<button type="button" class="btn btn-secondary" data-task-action="backup-now">${esc(T.tasks_backup_now)}</button>`
+          : "—";
+        return `
+        <tr data-task-id="${esc(r.id)}">
           <td>${esc(r.name)}</td>
-          <td>${esc(r.interval)}</td>
-          <td>${esc(r.lastRun)}</td>
-        </tr>`
-      )
+          <td>${esc(interval)}</td>
+          <td class="system-task-time">${esc(lastRun)}</td>
+          <td class="system-task-time">${esc(nextRun)}</td>
+          <td>${esc(taskStatusLabel(task.state))}</td>
+          <td>${action}</td>
+        </tr>`;
+      })
       .join("");
   } catch (err) {
-    tbody.innerHTML = `<tr><td colspan="3" class="muted">${esc(T.settings_load_error)} (${esc(err.message)})</td></tr>`;
+    tbody.innerHTML = `<tr><td colspan="6" class="muted">${esc(T.settings_load_error)} (${esc(err.message)})</td></tr>`;
   }
+}
+
+// "Backup now": the one safe manual task action. The button is re-rendered by
+// refreshTasks(), so the click is handled via delegation on the table body.
+async function runBackupNow(btn) {
+  btn.disabled = true;
+  setTasksMessage(T.tasks_backup_running);
+  try {
+    const resp = await fetch("/api/v1/system/backup", { method: "POST" });
+    if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+    setTasksMessage(T.tasks_backup_done);
+    if (window.AudiarrToast) window.AudiarrToast.success(T.tasks_backup_done);
+  } catch (err) {
+    const text = `${T.tasks_backup_error} (${err.message})`;
+    setTasksMessage(text);
+    if (window.AudiarrToast) window.AudiarrToast.error(text);
+  } finally {
+    btn.disabled = false;
+    // Re-render the rows (fresh button) and the Status-tab backup info.
+    refreshTasks();
+    refreshStatus();
+  }
+}
+
+function setupTaskActions() {
+  const tbody = document.getElementById("system-tasks-tbody");
+  if (!tbody) return;
+  tbody.addEventListener("click", (event) => {
+    const btn = event.target.closest('[data-task-action="backup-now"]');
+    if (btn && !btn.disabled) runBackupNow(btn);
+  });
 }
 
 // -- Events tab: read-only import-jobs audit trail (existing
@@ -319,20 +428,70 @@ async function refreshEvents() {
   }
 }
 
+// -- Logs tab: read-only, newest-first view of the in-memory application log
+// buffer (GET /api/v1/system/logs). Messages are already redacted server-side;
+// every field is still HTML-escaped before rendering.
+
+const LOGS_LIMIT = 200;
+
+function logLevelBadge(level) {
+  const l = String(level || "").toUpperCase();
+  let cls = "badge";
+  if (l === "ERROR" || l === "CRITICAL") cls = "badge badge-failed";
+  else if (l === "WARNING") cls = "badge badge-pending";
+  return `<span class="${cls}">${esc(level || "—")}</span>`;
+}
+
+async function refreshLogs() {
+  const tbody = document.getElementById("system-logs-tbody");
+  if (!tbody) return;
+  tbody.innerHTML = `<tr><td colspan="4" class="muted table-loading-row">${esc(T.system_logs_loading)}</td></tr>`;
+  try {
+    const resp = await fetch(`/api/v1/system/logs?limit=${LOGS_LIMIT}`);
+    if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+    const data = await resp.json();
+    const records = data.records || [];
+    console.debug("system logs: %d record(s)", records.length);
+
+    if (!records.length) {
+      tbody.innerHTML = `<tr><td colspan="4" class="muted">${esc(T.logs_empty || "No log records captured yet.")}</td></tr>`;
+      return;
+    }
+
+    tbody.innerHTML = records
+      .map(
+        (rec) => `
+        <tr>
+          <td>${esc(rec.timestamp)}</td>
+          <td>${logLevelBadge(rec.level)}</td>
+          <td>${esc(rec.logger)}</td>
+          <td class="system-log-message">${esc(rec.message)}</td>
+        </tr>`
+      )
+      .join("");
+  } catch (err) {
+    tbody.innerHTML = `<tr><td colspan="4" class="muted">${esc(T.logs_load_error)} (${esc(err.message)})</td></tr>`;
+  }
+}
+
 function refreshAll() {
   refreshHealth();
   refreshStatus();
   const tab = currentSystemTab();
   if (tab === "tasks") refreshTasks();
   if (tab === "events") refreshEvents();
+  if (tab === "logs") refreshLogs();
 }
 
 document.addEventListener("DOMContentLoaded", () => {
   setupSystemTabs();
+  setupTaskActions();
   refreshAll();
   document.getElementById("system-refresh-top").addEventListener("click", refreshAll);
   const checkBtn = document.getElementById("system-update-check-btn");
   if (checkBtn) checkBtn.addEventListener("click", runUpdateCheck);
   const eventsRefreshBtn = document.getElementById("system-events-refresh-btn");
   if (eventsRefreshBtn) eventsRefreshBtn.addEventListener("click", refreshEvents);
+  const logsRefreshBtn = document.getElementById("system-logs-refresh-btn");
+  if (logsRefreshBtn) logsRefreshBtn.addEventListener("click", refreshLogs);
 });

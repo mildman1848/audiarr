@@ -515,6 +515,7 @@ def test_system_status_page_has_tab_markers(
     assert 'data-system-tab="status"' in page.text
     assert 'data-system-tab="tasks"' in page.text
     assert 'data-system-tab="events"' in page.text
+    assert 'data-system-tab="logs"' in page.text
     assert 'id="system-panel-status"' in page.text
     assert 'id="system-panel-tasks"' in page.text
     assert 'id="system-panel-events"' in page.text

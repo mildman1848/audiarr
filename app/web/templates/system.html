@@ -14,13 +14,14 @@
   <div id="system-status-root">
     <p class="section-hint">{{ t.system_subtitle }}</p>
 
-    <!-- Starr-style Status/Tasks/Events tab bar (issue #49): client-side only,
+    <!-- Starr-style Status/Tasks/Events/Logs tab bar (issue #49, #73): client-side only,
          active tab persisted via ?tab= so it stays deep-linkable/bookmarkable
          and reloadable directly by browser smoke tests. -->
     <div class="section-tabs system-tabs" role="tablist" aria-label="{{ t.system_tabs_label }}">
       <button type="button" id="system-tab-status" class="system-tab active" role="tab" aria-selected="true" aria-controls="system-panel-status" data-system-tab="status" tabindex="0">{{ t.system_tab_status }}</button>
       <button type="button" id="system-tab-tasks" class="system-tab" role="tab" aria-selected="false" aria-controls="system-panel-tasks" data-system-tab="tasks" tabindex="-1">{{ t.system_tab_tasks }}</button>
       <button type="button" id="system-tab-events" class="system-tab" role="tab" aria-selected="false" aria-controls="system-panel-events" data-system-tab="events" tabindex="-1">{{ t.system_tab_events }}</button>
+      <button type="button" id="system-tab-logs" class="system-tab" role="tab" aria-selected="false" aria-controls="system-panel-logs" data-system-tab="logs" tabindex="-1">{{ t.system_tab_logs }}</button>
     </div>
 
     <div id="system-panel-status" class="system-tab-panel" role="tabpanel" aria-labelledby="system-tab-status" tabindex="0">
@@ -120,13 +121,17 @@
                 <th>{{ t.tasks_col_name }}</th>
                 <th>{{ t.tasks_col_interval }}</th>
                 <th>{{ t.tasks_col_last_run }}</th>
+                <th>{{ t.tasks_col_next_run }}</th>
+                <th>{{ t.tasks_col_status }}</th>
+                <th>{{ t.tasks_col_actions }}</th>
               </tr>
             </thead>
             <tbody id="system-tasks-tbody">
-              <tr><td colspan="3" class="muted table-loading-row">{{ t.system_tasks_loading }}</td></tr>
+              <tr><td colspan="6" class="muted table-loading-row">{{ t.system_tasks_loading }}</td></tr>
             </tbody>
           </table>
         </div>
+        <p class="muted small" id="system-tasks-msg" role="status" aria-live="polite" hidden></p>
       </section>
     </div>
 
@@ -157,9 +162,37 @@
         </div>
       </section>
     </div>
+
+    <div id="system-panel-logs" class="system-tab-panel" role="tabpanel" aria-labelledby="system-tab-logs" tabindex="0" hidden>
+      <section class="card" id="system-logs-section">
+        <div class="section-head">
+          <span class="eyebrow">{{ t.system_eyebrow }}</span>
+          <h2>{{ t.logs_heading }}</h2>
+        </div>
+        <p class="section-hint">{{ t.logs_subtitle }}</p>
+        <div class="button-row">
+          <button type="button" id="system-logs-refresh-btn" class="btn btn-secondary">{{ t.logs_refresh }}</button>
+        </div>
+        <div class="table-scroll">
+          <table class="table" id="system-logs-table">
+            <thead>
+              <tr>
+                <th>{{ t.logs_col_time }}</th>
+                <th>{{ t.logs_col_level }}</th>
+                <th>{{ t.logs_col_logger }}</th>
+                <th>{{ t.logs_col_message }}</th>
+              </tr>
+            </thead>
+            <tbody id="system-logs-tbody" aria-live="polite">
+              <tr><td colspan="4" class="muted table-loading-row">{{ t.system_logs_loading }}</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </section>
+    </div>
   </div>
 {% endblock %}
 
 {% block scripts %}
-  <script src="/static/js/system.js?v={{ version }}-starrtabs"></script>
+  <script src="/static/js/system.js?v={{ version }}-starrtabs-logs-tasks"></script>
 {% endblock %}

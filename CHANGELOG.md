@@ -1,5 +1,14 @@
 # Changelog
 
+## 1.1.8
+
+- System UI parity (#73): the System page now has Starr-style Status / Tasks / Events / Logs tabs, deep-linkable per tab.
+- Tasks: a new `GET /api/v1/system/tasks` endpoint reports the actual process-local runtime state and UTC next-due time of the five existing schedulers. Runtime timestamps are in-process only and reset on restart. Only Backup has a manual task-row action; the import, SABnzbd and wanted-search schedulers are listed read-only and are not manually triggered from this page.
+- Events: the tab is the existing read-only import-job audit list, not a universal event bus.
+- Logs: a new `GET /api/v1/system/logs` endpoint and Logs tab read a bounded in-memory ring buffer (1000 records; the API caps responses at 500). Messages, exceptions, JWTs, private-key blocks, credentials, headers and logger names are redacted before they are stored in the buffer. It is not a persistent/file log and is cleared on process restart.
+- Settings → UI: theme and date-format controls are now functional -- they persist and change the rendered UI instead of being read-only placeholders. The optional color-impaired mode mentioned in the issue was not added.
+- New i18n keys for the System tabs and UI settings added in both English and German (dictionaries at exact key parity).
+
 ## 1.1.7
 
 - Import lists / metadata profiles groundwork (#72): a new `app/import_lists.py` module gives Liberatarr (#64) -- and any future pull-style source such as a later #66 Hardcover addition -- one shared, normalized status/sync shape (`ImportListSource`, `ImportListSyncResult`) instead of each source inventing its own plumbing. The existing `/api/v1/liberatarr/*` routes and their behavior are unchanged; they now share the row-processing loop internally with the new generic routes.

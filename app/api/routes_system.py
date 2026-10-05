@@ -5,12 +5,14 @@ from __future__ import annotations
 import asyncio
 import platform
 
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, Query
 
 from app import __version__
 from app.backup_service import BackupError, create_backup, list_backups
 from app.config import load_settings
 from app.library.folder_health import probe_root_folder
+from app.logging_conf import LOG_BUFFER
+from app.scheduler_status import REGISTRY, TASK_BACKUP
 from app.update_check import check_for_updates
 
 router = APIRouter()
@@ -85,6 +87,62 @@ async def system_status() -> dict:
             "level": settings.logging.level,
             "retentionDays": settings.logging.retention_days,
         },
+    }
+
+
+LOGS_DEFAULT_LIMIT = 100
+LOGS_MAX_LIMIT = 500
+
+
+@router.get("/api/v1/system/logs")
+async def system_logs(
+    limit: int = Query(LOGS_DEFAULT_LIMIT, ge=1, le=LOGS_MAX_LIMIT),
+) -> dict:
+    """Newest-first application log records from the in-memory ring buffer.
+
+    Read-only and process-local: nothing is read from or written to disk, the
+    caller cannot influence any filesystem access, and messages were already
+    redacted before entering the buffer (see app/logging_conf.py).
+    """
+    records = LOG_BUFFER.snapshot(limit)
+    return {
+        "records": records,
+        "count": len(records),
+        "limit": limit,
+        "capacity": LOG_BUFFER.capacity,
+    }
+
+
+def _iso(value) -> str | None:
+    return value.isoformat(timespec="seconds") if value is not None else None
+
+
+@router.get("/api/v1/system/tasks")
+async def system_tasks() -> dict:
+    """Live state of the background schedulers, read-only.
+
+    Reports what the running process actually scheduled (see
+    app/scheduler_status.py): state, interval, last completed run and next
+    due time in UTC. A task that was not started in this process (disabled,
+    integration missing, or settings changed since boot) is ``not_started``
+    with null timestamps -- nothing is guessed from persisted settings. All
+    timestamps reset on restart. ``manualTrigger`` marks the only task with a
+    safe manual action (POST /api/v1/system/backup); imports, SAB grabs and
+    wanted searches write/import/grab files and are deliberately not
+    triggerable. No settings values, secrets or filesystem paths are exposed.
+    """
+    return {
+        "tasks": [
+            {
+                "id": task["id"],
+                "state": task["state"],
+                "intervalMinutes": task["interval_minutes"],
+                "lastRunAt": _iso(task["last_run_at"]),
+                "nextRunAt": _iso(task["next_due_at"]),
+                "manualTrigger": task["id"] == TASK_BACKUP,
+            }
+            for task in REGISTRY.snapshot()
+        ],
     }
 
 

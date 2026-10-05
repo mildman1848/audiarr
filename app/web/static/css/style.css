@@ -1377,6 +1377,20 @@ button:disabled,
   font-weight: 600;
 }
 
+/* System -> Tasks tab: keep timestamps on one line. */
+.system-task-time {
+  white-space: nowrap;
+}
+
+/* System -> Logs tab: keep multi-line messages/tracebacks readable and
+   wrapped inside the table. */
+.system-log-message {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 0.8rem;
+}
+
 .card a,
 .panel a {
   color: var(--audiarr-accent);

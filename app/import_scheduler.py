@@ -28,6 +28,7 @@ from app.config import get_db_path, load_settings, save_settings
 from app.db import migrate
 from app.library import list_root_folders
 from app.library.importer import run_import
+from app.scheduler_status import REGISTRY, SchedulerRegistry
 
 log = logging.getLogger("audiarr.import_scheduler")
 
@@ -109,6 +110,8 @@ async def scheduler_loop(
     interval_minutes: int,
     stop_event: asyncio.Event,
     delay_first: bool = False,
+    task_id: str | None = None,
+    registry: SchedulerRegistry | None = None,
 ) -> None:
     """Run ``scheduler.run_once()`` every ``interval_minutes`` until stopped.
 
@@ -122,16 +125,34 @@ async def scheduler_loop(
     /wanted-search schedulers; the backup scheduler (app/backup_scheduler.py)
     passes True, since an immediate run would mean surprise I/O at boot and
     a duplicate backup on every container restart.
+
+    ``task_id`` (optional) reports this loop's live state -- next due time,
+    last completed run, stopped -- to the in-memory scheduler registry
+    (app/scheduler_status.py) for the System -> Tasks view. Without it the
+    loop behaves exactly as before. ``registry`` exists for tests.
     """
     if interval_minutes <= 0:
         return
     interval_seconds = interval_minutes * 60
+    tracker = (registry or REGISTRY) if task_id is not None else None
     log.info("import scheduler started (interval=%d minute(s))", interval_minutes)
-    if delay_first:
-        with contextlib.suppress(TimeoutError):
-            await asyncio.wait_for(stop_event.wait(), timeout=interval_seconds)
-    while not stop_event.is_set():
-        await scheduler.run_once()
-        with contextlib.suppress(TimeoutError):
-            await asyncio.wait_for(stop_event.wait(), timeout=interval_seconds)
+    if tracker is not None:
+        tracker.register(task_id, interval_minutes, delay_first=delay_first)
+    try:
+        if delay_first:
+            with contextlib.suppress(TimeoutError):
+                await asyncio.wait_for(stop_event.wait(), timeout=interval_seconds)
+        while not stop_event.is_set():
+            if tracker is not None:
+                tracker.run_started(task_id)
+            # An exception ends the loop (as before); the finally below then
+            # marks it stopped without recording a last run.
+            ran = await scheduler.run_once()
+            if tracker is not None:
+                tracker.run_finished(task_id, ran=ran)
+            with contextlib.suppress(TimeoutError):
+                await asyncio.wait_for(stop_event.wait(), timeout=interval_seconds)
+    finally:
+        if tracker is not None:
+            tracker.stopped(task_id)
     log.info("import scheduler stopped")
