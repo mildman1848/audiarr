@@ -1982,3 +1982,17 @@ footer {
 .import-overlay[hidden] {
   display: none;
 }
+
+/* Reading-list import (issue #79): preview section toggled via [hidden]. */
+#reading-list-preview[hidden] {
+  display: none;
+}
+
+.rl-candidate {
+  display: block;
+  margin: 0 0 0.35rem;
+}
+
+.rl-candidate input {
+  margin-right: 0.35rem;
+}

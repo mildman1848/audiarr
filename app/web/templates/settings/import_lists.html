@@ -25,10 +25,100 @@
         </tbody>
       </table>
     </div>
-    <p class="muted small">{{ t.import_lists_hint_configure }}</p>
+    <p class="muted small">{{ t.settings_import_lists_hint_configure }}</p>
+  </section>
+
+  <section class="card settings-form" id="reading-list-sources">
+    <div class="section-head">
+      <span class="eyebrow">{{ t.settings_eyebrow }}</span>
+      <h2>{{ t.reading_list_section_goodreads }}</h2>
+    </div>
+    <p class="section-hint">{{ t.reading_list_goodreads_hint }}</p>
+    <form id="reading-list-add-form" class="inline-form toolbar" autocomplete="off">
+      <label>{{ t.reading_list_feed_url_label }}
+        <input type="url" id="rl-feed-url" required autocomplete="off" spellcheck="false" placeholder="https://www.goodreads.com/review/list_rss/…">
+      </label>
+      <label>{{ t.reading_list_name_label }}
+        <input type="text" id="rl-name" maxlength="200">
+      </label>
+      <label class="inline-check">
+        <input type="checkbox" id="rl-enabled" checked>
+        {{ t.settings_enabled_label }}
+      </label>
+      <button type="submit" class="btn btn-primary">{{ t.reading_list_add_button }}</button>
+    </form>
+    <p id="rl-add-msg" class="muted small" role="status"></p>
+    <p class="muted small">{{ t.reading_list_feed_url_note }}</p>
+  </section>
+
+  <section class="card settings-form" id="reading-list-csv">
+    <div class="section-head">
+      <span class="eyebrow">{{ t.settings_eyebrow }}</span>
+      <h2>{{ t.reading_list_section_csv }}</h2>
+    </div>
+    <p class="section-hint">{{ t.reading_list_csv_hint }}</p>
+    <form id="reading-list-csv-form" class="inline-form toolbar">
+      <label>{{ t.reading_list_csv_file_label }}
+        <input type="file" id="rl-csv-file" accept=".csv,text/csv" required>
+      </label>
+      <label>{{ t.reading_list_csv_format_label }}
+        <select id="rl-csv-format">
+          <option value="auto">{{ t.reading_list_format_auto }}</option>
+          <option value="goodreads">Goodreads</option>
+          <option value="storygraph">StoryGraph</option>
+        </select>
+      </label>
+      <label>{{ t.reading_list_shelf_label }}
+        <input type="text" id="rl-csv-shelf" maxlength="64">
+      </label>
+      <button type="submit" class="btn btn-secondary">{{ t.reading_list_preview_button }}</button>
+    </form>
+  </section>
+
+  <section class="card settings-form" id="reading-list-preview" hidden>
+    <div class="section-head">
+      <span class="eyebrow">{{ t.settings_eyebrow }}</span>
+      <h2>{{ t.reading_list_preview_title }} <span id="rl-preview-label" class="muted small"></span></h2>
+    </div>
+    <div class="inline-form toolbar">
+      <label>{{ t.metadata_locale_label }}
+        <select id="rl-locale">
+          <option value="">{{ t.reading_list_locale_default }}</option>
+          <option value="us">us</option><option value="uk">uk</option><option value="de">de</option>
+          <option value="fr">fr</option><option value="ca">ca</option><option value="au">au</option>
+          <option value="it">it</option><option value="es">es</option><option value="jp">jp</option>
+          <option value="in">in</option>
+        </select>
+      </label>
+      <label>{{ t.reading_list_shelf_label }}
+        <input type="text" id="rl-shelf" maxlength="64">
+      </label>
+      <button type="button" id="rl-refresh" class="btn btn-secondary">{{ t.reading_list_refresh_button }}</button>
+    </div>
+    <ul id="rl-preview-notes" class="muted small"></ul>
+    <p id="rl-preview-msg" class="muted small" role="status"></p>
+    <div class="table-scroll">
+      <table class="table table-compact" id="rl-preview-table">
+        <thead>
+          <tr>
+            <th>{{ t.reading_list_col_entry }}</th>
+            <th>{{ t.reading_list_col_status }}</th>
+            <th>{{ t.reading_list_col_candidates }}</th>
+          </tr>
+        </thead>
+        <tbody id="rl-preview-tbody"></tbody>
+      </table>
+    </div>
+    <div class="button-row">
+      <button type="button" id="rl-next-window" class="btn btn-secondary" hidden>{{ t.reading_list_next_window }}</button>
+      <button type="button" id="rl-next-page" class="btn btn-secondary" hidden>{{ t.reading_list_next_page }}</button>
+      <button type="button" id="rl-import" class="btn btn-primary" disabled>{{ t.reading_list_import_button }}</button>
+      <span id="rl-selected-count" class="muted small"></span>
+    </div>
+    <ul id="rl-import-results" class="muted small"></ul>
   </section>
 {% endblock %}
 
 {% block scripts %}
-  <script src="/static/js/import_lists.js?v={{ version }}-importlists72"></script>
+  <script src="/static/js/import_lists.js?v={{ version }}-readinglists79"></script>
 {% endblock %}
