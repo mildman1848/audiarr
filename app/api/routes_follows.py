@@ -14,10 +14,16 @@ chain for that author's/series' books and stores them as *candidates*:
 provider_ids / books.asin and is never stored. Nothing here searches or
 downloads releases, and there is no scheduler: refresh is manual only.
 
-Known limitation: refresh uses the provider chain's search, which returns
-only the first result page (50 hits), so very large back catalogs are
-partially listed. Authors are queried via Audible's ``author`` parameter;
-Audnexus has no author search, so it contributes nothing to author follows.
+Refresh reports an honest status: ``ok``, ``partial`` (a provider failed but
+another answered, or the provider has more hits than the single 50-hit page
+we fetch) or ``failed`` (provider error and nothing usable -> HTTP 502, never
+a silent empty success). Authors are queried via Audible's ``author``
+parameter; Audnexus has no author search, so it contributes nothing to author
+follows.
+
+If a book created from a candidate is later deleted, the candidate is
+reconciled back to ``future``/``backlog`` (or re-linked when another book now
+owns the same provider id) so it can be reviewed again.
 """
 
 from __future__ import annotations
@@ -42,6 +48,7 @@ router = APIRouter()
 
 KINDS = ("author", "series")
 SEARCH_PAGE_SIZE = 50
+MAX_NAME_LENGTH = 200
 
 
 class FollowIn(BaseModel):
@@ -88,11 +95,35 @@ class RefreshOut(BaseModel):
     new: int
     future_created: int
     owned: int
+    status: str = "ok"
     result: dict[str, Any]
 
 
 def _ensure_schema() -> None:
     migrate()
+
+
+def _begin_write(conn: sqlite3.Connection) -> None:
+    """Take the write lock up front so check-then-insert sequences (candidate
+    upsert, book creation) serialize across concurrent requests."""
+    conn.execute("BEGIN IMMEDIATE")
+
+
+def _authors_to_text(authors: list[str]) -> str:
+    # JSON, because names may contain commas ("Martin Luther King, Jr.").
+    return json.dumps(authors, ensure_ascii=False)
+
+
+def _authors_from_text(text: str | None) -> list[str]:
+    if not text:
+        return []
+    try:
+        parsed = json.loads(text)
+    except ValueError:
+        parsed = None
+    if isinstance(parsed, list):
+        return [str(a) for a in parsed if str(a)]
+    return [a for a in text.split(", ") if a]  # legacy comma-joined rows
 
 
 def _today() -> str:
@@ -118,15 +149,41 @@ def _get_follow(conn: sqlite3.Connection, follow_id: int) -> sqlite3.Row:
 def _owned_book_id(conn: sqlite3.Connection, provider: str, provider_book_id: str) -> int | None:
     """Library book matching this provider id, ignoring locale (same
     convention as the importer's duplicate check)."""
+    # Join books: provider_ids rows are not removed when a book is deleted,
+    # and a stale row must not make a deleted book look owned.
     row = conn.execute(
-        "SELECT entity_id FROM provider_ids "
-        "WHERE entity_type = 'book' AND provider = ? AND provider_id = ? LIMIT 1",
+        "SELECT p.entity_id FROM provider_ids p JOIN books b ON b.id = p.entity_id "
+        "WHERE p.entity_type = 'book' AND p.provider = ? AND p.provider_id = ? LIMIT 1",
         (provider, provider_book_id),
     ).fetchone()
     if row is not None:
         return int(row["entity_id"])
     row = conn.execute("SELECT id FROM books WHERE asin = ? LIMIT 1", (provider_book_id,)).fetchone()
     return int(row["id"]) if row is not None else None
+
+
+def _reconcile_added(conn: sqlite3.Connection, follow_id: int | None = None) -> None:
+    """Repair 'added' candidates whose book is gone.
+
+    Deleting a book NULLs ``book_id`` (ON DELETE SET NULL). Such a candidate
+    would otherwise stay 'added' forever and never be selectable again. If
+    another library book now owns the provider id it is re-linked (no
+    duplicate); otherwise the candidate returns to its date classification.
+    """
+    sql = "SELECT * FROM follow_candidates WHERE status = 'added' AND book_id IS NULL"
+    args: tuple[Any, ...] = ()
+    if follow_id is not None:
+        sql += " AND follow_id = ?"
+        args = (follow_id,)
+    for cand in conn.execute(sql, args).fetchall():
+        owner = _owned_book_id(conn, cand["provider"], cand["provider_book_id"])
+        if owner is not None:
+            conn.execute("UPDATE follow_candidates SET book_id = ? WHERE id = ?", (owner, cand["id"]))
+        else:
+            conn.execute(
+                "UPDATE follow_candidates SET status = ? WHERE id = ?",
+                (_classify(cand["release_date"]), cand["id"]),
+            )
 
 
 def _follow_out(conn: sqlite3.Connection, row: sqlite3.Row) -> FollowOut:
@@ -158,7 +215,7 @@ def _candidate_out(conn: sqlite3.Connection, row: sqlite3.Row) -> CandidateOut:
         provider=row["provider"],
         provider_book_id=row["provider_book_id"],
         title=row["title"],
-        authors=[a for a in (row["authors"] or "").split(", ") if a],
+        authors=_authors_from_text(row["authors"]),
         series=row["series"],
         series_position=row["series_position"],
         release_date=row["release_date"],
@@ -181,7 +238,7 @@ def _create_candidate_book(conn: sqlite3.Connection, cand: sqlite3.Row, locale: 
             title=cand["title"] or cand["provider_book_id"],
             release_date=cand["release_date"] or None,
             cover_url=cand["cover_url"],
-            authors=[a for a in (cand["authors"] or "").split(", ") if a],
+            authors=_authors_from_text(cand["authors"]),
             series=cand["series"],
             series_position=cand["series_position"] or None,
             provider=cand["provider"],
@@ -234,20 +291,20 @@ def _upsert_candidate(
     ).fetchone()
     fields = (
         hit.title,
-        ", ".join(hit.authors),
+        _authors_to_text(hit.authors),
         hit.series,
         hit.series_position or None,
         hit.release_date,
         hit.cover_url,
     )
     if existing is None:
-        conn.execute(
-            "INSERT INTO follow_candidates (follow_id, provider, provider_book_id, title, "
-            "authors, series, series_position, release_date, cover_url, status) "
+        cur = conn.execute(
+            "INSERT OR IGNORE INTO follow_candidates (follow_id, provider, provider_book_id, "
+            "title, authors, series, series_position, release_date, cover_url, status) "
             "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
             (follow_id, hit.provider_name, provider_book_id, *fields, _classify(hit.release_date)),
         )
-        return True
+        return cur.rowcount > 0
     conn.execute(
         "UPDATE follow_candidates SET title = ?, authors = ?, series = ?, series_position = ?, "
         "release_date = ?, cover_url = ? WHERE id = ?",
@@ -268,6 +325,8 @@ def _upsert_candidate(
 async def list_follows() -> list[FollowOut]:
     _ensure_schema()
     with get_conn() as conn:
+        _begin_write(conn)
+        _reconcile_added(conn)
         rows = conn.execute("SELECT * FROM follows ORDER BY kind, name COLLATE NOCASE").fetchall()
         return [_follow_out(conn, r) for r in rows]
 
@@ -280,6 +339,8 @@ async def create_follow(data: FollowIn) -> FollowOut:
         raise HTTPException(422, f"kind must be one of {', '.join(KINDS)}")
     if not name:
         raise HTTPException(422, "name must not be empty")
+    if len(name) > MAX_NAME_LENGTH:
+        raise HTTPException(422, f"name must be at most {MAX_NAME_LENGTH} characters")
     with get_conn() as conn:
         try:
             cur = conn.execute("INSERT INTO follows (kind, name) VALUES (?, ?)", (data.kind, name))
@@ -297,9 +358,31 @@ async def delete_follow(follow_id: int) -> None:
         conn.execute("DELETE FROM follows WHERE id = ?", (follow_id,))
 
 
+def _refresh_status(hits: list[BookQuickInfo], response: Any) -> tuple[str, dict[str, Any]]:
+    """Classify a provider response as ok / partial / failed (see module doc)."""
+    meta = response.provider_metadata
+    errors: dict[str, str] = dict(meta.get("provider_errors") or {})
+    extra: dict[str, Any] = {}
+    if errors:
+        extra["errors"] = errors
+    total = meta.get("total_results")
+    if isinstance(total, int) and total > len(response.results):
+        extra["truncated"] = True
+        extra["total_results"] = total
+    if errors and not hits:
+        return "failed", extra
+    if errors or extra.get("truncated"):
+        return "partial", extra
+    return "ok", extra
+
+
 @router.post("/api/v1/follows/{follow_id}/refresh", response_model=RefreshOut)
 async def refresh_follow(follow_id: int, chain: ChainDep = None) -> RefreshOut:  # type: ignore[assignment]
-    """Manual, idempotent refresh: upsert candidates, create future books only."""
+    """Manual, idempotent refresh: upsert candidates, create future books only.
+
+    A provider failure that leaves nothing usable is recorded on the follow
+    and answered with 502 instead of an empty "successful" refresh.
+    """
     _ensure_schema()
     with get_conn() as conn:
         follow = _get_follow(conn, follow_id)
@@ -309,10 +392,26 @@ async def refresh_follow(follow_id: int, chain: ChainDep = None) -> RefreshOut: 
     else:
         response = await chain.search(follow["name"], page_size=SEARCH_PAGE_SIZE)
     hits = [h for h in response.results if _matches(follow, h)]
+    status, extra = _refresh_status(hits, response)
     locale = chain.config.audible_locale
+
+    if status == "failed":
+        result = {"status": status, "found": 0, "new": 0, "future_created": 0, **extra}
+        with get_conn() as conn:
+            _begin_write(conn)
+            _get_follow(conn, follow_id)
+            # last_refreshed_at is left alone: it marks the last real refresh.
+            conn.execute(
+                "UPDATE follows SET last_result = ? WHERE id = ?", (json.dumps(result), follow_id)
+            )
+        log.warning("Follow %s (%s %r) refresh failed: %s", follow_id, follow["kind"], follow["name"], extra)
+        raise HTTPException(502, f"Provider search failed: {'; '.join(extra['errors'].values())}")
 
     new = 0
     with get_conn() as conn:
+        _begin_write(conn)
+        _get_follow(conn, follow_id)  # may have been deleted while we waited on the provider
+        _reconcile_added(conn, follow_id)
         for hit in hits:
             provider_book_id = hit.asin or hit.provider_uid
             if not provider_book_id:
@@ -328,14 +427,25 @@ async def refresh_follow(follow_id: int, chain: ChainDep = None) -> RefreshOut: 
             )
             if _owned_book_id(conn, c["provider"], c["provider_book_id"]) is not None
         )
-        result = {"found": len(hits), "new": new, "future_created": future_created}
+        result = {
+            "status": status,
+            "found": len(hits),
+            "new": new,
+            "future_created": future_created,
+            **extra,
+        }
         conn.execute(
             "UPDATE follows SET last_refreshed_at = datetime('now'), last_result = ? WHERE id = ?",
             (json.dumps(result), follow_id),
         )
     log.info("Follow %s (%s %r) refreshed: %s", follow_id, follow["kind"], follow["name"], result)
     return RefreshOut(
-        found=len(hits), new=new, future_created=future_created, owned=owned, result=result
+        found=len(hits),
+        new=new,
+        future_created=future_created,
+        owned=owned,
+        status=status,
+        result=result,
     )
 
 
@@ -346,7 +456,9 @@ async def refresh_follow(follow_id: int, chain: ChainDep = None) -> RefreshOut: 
 async def list_candidates(follow_id: int) -> list[CandidateOut]:
     _ensure_schema()
     with get_conn() as conn:
+        _begin_write(conn)
         _get_follow(conn, follow_id)
+        _reconcile_added(conn, follow_id)
         rows = conn.execute(
             "SELECT * FROM follow_candidates WHERE follow_id = ? "
             "ORDER BY release_date DESC, title COLLATE NOCASE",
@@ -373,7 +485,9 @@ async def exclude_candidates(follow_id: int, data: CandidateIdsIn) -> CandidateA
     changed: list[int] = []
     skipped: list[dict[str, Any]] = []
     with get_conn() as conn:
+        _begin_write(conn)
         _get_follow(conn, follow_id)
+        _reconcile_added(conn, follow_id)
         for cid, row in _selected(conn, follow_id, data.ids):
             if row is None:
                 skipped.append({"id": cid, "reason": "not_found"})
@@ -395,7 +509,9 @@ async def restore_candidates(
     changed: list[int] = []
     skipped: list[dict[str, Any]] = []
     with get_conn() as conn:
+        _begin_write(conn)
         _get_follow(conn, follow_id)
+        _reconcile_added(conn, follow_id)
         for cid, row in _selected(conn, follow_id, data.ids):
             if row is None:
                 skipped.append({"id": cid, "reason": "not_found"})
@@ -426,7 +542,9 @@ async def add_candidates(
     skipped: list[dict[str, Any]] = []
     locale = chain.config.audible_locale
     with get_conn() as conn:
+        _begin_write(conn)
         _get_follow(conn, follow_id)
+        _reconcile_added(conn, follow_id)
         for cid, row in _selected(conn, follow_id, data.ids):
             if row is None:
                 skipped.append({"id": cid, "reason": "not_found"})

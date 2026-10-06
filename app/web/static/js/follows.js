@@ -42,6 +42,17 @@ function kindLabel(kind) {
 
 // ---- follows table ----------------------------------------------------
 
+// Last refresh outcome: ok / partial / failed, with details as a tooltip.
+function lastResultCell(f) {
+  const r = f.last_result || {};
+  if (!r.status) return "—";
+  const notes = [];
+  if (r.errors) notes.push(tpl("follows_result_errors", { errors: Object.values(r.errors).join("; ") }));
+  if (r.truncated) notes.push(tpl("follows_result_truncated", { total: r.total_results }));
+  const cls = r.status === "failed" ? "badge-failed" : r.status === "partial" ? "badge-pending" : "badge-success";
+  return `<span class="badge ${cls}" title="${esc(notes.join(" "))}">${esc(T[`follows_result_${r.status}`] || r.status)}</span>`;
+}
+
 function renderFollowRow(f) {
   const counts = f.candidate_counts || {};
   return `
@@ -49,6 +60,7 @@ function renderFollowRow(f) {
       <td>${esc(f.name)}</td>
       <td><span class="badge">${esc(kindLabel(f.kind))}</span></td>
       <td>${esc(f.last_refreshed_at || T.follows_never_refreshed)}</td>
+      <td>${lastResultCell(f)}</td>
       <td>${esc(tpl("follows_counts_summary", counts))}</td>
       <td>
         <button type="button" class="btn btn-primary" data-refresh="${f.id}">${esc(T.follows_refresh)}</button>
@@ -76,6 +88,7 @@ function renderFollows() {
             <th>${esc(T.follows_col_name)}</th>
             <th>${esc(T.follows_col_kind)}</th>
             <th>${esc(T.follows_col_last_refreshed)}</th>
+            <th>${esc(T.follows_col_last_result)}</th>
             <th>${esc(T.follows_col_counts)}</th>
             <th>${esc(T.follows_col_actions)}</th>
           </tr>
@@ -144,17 +157,24 @@ async function refreshFollow(id, btn) {
     const resp = await fetch(`/api/v1/follows/${id}/refresh`, { method: "POST" });
     if (!resp.ok) throw new Error(await errorDetail(resp));
     const data = await resp.json();
-    toast("success", tpl("follows_refresh_success", {
-      found: data.found,
-      new: data.new,
-      created: data.future_created,
-    }));
+    const values = { found: data.found, new: data.new, created: data.future_created };
+    if (data.status === "partial") {
+      // Not a clean success: say why (provider error and/or truncated page).
+      const r = data.result || {};
+      const details = [];
+      if (r.errors) details.push(tpl("follows_result_errors", { errors: Object.values(r.errors).join("; ") }));
+      if (r.truncated) details.push(tpl("follows_result_truncated", { total: r.total_results }));
+      toast("info", tpl("follows_refresh_partial", { ...values, details: details.join(" ") }));
+    } else {
+      toast("success", tpl("follows_refresh_success", values));
+    }
     await loadFollows();
     if (selectedFollow && selectedFollow.id === id) await loadCandidates();
   } catch (err) {
     toast("error", `${T.follows_refresh_error} (${err.message})`);
     btn.disabled = false;
     btn.textContent = originalLabel;
+    await loadFollows(); // surface the persisted "failed" last result
   }
 }
 

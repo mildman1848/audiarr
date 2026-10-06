@@ -122,3 +122,14 @@ async def test_get_detail_maps_runtime_minutes_to_seconds(
     assert detail is not None
     assert detail.provider_name == "audnexus"
     assert detail.title == "Das Parfum"
+
+
+@pytest.mark.asyncio
+async def test_search_http_failure_is_flagged_not_a_plain_empty_result() -> None:
+    client = httpx.AsyncClient(
+        transport=httpx.MockTransport(lambda request: httpx.Response(503, json={})),
+        base_url="https://api.audnex.us",
+    )
+    response = await AudnexusProvider(client=client).search("anything")
+    assert response.results == []
+    assert response.provider_metadata.get("error")

@@ -240,7 +240,11 @@ class AudibleProvider(BaseMetadataProvider):
             payload = response.json()
         except httpx.HTTPError as exc:
             log.warning("Audible search failed: %s", exc)
-            return SearchResponse(results=[], query_used=query)
+            # Empty results alone are indistinguishable from "no match";
+            # flag the failure so callers (follows refresh) can report it.
+            return SearchResponse(
+                results=[], query_used=query, provider_metadata={"error": str(exc) or type(exc).__name__}
+            )
         finally:
             if self._owns_client():
                 await client.aclose()

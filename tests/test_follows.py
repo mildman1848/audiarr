@@ -35,12 +35,15 @@ def provider_products(app_client) -> list[dict[str, Any]]:
     request params are exposed as ``app_client.follow_requests``."""
     products: list[dict[str, Any]] = []
     requests: list[dict[str, str]] = []
+    # Test knobs: force an HTTP error status / a larger provider-side total.
+    behavior: dict[str, Any] = {"status": 200, "total": None}
 
     def handler(request: httpx.Request) -> httpx.Response:
         requests.append(dict(request.url.params))
-        return httpx.Response(
-            200, json={"products": products, "total_results": len(products)}
-        )
+        if behavior["status"] != 200:
+            return httpx.Response(behavior["status"], json={"message": "boom"})
+        total = behavior["total"] if behavior["total"] is not None else len(products)
+        return httpx.Response(200, json={"products": products, "total_results": total})
 
     client = httpx.AsyncClient(transport=httpx.MockTransport(handler), base_url=api_host_for("us"))
     chain = ProviderChain(
@@ -49,6 +52,7 @@ def provider_products(app_client) -> list[dict[str, Any]]:
     )
     app_client.app.dependency_overrides[build_provider_chain] = lambda: chain
     app_client.follow_requests = requests  # for param assertions
+    app_client.follow_behavior = behavior
     return products
 
 
@@ -357,3 +361,175 @@ def test_delete_follow_keeps_created_books(app_client, provider_products):
     assert [b["title"] for b in _books(app_client)] == ["Future Book"]
     with get_conn() as conn:
         assert conn.execute("SELECT COUNT(*) FROM follow_candidates").fetchone()[0] == 0
+
+
+# -- failure reporting --------------------------------------------------------
+
+
+def test_provider_failure_is_502_not_an_empty_success(app_client, provider_products):
+    provider_products.append(_product("B0BACKLOG1", "Old Book", PAST))
+    follow = _follow(app_client)
+    assert app_client.post(f"/api/v1/follows/{follow['id']}/refresh").status_code == 200
+    refreshed_at = app_client.get("/api/v1/follows").json()[0]["last_refreshed_at"]
+
+    app_client.follow_behavior["status"] = 503
+    resp = app_client.post(f"/api/v1/follows/{follow['id']}/refresh")
+    assert resp.status_code == 502
+    assert "Provider search failed" in resp.json()["detail"]
+
+    listed = app_client.get("/api/v1/follows").json()[0]
+    assert listed["last_result"]["status"] == "failed"
+    assert "audible" in listed["last_result"]["errors"]
+    assert listed["last_refreshed_at"] == refreshed_at  # no fake refresh timestamp
+    # Existing candidates are untouched by the failed refresh.
+    assert set(_candidates(app_client, follow["id"])) == {"B0BACKLOG1"}
+
+
+def test_genuine_empty_result_is_still_ok(app_client, provider_products):
+    follow = _follow(app_client)
+    body = app_client.post(f"/api/v1/follows/{follow['id']}/refresh").json()
+    assert body["status"] == "ok"
+    assert body["found"] == 0
+    assert "errors" not in body["result"]
+
+
+def test_truncated_provider_page_is_reported_partial(app_client, provider_products):
+    provider_products.append(_product("B0BACKLOG1", "Old Book", PAST))
+    app_client.follow_behavior["total"] = 180
+    follow = _follow(app_client)
+    body = app_client.post(f"/api/v1/follows/{follow['id']}/refresh").json()
+    assert body["status"] == "partial"
+    assert body["result"]["truncated"] is True
+    assert body["result"]["total_results"] == 180
+    assert body["new"] == 1  # what was fetched is still stored
+
+
+async def test_chain_reports_provider_errors_for_failure_and_fallback():
+    from app.providers.base import BaseMetadataProvider, BookQuickInfo, SearchResponse
+
+    class Boom(BaseMetadataProvider):
+        provider_name = "boom"
+
+        async def search(self, query, **kwargs):
+            raise RuntimeError("kaput")
+
+    class Ok(BaseMetadataProvider):
+        provider_name = "ok"
+
+        async def search(self, query, **kwargs):
+            return SearchResponse(results=[BookQuickInfo(provider_uid="1", provider_name="ok", title="T")])
+
+    chain = ProviderChain(
+        config=ProviderChainConfig(provider_order=["boom", "ok"]),
+        provider_overrides={"boom": Boom(), "ok": Ok()},
+    )
+    resp = await chain.search("x")
+    assert [r.title for r in resp.results] == ["T"]
+    assert resp.provider_metadata["provider_errors"]["boom"].startswith("RuntimeError")
+
+    only_boom = ProviderChain(
+        config=ProviderChainConfig(provider_order=["boom"]), provider_overrides={"boom": Boom()}
+    )
+    resp = await only_boom.search("x")
+    assert resp.results == []
+    assert "boom" in resp.provider_metadata["provider_errors"]
+
+
+# -- deleted books ------------------------------------------------------------
+
+
+def test_deleted_added_book_candidate_is_reviewable_again(app_client, provider_products):
+    provider_products += [
+        _product("B0BACKLOG1", "Old Book", PAST),
+        _product("B0FUTURE01", "Future Book", FUTURE),
+    ]
+    follow = _follow(app_client)
+    fid = follow["id"]
+    app_client.post(f"/api/v1/follows/{fid}/refresh")
+    cands = _candidates(app_client, fid)
+    app_client.post(f"/api/v1/follows/{fid}/candidates/add", json={"ids": [cands["B0BACKLOG1"]["id"]]})
+    assert {c["status"] for c in _candidates(app_client, fid).values()} == {"added"}
+
+    for book in _books(app_client):
+        assert app_client.delete(f"/api/v1/library/books/{book['id']}").status_code == 204
+
+    # Not "owned" (stale provider_ids row must not count) and no dangling book.
+    cands = _candidates(app_client, fid)
+    assert cands["B0BACKLOG1"]["status"] == "backlog"
+    assert cands["B0BACKLOG1"]["owned"] is False
+    assert cands["B0BACKLOG1"]["book_id"] is None
+    assert cands["B0FUTURE01"]["status"] == "future"
+    counts = app_client.get("/api/v1/follows").json()[0]["candidate_counts"]
+    assert counts["added"] == 0
+
+    # Explicit re-add works and creates exactly one new book.
+    add = app_client.post(
+        f"/api/v1/follows/{fid}/candidates/add", json={"ids": [cands["B0BACKLOG1"]["id"]]}
+    ).json()
+    assert add["changed"] == [cands["B0BACKLOG1"]["id"]]
+    assert [b["title"] for b in _books(app_client)] == ["Old Book"]
+    assert _candidates(app_client, fid)["B0BACKLOG1"]["status"] == "added"
+
+    # A refresh re-materializes the still-unreleased book only; nothing duplicates.
+    body = app_client.post(f"/api/v1/follows/{fid}/refresh").json()
+    assert body["future_created"] == 1
+    assert sorted(b["title"] for b in _books(app_client)) == ["Future Book", "Old Book"]
+    app_client.post(f"/api/v1/follows/{fid}/refresh")
+    assert len(_books(app_client)) == 2
+
+
+def test_deleted_book_relinks_when_another_book_owns_the_provider_id(app_client, provider_products):
+    provider_products.append(_product("B0BACKLOG1", "Old Book", PAST))
+    follow = _follow(app_client)
+    fid = follow["id"]
+    app_client.post(f"/api/v1/follows/{fid}/refresh")
+    cid = _candidates(app_client, fid)["B0BACKLOG1"]["id"]
+    app_client.post(f"/api/v1/follows/{fid}/candidates/add", json={"ids": [cid]})
+    (book,) = _books(app_client)
+    app_client.delete(f"/api/v1/library/books/{book['id']}")
+    other = app_client.post(
+        "/api/v1/library/books",
+        json={"title": "Re-imported", "provider": "audible", "provider_id": "B0BACKLOG1"},
+    ).json()
+
+    cand = _candidates(app_client, fid)["B0BACKLOG1"]
+    assert cand["status"] == "added"
+    assert cand["owned"] is True
+    assert cand["book_id"] == other["id"]
+    assert len(_books(app_client)) == 1
+
+
+# -- data integrity -----------------------------------------------------------
+
+
+def test_author_names_with_commas_survive_candidate_to_book(app_client, provider_products):
+    name = "Martin Luther King, Jr."
+    provider_products.append(_product("B0COMMA001", "Speeches", PAST, authors=[{"name": name}]))
+    follow = _follow(app_client, name=name)
+    app_client.post(f"/api/v1/follows/{follow['id']}/refresh")
+    cand = _candidates(app_client, follow["id"])["B0COMMA001"]
+    assert cand["authors"] == [name]
+    app_client.post(f"/api/v1/follows/{follow['id']}/candidates/add", json={"ids": [cand["id"]]})
+    # Check the stored author rows (the library API re-splits names on ", " itself).
+    with get_conn() as conn:
+        names = [r["name"] for r in conn.execute("SELECT name FROM authors")]
+    assert names == [name]
+
+
+def test_follow_name_length_is_bounded(app_client):
+    resp = app_client.post("/api/v1/follows", json={"kind": "author", "name": "x" * 201})
+    assert resp.status_code == 422
+
+
+def test_add_candidates_twice_creates_one_book(app_client, provider_products):
+    provider_products.append(_product("B0BACKLOG1", "Old Book", PAST))
+    follow = _follow(app_client)
+    fid = follow["id"]
+    app_client.post(f"/api/v1/follows/{fid}/refresh")
+    cid = _candidates(app_client, fid)["B0BACKLOG1"]["id"]
+    ids = {"ids": [cid, cid]}
+    first = app_client.post(f"/api/v1/follows/{fid}/candidates/add", json=ids).json()
+    second = app_client.post(f"/api/v1/follows/{fid}/candidates/add", json=ids).json()
+    assert first["changed"] == [cid]
+    assert second["changed"] == []
+    assert len(_books(app_client)) == 1

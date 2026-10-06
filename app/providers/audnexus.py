@@ -122,7 +122,9 @@ class AudnexusProvider(BaseMetadataProvider):
             payload = response.json()
         except httpx.HTTPError as exc:
             log.warning("Audnexus search failed: %s", exc)
-            return SearchResponse(results=[], query_used=query)
+            return SearchResponse(
+                results=[], query_used=query, provider_metadata={"error": str(exc) or type(exc).__name__}
+            )
         finally:
             if self._owns_client():
                 await client.aclose()
