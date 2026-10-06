@@ -28,12 +28,21 @@ from app.config import load_settings, save_settings
 from app.connections.liberatarr import LiberatarrError, fetch_library, is_not_liberated
 from app.library import BookCreate, create_book, get_conn
 from app.models.settings import Settings
+from app.reading_list_import import list_reading_list_sources
 
 log = logging.getLogger("audiarr.import_lists")
 
 LIBERATARR_PROVIDER = "audible"
 LIBERATARR_SOURCE_ID = "liberatarr"
 LIBERATARR_SOURCE_TYPE = "liberatarr"
+
+
+class SelectionRequiredError(Exception):
+    """The source only imports from an explicit, previewed selection (#79).
+
+    Reading-list sources (Goodreads shelf RSS) are never bulk-synced: the
+    generic ``/sync`` route reports this instead of creating books.
+    """
 
 
 @dataclass
@@ -64,11 +73,10 @@ class ImportListSource:
 def list_sources(settings: Settings | None = None) -> list[ImportListSource]:
     """List all currently known import-list sources and their persisted status.
 
-    Liberatarr is the only concrete source today; more entries are added
-    here as future sources register (see module docstring).
+    Liberatarr first, then any saved reading-list sources (issue #79).
     """
     settings = settings or load_settings()
-    return [_liberatarr_source(settings)]
+    return [_liberatarr_source(settings), *_reading_list_sources(settings)]
 
 
 def get_source(source_id: str, settings: Settings | None = None) -> ImportListSource | None:
@@ -91,6 +99,23 @@ def _liberatarr_source(settings: Settings) -> ImportListSource:
         last_created=lib.last_sync_created,
         last_skipped=lib.last_sync_skipped,
     )
+
+
+def _reading_list_sources(settings: Settings) -> list[ImportListSource]:
+    return [
+        ImportListSource(
+            id=src.id,
+            type=src.type,
+            name=src.name,
+            enabled=src.enabled,
+            status=src.sync_status,
+            last_sync_at=src.last_sync_at,
+            last_error=src.last_sync_error,
+            last_created=src.last_sync_created,
+            last_skipped=src.last_sync_skipped,
+        )
+        for src in list_reading_list_sources(settings)
+    ]
 
 
 def sync_liberatarr_rows(conn: Connection, rows: list[dict]) -> ImportListSyncResult:
@@ -182,11 +207,14 @@ def record_liberatarr_sync(settings: Settings, result: ImportListSyncResult, err
 async def sync_source(source_id: str, settings: Settings | None = None) -> ImportListSyncResult:
     """Sync one configured import-list source by id, persisting its status.
 
-    Raises ``ValueError`` for an unknown source id and ``LiberatarrError``
+    Raises ``SelectionRequiredError`` for a reading-list source (preview and
+    select instead), ``ValueError`` for an unknown source id and ``LiberatarrError``
     (propagated) on an upstream fetch failure -- both are turned into HTTP
     responses by the caller (see app/api/routes_import_lists.py).
     """
     settings = settings or load_settings()
+    if any(src.id == source_id for src in list_reading_list_sources(settings)):
+        raise SelectionRequiredError(source_id)
     if source_id != LIBERATARR_SOURCE_ID:
         raise ValueError(f"Unknown import-list source: {source_id!r}")
 

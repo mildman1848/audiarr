@@ -1,5 +1,14 @@
 # Changelog
 
+## 1.1.10
+
+- Reading-list imports (#79): Settings → Import Lists can now preview and import books from a public Goodreads shelf RSS feed, a Goodreads library CSV export, or a StoryGraph CSV export, reusing the existing provider matching and import-list groundwork rather than a parallel discovery engine.
+- Goodreads feeds: only public shelf RSS URLs (`/review/list_rss/<user id>?shelf=<name>`) on `goodreads.com` are accepted and fetched from the fixed host `www.goodreads.com`; saved sources store only the numeric user id and shelf name. Private feed URLs carrying a `key=` token are rejected, and the key is never stored or logged. User ids must be ASCII digits; other Unicode numerals (e.g. Arabic-Indic digits) are rejected.
+- StoryGraph is supported as **user-exported CSV upload only**. There is no StoryGraph login, no session-cookie handling and no scraping.
+- Preview is read-only. Importing requires an explicit per-entry selection (maximum 50) of a verifiable provider candidate; books are created monitored from the provider's own detail record, already-known books are skipped, and nothing is downloaded or searched automatically. A reading list is a partial observation, so a book missing from a later feed/CSV is never deleted or unmonitored.
+- Inputs are bounded (2 MiB feed, 5 MiB CSV, 2000 parsed rows, up to 20 saved sources); the feed parser rejects DTD/entity declarations.
+- New `reading_list_err_*` i18n strings (including `feed_url_private_key` and `csv_format_unrecognized`) and UI strings added in both English and German.
+
 ## 1.1.8
 
 - System UI parity (#73): the System page now has Starr-style Status / Tasks / Events / Logs tabs, deep-linkable per tab.
