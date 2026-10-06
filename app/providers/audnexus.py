@@ -88,6 +88,7 @@ class AudnexusProvider(BaseMetadataProvider):
             narrators=self._normalize_narrators(book.get("narrators")),
             asin=asin,
             isbn=self._normalize_optional(book.get("isbn")),
+            release_date=self._normalize_string(book.get("releaseDate")),
             cover_url=self._normalize_optional(book.get("image")),
             locale=self.region,
         )

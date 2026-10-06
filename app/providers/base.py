@@ -25,6 +25,7 @@ class BookQuickInfo:
     narrators: list[str] = field(default_factory=list)
     series: str = ""
     series_position: int = 0
+    release_date: str = ""
     cover_url: str | None = None
     asin: str | None = None
     isbn: str | None = None

@@ -64,7 +64,10 @@ class ProviderChain:
         return kwargs
 
     async def search(self, query: str, **kwargs: Any) -> SearchResponse:
-        if not query.strip():
+        # An author-only search (blank query + ``author`` kwarg) is valid for
+        # providers that support it (Audible); others return empty on a blank
+        # query and the chain falls through.
+        if not query.strip() and not str(kwargs.get("author") or "").strip():
             return SearchResponse(results=[], query_used=query)
 
         for provider_name in self.config.provider_order:

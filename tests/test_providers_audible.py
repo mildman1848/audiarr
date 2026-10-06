@@ -111,6 +111,7 @@ async def test_search_returns_real_catalog_shape() -> None:
     assert book.authors == ["Bernhard Schlink"]
     assert book.narrators == ["Hans Korte"]
     assert book.cover_url is not None
+    assert book.release_date == "2010-11-08"
     assert book.locale == "de"
 
 

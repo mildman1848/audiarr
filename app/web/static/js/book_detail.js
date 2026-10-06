@@ -526,6 +526,31 @@ async function refreshBookMetadata(bookId, btn) {
   }
 }
 
+// Toolbar "Follow author" / "Follow series" actions (#80): create a follow
+// from this book's first author or its series; refresh/review happen on the
+// /follows page.
+async function followFromBook(kind, name) {
+  if (!name) return;
+  try {
+    const resp = await fetch("/api/v1/follows", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ kind, name }),
+    });
+    if (resp.status === 409) {
+      if (window.AudiarrToast) window.AudiarrToast.info(tpl("book_detail_follow_duplicate", { name }));
+      return;
+    }
+    if (!resp.ok) {
+      const body = await resp.json().catch(() => ({}));
+      throw new Error(typeof body.detail === "string" ? body.detail : `HTTP ${resp.status}`);
+    }
+    if (window.AudiarrToast) window.AudiarrToast.success(tpl("book_detail_follow_success", { name }));
+  } catch (err) {
+    if (window.AudiarrToast) window.AudiarrToast.error(`${T.book_detail_follow_error} (${err.message})`);
+  }
+}
+
 // Toolbar "Search" action (#50): jumps to the interactive release Search
 // page, prefilled with this book's title + authors, and triggers a search
 // there -- reuses the existing /search page/endpoint rather than adding a
@@ -712,6 +737,10 @@ async function loadBook() {
     if (rescanBtn) rescanBtn.disabled = false;
     const organizeToolbarBtn = document.getElementById("book-detail-organize-toolbar-btn");
     if (organizeToolbarBtn) organizeToolbarBtn.disabled = false;
+    const followAuthorBtn = document.getElementById("book-detail-follow-author-btn");
+    if (followAuthorBtn) followAuthorBtn.disabled = !(currentBook.authors || []).length;
+    const followSeriesBtn = document.getElementById("book-detail-follow-series-btn");
+    if (followSeriesBtn) followSeriesBtn.disabled = !currentBook.series;
     const organizePreviewBtn = document.getElementById("book-detail-organize-preview-btn");
     if (organizePreviewBtn) organizePreviewBtn.disabled = false;
   } catch (err) {
@@ -746,6 +775,18 @@ document.addEventListener("DOMContentLoaded", () => {
   const organizeToolbarBtn = document.getElementById("book-detail-organize-toolbar-btn");
   if (organizeToolbarBtn) {
     organizeToolbarBtn.addEventListener("click", focusOrganizePanel);
+  }
+  const followAuthorBtn = document.getElementById("book-detail-follow-author-btn");
+  if (followAuthorBtn) {
+    followAuthorBtn.addEventListener("click", () => {
+      if (currentBook) followFromBook("author", (currentBook.authors || [])[0]);
+    });
+  }
+  const followSeriesBtn = document.getElementById("book-detail-follow-series-btn");
+  if (followSeriesBtn) {
+    followSeriesBtn.addEventListener("click", () => {
+      if (currentBook) followFromBook("series", currentBook.series);
+    });
   }
   const organizePreviewBtn = document.getElementById("book-detail-organize-preview-btn");
   if (organizePreviewBtn) {

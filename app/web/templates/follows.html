@@ -1,0 +1,55 @@
+{% extends "base.html" %}
+
+{% block page_title %}{{ t.follows_title }}{% endblock %}
+{% block page_eyebrow %}{{ t.follows_eyebrow }}{% endblock %}
+{% block page_heading %}{{ t.follows_title }}{% endblock %}
+
+{% block page_toolbar %}
+  <div class="toolbar-group toolbar-left">
+    <select id="follows-kind" class="toolbar-select" aria-label="{{ t.follows_col_kind }}">
+      <option value="author">{{ t.follows_kind_author }}</option>
+      <option value="series">{{ t.follows_kind_series }}</option>
+    </select>
+    <input type="text" id="follows-name" class="toolbar-input" maxlength="200" placeholder="{{ t.follows_name_placeholder }}" aria-label="{{ t.follows_name_placeholder }}">
+    <button type="button" id="follows-add-btn" class="toolbar-btn">{{ t.follows_add }}</button>
+  </div>
+{% endblock %}
+
+{% block content %}
+  <div id="follows-root">
+    <p class="section-hint">{{ t.follows_subtitle }}</p>
+
+    <section class="panel">
+      <div class="section-head">
+        <span class="eyebrow">{{ t.follows_eyebrow }}</span>
+        <h2>{{ t.follows_title }}</h2>
+      </div>
+      <div class="card">
+        <div id="follows-list">
+          <p class="muted">{{ t.library_books_loading }}</p>
+        </div>
+      </div>
+    </section>
+
+    <section class="panel" id="follows-candidates-panel">
+      <div class="section-head">
+        <span class="eyebrow">{{ t.follows_eyebrow }}</span>
+        <h2 id="follows-candidates-heading">{{ t.follows_candidates_heading }}</h2>
+      </div>
+      <div class="card">
+        <div class="toolbar" id="follows-candidates-actions" hidden>
+          <button type="button" id="follows-add-selected-btn" class="btn btn-primary">{{ t.follows_action_add_selected }}</button>
+          <button type="button" id="follows-exclude-selected-btn" class="btn btn-secondary">{{ t.follows_action_exclude_selected }}</button>
+          <button type="button" id="follows-restore-selected-btn" class="btn btn-secondary">{{ t.follows_action_restore_selected }}</button>
+        </div>
+        <div id="follows-candidates">
+          <p class="muted">{{ t.follows_candidates_select_follow }}</p>
+        </div>
+      </div>
+    </section>
+  </div>
+{% endblock %}
+
+{% block scripts %}
+  <script src="/static/js/follows.js?v={{ version }}-follows-80"></script>
+{% endblock %}

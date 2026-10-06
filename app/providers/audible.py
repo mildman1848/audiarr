@@ -151,6 +151,7 @@ class AudibleProvider(BaseMetadataProvider):
             narrators=self._normalize_named_entries(product.get("narrators")),
             series=series,
             series_position=sequence,
+            release_date=self._normalize_string(product.get("release_date")),
             cover_url=self._cover_from(product),
             asin=asin,
             locale=self.region,

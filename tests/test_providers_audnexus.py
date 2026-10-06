@@ -73,6 +73,18 @@ async def test_search_returns_results(provider: AudnexusProvider) -> None:
 
 
 @pytest.mark.asyncio
+async def test_search_maps_release_date_when_present() -> None:
+    client = httpx.AsyncClient(
+        transport=_mock_transport(
+            books_results=[{"asin": "B0DATED001", "title": "Dated", "releaseDate": "2024-05-01"}]
+        ),
+        base_url="https://api.audnex.us",
+    )
+    response = await AudnexusProvider(client=client, region="de").search("Dated")
+    assert response.results[0].release_date == "2024-05-01"
+
+
+@pytest.mark.asyncio
 async def test_search_uses_authors_and_narrators_as_lists(
     provider: AudnexusProvider,
 ) -> None:
