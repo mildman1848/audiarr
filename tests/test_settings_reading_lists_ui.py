@@ -129,6 +129,8 @@ def test_dynamic_i18n_families_have_parity_and_cover_backend_vocabulary():
         "reading_list_err_source_disabled",
         "reading_list_err_selection_required",
         "reading_list_err_feed_http_error",
+        "reading_list_err_feed_url_private_key",
+        "reading_list_err_csv_format_unrecognized",
     ):
         assert en[key] and de[key] and en[key] != de[key]
 

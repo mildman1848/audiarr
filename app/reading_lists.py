@@ -50,7 +50,8 @@ log = logging.getLogger("audiarr.reading_lists")
 
 GOODREADS_FEED_HOST = "www.goodreads.com"
 GOODREADS_HOSTS = frozenset({"www.goodreads.com", "goodreads.com"})
-GOODREADS_FEED_PATH = re.compile(r"^/review/list_rss/(\d{1,20})$")
+GOODREADS_FEED_PATH = re.compile(r"^/review/list_rss/([0-9]{1,20})$")
+_USER_ID_RE = re.compile(r"[0-9]{1,20}")  # ASCII digits only (str.isdigit/\d accept other scripts)
 GOODREADS_ALL_SHELVES = "#ALL#"
 _SHELF_RE = re.compile(r"^[a-z0-9][a-z0-9_-]{0,63}$")
 
@@ -367,7 +368,7 @@ def normalize_shelf(shelf: str) -> str:
 
 def build_goodreads_feed_url(ref: GoodreadsFeedRef, page: int = 1) -> str:
     """Rebuild the canonical fetch URL from validated parts (fixed host)."""
-    if not ref.user_id.isdigit() or len(ref.user_id) > 20:
+    if not _USER_ID_RE.fullmatch(ref.user_id):
         raise FeedUrlError("feed_url_invalid", "The stored feed reference is not valid.")
     shelf = normalize_shelf(ref.shelf)
     if not 1 <= page <= MAX_FEED_PAGE:

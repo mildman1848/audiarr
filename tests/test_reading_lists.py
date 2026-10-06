@@ -65,6 +65,8 @@ def test_feed_url_accepts_public_shelf_shapes(url, user_id, shelf):
         ("https://www.goodreads.com/review/list_rss/1?shelf=read#", "feed_url_fragment"),
         ("https://www.goodreads.com/user/show/1?shelf=read", "feed_url_path"),
         ("https://www.goodreads.com/review/list_rss/abc?shelf=read", "feed_url_path"),
+        # Arabic-Indic digits (\d and str.isdigit would accept these) are not Goodreads user ids.
+        ("https://www.goodreads.com/review/list_rss/\u0661\u0662\u0663?shelf=read", "feed_url_path"),
         ("https://www.goodreads.com/review/list_rss/1/?shelf=read", "feed_url_path"),
         ("https://www.goodreads.com/review/list_rss/1/../2?shelf=read", "feed_url_path"),
         (f"https://www.goodreads.com/review/list_rss/1?shelf=read&key={SECRET}", "feed_url_private_key"),
@@ -96,7 +98,13 @@ def test_build_feed_url_is_canonical_and_fixed_host():
 
 
 @pytest.mark.parametrize(
-    "ref", [GoodreadsFeedRef("4x", "read"), GoodreadsFeedRef("4", "../etc"), GoodreadsFeedRef("", "read")]
+    "ref", [
+        GoodreadsFeedRef("4x", "read"),
+        GoodreadsFeedRef("4", "../etc"),
+        GoodreadsFeedRef("", "read"),
+        GoodreadsFeedRef("\u0661\u0662\u0663", "read"),
+        GoodreadsFeedRef("1" * 21, "read"),
+    ]
 )
 def test_build_feed_url_revalidates_stored_parts(ref):
     with pytest.raises(FeedUrlError):
