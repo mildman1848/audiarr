@@ -88,6 +88,7 @@ class AudnexusProvider(BaseMetadataProvider):
             narrators=self._normalize_narrators(book.get("narrators")),
             asin=asin,
             isbn=self._normalize_optional(book.get("isbn")),
+            release_date=self._normalize_string(book.get("releaseDate")),
             cover_url=self._normalize_optional(book.get("image")),
             locale=self.region,
         )
@@ -121,7 +122,9 @@ class AudnexusProvider(BaseMetadataProvider):
             payload = response.json()
         except httpx.HTTPError as exc:
             log.warning("Audnexus search failed: %s", exc)
-            return SearchResponse(results=[], query_used=query)
+            return SearchResponse(
+                results=[], query_used=query, provider_metadata={"error": str(exc) or type(exc).__name__}
+            )
         finally:
             if self._owns_client():
                 await client.aclose()

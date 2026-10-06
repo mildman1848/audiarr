@@ -1,5 +1,14 @@
 # Changelog
 
+## 1.1.11
+
+- Author and series follows (#80): a new Follows page (and follow actions on Book Detail) lets you follow an author or a series by name. Follows and their candidates are persisted (schema v16, `016_follows.sql`) and reviewed as candidates instead of being imported blindly.
+- Refresh is **manual only**. There is no scheduler; each follow has a Refresh action that asks the metadata provider chain for that author's/series' books. Nothing is searched, grabbed or downloaded -- Wanted stays in charge of acquisition.
+- Candidates are classified as: future (release date after today), back-catalog, owned, missing or excluded. Future-dated results may auto-create monitored books (default quality profile/root folder). Back-catalog results are only listed; a book is created only when you explicitly select and add the candidate. Owned status is derived at read time from provider ids/ASIN, excluded candidates are never touched by a refresh, and if a book created from a candidate is later deleted the candidate returns to review.
+- Refresh reports honest status instead of a silent empty success: `ok`, `partial` (a provider failed but another answered, or results were truncated) or `failed` (provider error and no usable result, HTTP 502). Provider errors and truncation are shown in the result.
+- Limits: a refresh fetches a single page of at most 50 results; truncation is reported as `partial` status and does not page further. Audnexus supplies no author or series search, so it contributes nothing to follows. Only the first provider that returns results is used. Names are matched exactly and case-insensitively. Future titles appear only if a provider actually lists them.
+- New EN/DE i18n strings for the Follows page and Book Detail follow actions (dictionaries at exact key parity).
+
 ## 1.1.10
 
 - Reading-list imports (#79): Settings → Import Lists can now preview and import books from a public Goodreads shelf RSS feed, a Goodreads library CSV export, or a StoryGraph CSV export, reusing the existing provider matching and import-list groundwork rather than a parallel discovery engine.

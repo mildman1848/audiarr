@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 DOCKER="${DOCKER:-docker}"
-IMAGE="${IMAGE:-local/audiarr:1.1.10}"
+IMAGE="${IMAGE:-local/audiarr:1.1.11}"
 NAME="audiarr-smoke"
 
 if ! ${DOCKER} info >/dev/null 2>&1; then

@@ -64,9 +64,15 @@ class ProviderChain:
         return kwargs
 
     async def search(self, query: str, **kwargs: Any) -> SearchResponse:
-        if not query.strip():
+        # An author-only search (blank query + ``author`` kwarg) is valid for
+        # providers that support it (Audible); others return empty on a blank
+        # query and the chain falls through.
+        if not query.strip() and not str(kwargs.get("author") or "").strip():
             return SearchResponse(results=[], query_used=query)
 
+        # provider -> failure message; surfaced as provider_metadata
+        # ["provider_errors"] so callers can tell "failed" from "no match".
+        errors: dict[str, str] = {}
         for provider_name in self.config.provider_order:
             provider = self._resolve_provider(provider_name)
             if provider is None:
@@ -75,6 +81,8 @@ class ProviderChain:
 
             try:
                 response = await provider.search(query, **kwargs)
+                if response.provider_metadata.get("error"):
+                    errors[provider_name] = str(response.provider_metadata["error"])[:200]
                 if response.results:
                     log.debug(
                         "provider %s returned %d hits for %r",
@@ -84,6 +92,8 @@ class ProviderChain:
                     )
                     response.provider_metadata = dict(response.provider_metadata)
                     response.provider_metadata["provider_used"] = provider_name
+                    if errors:
+                        response.provider_metadata["provider_errors"] = errors
                     return response
                 log.debug(
                     "provider %s returned no results for %r", provider_name, query
@@ -95,8 +105,10 @@ class ProviderChain:
                     query,
                     exc,
                 )
+                errors[provider_name] = f"{type(exc).__name__}: {exc}"[:200]
 
-        return SearchResponse(results=[], query_used=query)
+        metadata = {"provider_errors": errors} if errors else {}
+        return SearchResponse(results=[], query_used=query, provider_metadata=metadata)
 
     async def browse(
         self,

@@ -11,6 +11,8 @@
     <button type="button" id="book-detail-rescan-btn" class="toolbar-btn" disabled title="{{ t.book_detail_rescan_hint }}">{{ t.book_detail_rescan }}</button>
     <button type="button" id="book-detail-search-btn" class="toolbar-btn" disabled>{{ t.book_detail_search }}</button>
     <button type="button" id="book-detail-organize-toolbar-btn" class="toolbar-btn" disabled>{{ t.book_detail_toolbar_organize }}</button>
+    <button type="button" id="book-detail-follow-author-btn" class="toolbar-btn" disabled>{{ t.book_detail_follow_author }}</button>
+    <button type="button" id="book-detail-follow-series-btn" class="toolbar-btn" disabled>{{ t.book_detail_follow_series }}</button>
   </div>
   <div class="toolbar-group toolbar-right">
     <button type="button" id="book-detail-delete-btn" class="toolbar-btn" disabled>{{ t.book_detail_delete }}</button>
@@ -39,5 +41,5 @@
 {% endblock %}
 
 {% block scripts %}
-  <script src="/static/js/book_detail.js?v={{ version }}-audio-metadata-71"></script>
+  <script src="/static/js/book_detail.js?v={{ version }}-follows-80"></script>
 {% endblock %}

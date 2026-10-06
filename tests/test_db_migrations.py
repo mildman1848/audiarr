@@ -13,7 +13,7 @@ from app.db import SCHEMA_VERSION, migrate
 def test_fresh_db_reaches_latest_schema(tmp_path: Path) -> None:
     db = tmp_path / "fresh.db"
     version = migrate(db)
-    assert version == SCHEMA_VERSION == 15
+    assert version == SCHEMA_VERSION == 16
 
     conn = sqlite3.connect(db)
     tables = {
@@ -73,7 +73,7 @@ def test_migration_is_idempotent(tmp_path: Path) -> None:
     conn = sqlite3.connect(db)
     rows = conn.execute("SELECT version FROM schema_version ORDER BY version").fetchall()
     conn.close()
-    assert [r[0] for r in rows] == [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15]
+    assert [r[0] for r in rows] == [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16]
 
 
 def test_v1_db_upgrades_to_latest(tmp_path: Path) -> None:
@@ -118,6 +118,8 @@ def test_v3_db_upgrades_to_v4(tmp_path: Path) -> None:
     conn.execute("ALTER TABLE books DROP COLUMN quality_profile")
     conn.execute("ALTER TABLE root_folders DROP COLUMN import_strategy")
     conn.execute("ALTER TABLE books DROP COLUMN root_folder_id")
+    conn.execute("DROP TABLE follow_candidates")
+    conn.execute("DROP TABLE follows")
     conn.execute("DROP TABLE library_file_chapters")
     conn.execute("ALTER TABLE library_files DROP COLUMN duration_seconds")
     conn.execute("ALTER TABLE library_files DROP COLUMN bitrate_kbps")
@@ -159,6 +161,8 @@ def test_v6_db_upgrades_to_v7(tmp_path: Path) -> None:
     conn.execute("ALTER TABLE books DROP COLUMN quality_profile")
     conn.execute("ALTER TABLE root_folders DROP COLUMN import_strategy")
     conn.execute("ALTER TABLE books DROP COLUMN root_folder_id")
+    conn.execute("DROP TABLE follow_candidates")
+    conn.execute("DROP TABLE follows")
     conn.execute("DROP TABLE library_file_chapters")
     conn.execute("ALTER TABLE library_files DROP COLUMN duration_seconds")
     conn.execute("ALTER TABLE library_files DROP COLUMN bitrate_kbps")
@@ -172,7 +176,7 @@ def test_v6_db_upgrades_to_v7(tmp_path: Path) -> None:
     conn.close()
 
     version = migrate(db)
-    assert version == SCHEMA_VERSION == 15
+    assert version == SCHEMA_VERSION == 16
 
     conn = sqlite3.connect(db)
     cols = {r[1] for r in conn.execute("PRAGMA table_info(books)")}
@@ -190,6 +194,8 @@ def test_v7_db_upgrades_to_v8(tmp_path: Path) -> None:
     conn.execute("ALTER TABLE books DROP COLUMN quality_profile")
     conn.execute("ALTER TABLE root_folders DROP COLUMN import_strategy")
     conn.execute("ALTER TABLE books DROP COLUMN root_folder_id")
+    conn.execute("DROP TABLE follow_candidates")
+    conn.execute("DROP TABLE follows")
     conn.execute("DROP TABLE library_file_chapters")
     conn.execute("ALTER TABLE library_files DROP COLUMN duration_seconds")
     conn.execute("ALTER TABLE library_files DROP COLUMN bitrate_kbps")
@@ -203,7 +209,7 @@ def test_v7_db_upgrades_to_v8(tmp_path: Path) -> None:
     conn.close()
 
     version = migrate(db)
-    assert version == SCHEMA_VERSION == 15
+    assert version == SCHEMA_VERSION == 16
 
     conn = sqlite3.connect(db)
     cols = {r[1]: r for r in conn.execute("PRAGMA table_info(books)")}
@@ -222,6 +228,8 @@ def test_v8_db_upgrades_to_v9(tmp_path: Path) -> None:
     conn.execute("DROP TABLE wanted_search_state")
     conn.execute("ALTER TABLE root_folders DROP COLUMN import_strategy")
     conn.execute("ALTER TABLE books DROP COLUMN root_folder_id")
+    conn.execute("DROP TABLE follow_candidates")
+    conn.execute("DROP TABLE follows")
     conn.execute("DROP TABLE library_file_chapters")
     conn.execute("ALTER TABLE library_files DROP COLUMN duration_seconds")
     conn.execute("ALTER TABLE library_files DROP COLUMN bitrate_kbps")
@@ -235,7 +243,7 @@ def test_v8_db_upgrades_to_v9(tmp_path: Path) -> None:
     conn.close()
 
     version = migrate(db)
-    assert version == SCHEMA_VERSION == 15
+    assert version == SCHEMA_VERSION == 16
 
     conn = sqlite3.connect(db)
     tables = {
@@ -253,6 +261,8 @@ def test_v9_db_upgrades_to_v10(tmp_path: Path) -> None:
     conn.execute("DROP TABLE wanted_search_state")
     conn.execute("ALTER TABLE root_folders DROP COLUMN import_strategy")
     conn.execute("ALTER TABLE books DROP COLUMN root_folder_id")
+    conn.execute("DROP TABLE follow_candidates")
+    conn.execute("DROP TABLE follows")
     conn.execute("DROP TABLE library_file_chapters")
     conn.execute("ALTER TABLE library_files DROP COLUMN duration_seconds")
     conn.execute("ALTER TABLE library_files DROP COLUMN bitrate_kbps")
@@ -266,7 +276,7 @@ def test_v9_db_upgrades_to_v10(tmp_path: Path) -> None:
     conn.close()
 
     version = migrate(db)
-    assert version == SCHEMA_VERSION == 15
+    assert version == SCHEMA_VERSION == 16
 
     conn = sqlite3.connect(db)
     tables = {
@@ -286,6 +296,8 @@ def test_v10_db_upgrades_to_v11(tmp_path: Path) -> None:
     conn.execute("DROP TABLE tags")
     conn.execute("ALTER TABLE root_folders DROP COLUMN import_strategy")
     conn.execute("ALTER TABLE books DROP COLUMN root_folder_id")
+    conn.execute("DROP TABLE follow_candidates")
+    conn.execute("DROP TABLE follows")
     conn.execute("DROP TABLE library_file_chapters")
     conn.execute("ALTER TABLE library_files DROP COLUMN duration_seconds")
     conn.execute("ALTER TABLE library_files DROP COLUMN bitrate_kbps")
@@ -299,7 +311,7 @@ def test_v10_db_upgrades_to_v11(tmp_path: Path) -> None:
     conn.close()
 
     version = migrate(db)
-    assert version == SCHEMA_VERSION == 15
+    assert version == SCHEMA_VERSION == 16
 
     conn = sqlite3.connect(db)
     tables = {
@@ -318,6 +330,8 @@ def test_v11_db_upgrades_to_v12(tmp_path: Path) -> None:
     conn = sqlite3.connect(db)
     conn.execute("ALTER TABLE root_folders DROP COLUMN import_strategy")
     conn.execute("ALTER TABLE books DROP COLUMN root_folder_id")
+    conn.execute("DROP TABLE follow_candidates")
+    conn.execute("DROP TABLE follows")
     conn.execute("DROP TABLE library_file_chapters")
     conn.execute("ALTER TABLE library_files DROP COLUMN duration_seconds")
     conn.execute("ALTER TABLE library_files DROP COLUMN bitrate_kbps")
@@ -331,7 +345,7 @@ def test_v11_db_upgrades_to_v12(tmp_path: Path) -> None:
     conn.close()
 
     version = migrate(db)
-    assert version == SCHEMA_VERSION == 15
+    assert version == SCHEMA_VERSION == 16
 
     conn = sqlite3.connect(db)
     cols = {r[1]: r for r in conn.execute("PRAGMA table_info(root_folders)")}
@@ -361,6 +375,8 @@ def test_v12_db_upgrades_to_v13(tmp_path: Path) -> None:
         ("/data/hardlink-explicit", "hardlink"),
     )
     conn.execute("ALTER TABLE books DROP COLUMN root_folder_id")
+    conn.execute("DROP TABLE follow_candidates")
+    conn.execute("DROP TABLE follows")
     conn.execute("DROP TABLE library_file_chapters")
     conn.execute("ALTER TABLE library_files DROP COLUMN duration_seconds")
     conn.execute("ALTER TABLE library_files DROP COLUMN bitrate_kbps")
@@ -374,7 +390,7 @@ def test_v12_db_upgrades_to_v13(tmp_path: Path) -> None:
     conn.close()
 
     version = migrate(db)
-    assert version == SCHEMA_VERSION == 15
+    assert version == SCHEMA_VERSION == 16
 
     conn = sqlite3.connect(db)
     strategies = {
@@ -396,6 +412,8 @@ def test_v13_db_upgrades_to_v14(tmp_path: Path) -> None:
     conn = sqlite3.connect(db)
     conn.execute("INSERT INTO books (title) VALUES ('Untitled')")
     conn.execute("ALTER TABLE books DROP COLUMN root_folder_id")
+    conn.execute("DROP TABLE follow_candidates")
+    conn.execute("DROP TABLE follows")
     conn.execute("DROP TABLE library_file_chapters")
     conn.execute("ALTER TABLE library_files DROP COLUMN duration_seconds")
     conn.execute("ALTER TABLE library_files DROP COLUMN bitrate_kbps")
@@ -409,7 +427,7 @@ def test_v13_db_upgrades_to_v14(tmp_path: Path) -> None:
     conn.close()
 
     version = migrate(db)
-    assert version == SCHEMA_VERSION == 15
+    assert version == SCHEMA_VERSION == 16
 
     conn = sqlite3.connect(db)
     cols = {r[1] for r in conn.execute("PRAGMA table_info(books)")}
@@ -436,6 +454,8 @@ def test_v14_db_upgrades_to_v15(tmp_path: Path) -> None:
         "INSERT INTO library_files (edition_id, path) VALUES (?, '/data/book.mp3')",
         (edition_id,),
     )
+    conn.execute("DROP TABLE follow_candidates")
+    conn.execute("DROP TABLE follows")
     conn.execute("DROP TABLE library_file_chapters")
     conn.execute("ALTER TABLE library_files DROP COLUMN duration_seconds")
     conn.execute("ALTER TABLE library_files DROP COLUMN bitrate_kbps")
@@ -449,7 +469,7 @@ def test_v14_db_upgrades_to_v15(tmp_path: Path) -> None:
     conn.close()
 
     version = migrate(db)
-    assert version == SCHEMA_VERSION == 15
+    assert version == SCHEMA_VERSION == 16
 
     conn = sqlite3.connect(db)
     tables = {r[0] for r in conn.execute("SELECT name FROM sqlite_master WHERE type='table'")}
@@ -462,6 +482,62 @@ def test_v14_db_upgrades_to_v15(tmp_path: Path) -> None:
     assert {"duration_seconds", "bitrate_kbps", "codec", "container", "chapter_count",
             "probe_status", "probe_error"} <= cols
     assert probe_status == "pending"
+
+
+def test_v15_db_upgrades_to_v16(tmp_path: Path) -> None:
+    """A v15 DB gains the follows + follow_candidates tables (#80); existing
+    books are untouched."""
+    db = tmp_path / "v15.db"
+    migrate(db)
+    conn = sqlite3.connect(db)
+    conn.execute("INSERT INTO books (title) VALUES ('Untitled')")
+    conn.execute("DROP TABLE follow_candidates")
+    conn.execute("DROP TABLE follows")
+    conn.execute("DELETE FROM schema_version WHERE version >= 16")
+    conn.commit()
+    conn.close()
+
+    version = migrate(db)
+    assert version == SCHEMA_VERSION == 16
+
+    conn = sqlite3.connect(db)
+    tables = {r[0] for r in conn.execute("SELECT name FROM sqlite_master WHERE type='table'")}
+    follow_cols = {r[1] for r in conn.execute("PRAGMA table_info(follows)")}
+    cand_cols = {r[1] for r in conn.execute("PRAGMA table_info(follow_candidates)")}
+    books = conn.execute("SELECT COUNT(*) FROM books").fetchone()[0]
+    conn.close()
+    assert {"follows", "follow_candidates"} <= tables
+    assert {"kind", "name", "provider", "provider_id", "created_at",
+            "last_refreshed_at", "last_result"} <= follow_cols
+    assert {"follow_id", "provider", "provider_book_id", "title", "authors", "series",
+            "series_position", "release_date", "cover_url", "status", "book_id"} <= cand_cols
+    assert books == 1
+
+
+def test_follows_unique_nocase_and_candidate_cascade(tmp_path: Path) -> None:
+    db = tmp_path / "follows.db"
+    migrate(db)
+    conn = sqlite3.connect(db)
+    conn.execute("PRAGMA foreign_keys = ON")
+    conn.execute("INSERT INTO follows (kind, name) VALUES ('author', 'Andy Weir')")
+    with pytest.raises(sqlite3.IntegrityError):
+        conn.execute("INSERT INTO follows (kind, name) VALUES ('author', 'ANDY WEIR')")
+    # Same name under the other kind is a different follow.
+    conn.execute("INSERT INTO follows (kind, name) VALUES ('series', 'Andy Weir')")
+    with pytest.raises(sqlite3.IntegrityError):
+        conn.execute("INSERT INTO follows (kind, name) VALUES ('publisher', 'X')")
+    conn.execute(
+        "INSERT INTO follow_candidates (follow_id, provider, provider_book_id) "
+        "VALUES (1, 'audible', 'B1')"
+    )
+    with pytest.raises(sqlite3.IntegrityError):
+        conn.execute(
+            "INSERT INTO follow_candidates (follow_id, provider, provider_book_id) "
+            "VALUES (1, 'audible', 'B1')"
+        )
+    conn.execute("DELETE FROM follows WHERE id = 1")
+    assert conn.execute("SELECT COUNT(*) FROM follow_candidates").fetchone()[0] == 0
+    conn.close()
 
 
 def test_fresh_db_library_files_have_audio_metadata_columns(tmp_path: Path) -> None:
@@ -569,4 +645,4 @@ def test_version_history_is_preserved(tmp_path: Path) -> None:
     conn = sqlite3.connect(db)
     rows = conn.execute("SELECT version FROM schema_version ORDER BY version").fetchall()
     conn.close()
-    assert [r[0] for r in rows] == [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15]
+    assert [r[0] for r in rows] == [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16]

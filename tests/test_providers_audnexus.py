@@ -73,6 +73,18 @@ async def test_search_returns_results(provider: AudnexusProvider) -> None:
 
 
 @pytest.mark.asyncio
+async def test_search_maps_release_date_when_present() -> None:
+    client = httpx.AsyncClient(
+        transport=_mock_transport(
+            books_results=[{"asin": "B0DATED001", "title": "Dated", "releaseDate": "2024-05-01"}]
+        ),
+        base_url="https://api.audnex.us",
+    )
+    response = await AudnexusProvider(client=client, region="de").search("Dated")
+    assert response.results[0].release_date == "2024-05-01"
+
+
+@pytest.mark.asyncio
 async def test_search_uses_authors_and_narrators_as_lists(
     provider: AudnexusProvider,
 ) -> None:
@@ -110,3 +122,14 @@ async def test_get_detail_maps_runtime_minutes_to_seconds(
     assert detail is not None
     assert detail.provider_name == "audnexus"
     assert detail.title == "Das Parfum"
+
+
+@pytest.mark.asyncio
+async def test_search_http_failure_is_flagged_not_a_plain_empty_result() -> None:
+    client = httpx.AsyncClient(
+        transport=httpx.MockTransport(lambda request: httpx.Response(503, json={})),
+        base_url="https://api.audnex.us",
+    )
+    response = await AudnexusProvider(client=client).search("anything")
+    assert response.results == []
+    assert response.provider_metadata.get("error")

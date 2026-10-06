@@ -111,6 +111,7 @@ async def test_search_returns_real_catalog_shape() -> None:
     assert book.authors == ["Bernhard Schlink"]
     assert book.narrators == ["Hans Korte"]
     assert book.cover_url is not None
+    assert book.release_date == "2010-11-08"
     assert book.locale == "de"
 
 
@@ -207,3 +208,14 @@ async def test_healthcheck_fails_gracefully() -> None:
     )
     provider = AudibleProvider(client=client, region="de")
     assert await provider.healthcheck() is False
+
+
+@pytest.mark.asyncio
+async def test_search_http_failure_is_flagged_not_a_plain_empty_result() -> None:
+    client = httpx.AsyncClient(
+        transport=httpx.MockTransport(lambda request: httpx.Response(503, json={})),
+        base_url="https://api.audible.com",
+    )
+    response = await AudibleProvider(client=client).search("anything")
+    assert response.results == []
+    assert response.provider_metadata.get("error")
