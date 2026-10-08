@@ -12,6 +12,7 @@ from app.connect import dispatch_event
 from app.connections.audiobookshelf import AudiobookshelfClient
 from app.connections.m4b_convertarr import M4BConvertarrClient
 from app.connections.prowlarr import ProwlarrClient
+from app.connections.qbittorrent import QBittorrentClient, QBittorrentError
 from app.connections.sabnzbd import SABnzbdClient
 
 log = logging.getLogger("audiarr.api.connections")
@@ -129,6 +130,67 @@ async def test_sabnzbd(request: ConnectionTestRequest) -> ConnectionTestResponse
             "health_issue", {"integration": "SABnzbd", "url": url, "message": message}
         )
     return ConnectionTestResponse(ok=ok, message=message)
+
+
+class QBittorrentTestRequest(BaseModel):
+    """qBittorrent test input: an API key, or legacy username/password."""
+
+    url: str
+    api_key: str | None = None
+    username: str | None = None
+    password: str | None = None
+
+
+def _stored_qbittorrent_values(
+    request: QBittorrentTestRequest,
+) -> tuple[str | None, str | None, str | None]:
+    """Fill blank qBittorrent test secrets from the stored client at the SAME URL.
+
+    Unlike the SABnzbd fallback, a stored secret is only ever reused for the
+    URL it was saved with, so a test can't be pointed at another host to
+    collect it. An explicit API key in the request means API-key mode: stored
+    legacy credentials are not mixed in.
+    """
+    api_key, username, password = request.api_key, request.username, request.password
+    if api_key:
+        return api_key, None, None
+    wanted = request.url.rstrip("/")
+    stored = next(
+        (
+            c
+            for c in load_settings().download_clients
+            if c.type == "qbittorrent" and c.base_url() == wanted
+        ),
+        None,
+    )
+    if stored is None:
+        return None, username, password
+    if not username and not password:
+        return stored.api_key or None, stored.username or None, stored.password or None
+    if username and not password and username == stored.username:
+        return None, username, stored.password or None
+    return None, username, password
+
+
+@router.post("/api/v1/connections/qbittorrent/test", response_model=ConnectionTestResponse)
+async def test_qbittorrent(request: QBittorrentTestRequest) -> ConnectionTestResponse:
+    """Probe a qBittorrent client via ``/api/v2/app/version`` (never logs secrets)."""
+    api_key, username, password = _stored_qbittorrent_values(request)
+    url = request.url.rstrip("/")
+    client = QBittorrentClient(
+        base_url=url, api_key=api_key, username=username, password=password
+    )
+    try:
+        version = await client.version()
+    except QBittorrentError as exc:
+        log.info("qBittorrent connection test -> failed (%s)", exc.reason)
+        message = str(exc)
+        await dispatch_event(
+            "health_issue", {"integration": "qBittorrent", "message": message}
+        )
+        return ConnectionTestResponse(ok=False, message=message)
+    log.info("qBittorrent connection test -> ok")
+    return ConnectionTestResponse(ok=True, message=f"qBittorrent {version}")
 
 
 @router.post("/api/v1/connections/prowlarr/test", response_model=ConnectionTestResponse)

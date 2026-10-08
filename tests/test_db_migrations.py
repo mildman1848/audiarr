@@ -13,7 +13,7 @@ from app.db import SCHEMA_VERSION, migrate
 def test_fresh_db_reaches_latest_schema(tmp_path: Path) -> None:
     db = tmp_path / "fresh.db"
     version = migrate(db)
-    assert version == SCHEMA_VERSION == 16
+    assert version == SCHEMA_VERSION == 17
 
     conn = sqlite3.connect(db)
     tables = {
@@ -73,7 +73,7 @@ def test_migration_is_idempotent(tmp_path: Path) -> None:
     conn = sqlite3.connect(db)
     rows = conn.execute("SELECT version FROM schema_version ORDER BY version").fetchall()
     conn.close()
-    assert [r[0] for r in rows] == [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16]
+    assert [r[0] for r in rows] == [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17]
 
 
 def test_v1_db_upgrades_to_latest(tmp_path: Path) -> None:
@@ -176,7 +176,7 @@ def test_v6_db_upgrades_to_v7(tmp_path: Path) -> None:
     conn.close()
 
     version = migrate(db)
-    assert version == SCHEMA_VERSION == 16
+    assert version == SCHEMA_VERSION == 17
 
     conn = sqlite3.connect(db)
     cols = {r[1] for r in conn.execute("PRAGMA table_info(books)")}
@@ -209,7 +209,7 @@ def test_v7_db_upgrades_to_v8(tmp_path: Path) -> None:
     conn.close()
 
     version = migrate(db)
-    assert version == SCHEMA_VERSION == 16
+    assert version == SCHEMA_VERSION == 17
 
     conn = sqlite3.connect(db)
     cols = {r[1]: r for r in conn.execute("PRAGMA table_info(books)")}
@@ -243,7 +243,7 @@ def test_v8_db_upgrades_to_v9(tmp_path: Path) -> None:
     conn.close()
 
     version = migrate(db)
-    assert version == SCHEMA_VERSION == 16
+    assert version == SCHEMA_VERSION == 17
 
     conn = sqlite3.connect(db)
     tables = {
@@ -276,7 +276,7 @@ def test_v9_db_upgrades_to_v10(tmp_path: Path) -> None:
     conn.close()
 
     version = migrate(db)
-    assert version == SCHEMA_VERSION == 16
+    assert version == SCHEMA_VERSION == 17
 
     conn = sqlite3.connect(db)
     tables = {
@@ -311,7 +311,7 @@ def test_v10_db_upgrades_to_v11(tmp_path: Path) -> None:
     conn.close()
 
     version = migrate(db)
-    assert version == SCHEMA_VERSION == 16
+    assert version == SCHEMA_VERSION == 17
 
     conn = sqlite3.connect(db)
     tables = {
@@ -345,7 +345,7 @@ def test_v11_db_upgrades_to_v12(tmp_path: Path) -> None:
     conn.close()
 
     version = migrate(db)
-    assert version == SCHEMA_VERSION == 16
+    assert version == SCHEMA_VERSION == 17
 
     conn = sqlite3.connect(db)
     cols = {r[1]: r for r in conn.execute("PRAGMA table_info(root_folders)")}
@@ -390,7 +390,7 @@ def test_v12_db_upgrades_to_v13(tmp_path: Path) -> None:
     conn.close()
 
     version = migrate(db)
-    assert version == SCHEMA_VERSION == 16
+    assert version == SCHEMA_VERSION == 17
 
     conn = sqlite3.connect(db)
     strategies = {
@@ -427,7 +427,7 @@ def test_v13_db_upgrades_to_v14(tmp_path: Path) -> None:
     conn.close()
 
     version = migrate(db)
-    assert version == SCHEMA_VERSION == 16
+    assert version == SCHEMA_VERSION == 17
 
     conn = sqlite3.connect(db)
     cols = {r[1] for r in conn.execute("PRAGMA table_info(books)")}
@@ -469,7 +469,7 @@ def test_v14_db_upgrades_to_v15(tmp_path: Path) -> None:
     conn.close()
 
     version = migrate(db)
-    assert version == SCHEMA_VERSION == 16
+    assert version == SCHEMA_VERSION == 17
 
     conn = sqlite3.connect(db)
     tables = {r[0] for r in conn.execute("SELECT name FROM sqlite_master WHERE type='table'")}
@@ -498,7 +498,7 @@ def test_v15_db_upgrades_to_v16(tmp_path: Path) -> None:
     conn.close()
 
     version = migrate(db)
-    assert version == SCHEMA_VERSION == 16
+    assert version == SCHEMA_VERSION == 17
 
     conn = sqlite3.connect(db)
     tables = {r[0] for r in conn.execute("SELECT name FROM sqlite_master WHERE type='table'")}
@@ -512,6 +512,36 @@ def test_v15_db_upgrades_to_v16(tmp_path: Path) -> None:
     assert {"follow_id", "provider", "provider_book_id", "title", "authors", "series",
             "series_position", "release_date", "cover_url", "status", "book_id"} <= cand_cols
     assert books == 1
+
+
+def test_v16_db_upgrades_to_v17(tmp_path: Path) -> None:
+    """A v16 DB gains download_client_import_state (#81); existing SAB import
+    state is untouched and (client, item_id) is unique."""
+    db = tmp_path / "v16.db"
+    migrate(db)
+    conn = sqlite3.connect(db)
+    conn.execute("INSERT INTO sab_import_state (nzo_key, status) VALUES ('nzo_1', 'imported')")
+    conn.execute("DROP TABLE download_client_import_state")
+    conn.execute("DELETE FROM schema_version WHERE version >= 17")
+    conn.commit()
+    conn.close()
+
+    version = migrate(db)
+    assert version == SCHEMA_VERSION == 17
+
+    conn = sqlite3.connect(db)
+    cols = {r[1] for r in conn.execute("PRAGMA table_info(download_client_import_state)")}
+    sab_rows = conn.execute("SELECT COUNT(*) FROM sab_import_state").fetchone()[0]
+    conn.execute(
+        "INSERT INTO download_client_import_state (client, item_id) VALUES ('qbittorrent', 'nzo_1')"
+    )
+    with pytest.raises(sqlite3.IntegrityError):
+        conn.execute(
+            "INSERT INTO download_client_import_state (client, item_id) VALUES ('qbittorrent', 'nzo_1')"
+        )
+    conn.close()
+    assert {"client", "item_id", "name", "folder_path", "status", "reason", "book_id"} <= cols
+    assert sab_rows == 1
 
 
 def test_follows_unique_nocase_and_candidate_cascade(tmp_path: Path) -> None:
@@ -645,4 +675,4 @@ def test_version_history_is_preserved(tmp_path: Path) -> None:
     conn = sqlite3.connect(db)
     rows = conn.execute("SELECT version FROM schema_version ORDER BY version").fetchall()
     conn.close()
-    assert [r[0] for r in rows] == [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16]
+    assert [r[0] for r in rows] == [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17]

@@ -174,11 +174,11 @@ async def lifespan(app: FastAPI):
     sab_import_stop_event = asyncio.Event()
     sab_import_task = None
     if settings.media_management.sab_auto_import_enabled:
-        from app.api.routes_releases import _enabled_sabnzbd
+        from app.api.routes_releases import _enabled_qbittorrent, _enabled_sabnzbd
         from app.import_scheduler import scheduler_loop
         from app.sab_auto_import import SabAutoImportScheduler
 
-        if _enabled_sabnzbd() is not None:
+        if _enabled_sabnzbd() is not None or _enabled_qbittorrent() is not None:
             interval = settings.media_management.sab_auto_import_interval_minutes
             sab_import_task = asyncio.create_task(
                 scheduler_loop(
@@ -190,7 +190,7 @@ async def lifespan(app: FastAPI):
             )
             log.info("SABnzbd auto-import enabled (interval=%d minute(s))", interval)
         else:
-            log.info("SABnzbd auto-import enabled but no enabled SABnzbd client configured")
+            log.info("SABnzbd auto-import enabled but no enabled SABnzbd/qBittorrent client configured")
 
     # Periodic metadata refresh (issue #26): only runs when a positive
     # interval is configured; 0 (the default) disables it. Reuses the same
