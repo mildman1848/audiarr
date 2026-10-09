@@ -6,7 +6,7 @@
 // fields, then PUT the whole document back (the settings API replaces,
 // it does not patch).
 //
-// Secrets (webhook / SABnzbd / Prowlarr API keys, the auth password) are
+// Secrets (webhook / SABnzbd / qBittorrent / Prowlarr API keys, the auth password) are
 // never rendered back into the page: a stored value only shows as a masked
 // placeholder (or, for the password, stays blank), and an empty submit
 // keeps the current value. The auth API key is the one exception: the
@@ -111,15 +111,34 @@ async function loginAfterAuthChange(username, password) {
 }
 
 // Return the first SABnzbd download client, or a fresh default (not yet
-// attached to the document).
+// attached to the document). Like qBittorrent, the settings API never
+// returns the SAB api_key, only api_key_set.
 function readSab(s) {
   return (
     (s.download_clients || []).find((c) => c.type === "sabnzbd") || {
       name: "SABnzbd",
       type: "sabnzbd",
       url: "",
-      api_key: "",
+      api_key_set: false,
       category: "audiobooks",
+      enabled: false,
+    }
+  );
+}
+
+// Return the first qBittorrent download client, or a fresh default. The
+// settings API never returns api_key/password, only api_key_set/password_set.
+function readQbittorrent(s) {
+  return (
+    (s.download_clients || []).find((c) => c.type === "qbittorrent") || {
+      name: "qBittorrent",
+      type: "qbittorrent",
+      url: "",
+      username: "",
+      category: "audiobooks",
+      tag: "audiarr",
+      api_key_set: false,
+      password_set: false,
       enabled: false,
     }
   );
@@ -136,6 +155,17 @@ function readProwlarr(s) {
       enabled: false,
     }
   );
+}
+
+// Find-or-create the qBittorrent entry inside the document being saved.
+function mergeQbittorrent(doc) {
+  doc.download_clients = doc.download_clients || [];
+  let qbt = doc.download_clients.find((c) => c.type === "qbittorrent");
+  if (!qbt) {
+    qbt = { name: "qBittorrent", type: "qbittorrent", category: "audiobooks", tag: "audiarr", enabled: false };
+    doc.download_clients.push(qbt);
+  }
+  return qbt;
 }
 
 // Find-or-create the SABnzbd entry inside the document being saved.
@@ -688,7 +718,17 @@ function populate(s) {
   setValue("sab-name", sab.name || "SABnzbd");
   setValue("sab-url", sab.url || "");
   setValue("sab-category", sab.category || "audiobooks");
-  setPlaceholder("sab-api-key", sab.api_key ? MASK : "");
+  setPlaceholder("sab-api-key", sab.api_key_set ? MASK : "");
+
+  const qbt = readQbittorrent(s);
+  setChecked("qbt-enabled", qbt.enabled);
+  setValue("qbt-name", qbt.name || "qBittorrent");
+  setValue("qbt-url", qbt.url || "");
+  setValue("qbt-category", qbt.category || "audiobooks");
+  setValue("qbt-tag", qbt.tag || "audiarr");
+  setValue("qbt-username", qbt.username || "");
+  setPlaceholder("qbt-api-key", qbt.api_key_set ? MASK : "");
+  setPlaceholder("qbt-password", qbt.password_set ? MASK : "");
 
   if ($("rpm-list") && window.AudiarrRemotePathMappings) {
     window.AudiarrRemotePathMappings.populate(s.remote_path_mappings);
@@ -898,6 +938,23 @@ async function saveSettings(event) {
       if (sabKey) sab.api_key = sabKey; // empty means keep stored key
     }
 
+    if ($("qbt-url") || $("qbt-enabled")) {
+      const qbt = mergeQbittorrent(doc);
+      qbt.enabled = getChecked("qbt-enabled");
+      qbt.name = getValue("qbt-name").trim() || "qBittorrent";
+      qbt.url = getValue("qbt-url").trim();
+      qbt.category = getValue("qbt-category").trim() || "audiobooks";
+      qbt.tag = getValue("qbt-tag").trim() || "audiarr";
+      qbt.username = getValue("qbt-username").trim();
+      // Write-only secrets: blank means keep the stored value, so omit them.
+      delete qbt.api_key;
+      delete qbt.password;
+      const qbtKey = getValue("qbt-api-key");
+      if (qbtKey) qbt.api_key = qbtKey;
+      const qbtPassword = getValue("qbt-password");
+      if (qbtPassword) qbt.password = qbtPassword;
+    }
+
     if ($("quality-definitions") && qualityDefinitionsState) {
       doc.quality_definitions = qualityDefinitionsState
         .map((d) => ({
@@ -992,6 +1049,8 @@ async function saveSettings(event) {
     for (const id of [
       "conversion-webhook-key",
       "sab-api-key",
+      "qbt-api-key",
+      "qbt-password",
       "prowlarr-api-key",
       "security-password",
     ]) {
@@ -1041,6 +1100,45 @@ async function testConnection(endpoint, urlId, keyId, msgId, btnId) {
     const text = `${T.settings_test_error} (${err.message})`;
     if (msg) msg.textContent = text;
     if (window.AudiarrToast) window.AudiarrToast.error(text);
+  } finally {
+    if (btn) btn.disabled = false;
+  }
+}
+
+// qBittorrent test: posts the URL plus only the non-empty secret fields; the
+// server fills blanks from the stored client for the same URL. Only the
+// server's already-safe message is shown, never the secrets.
+async function testQbittorrent() {
+  const msg = $("qbt-msg");
+  const btn = $("qbt-test-btn");
+  if (msg) msg.textContent = T.settings_testing;
+  if (btn) btn.disabled = true;
+  const show = (text, ok) => {
+    if (msg) msg.textContent = text;
+    if (window.AudiarrToast) (ok ? window.AudiarrToast.success : window.AudiarrToast.error)(text);
+  };
+  try {
+    const body = { url: getValue("qbt-url").trim() };
+    const apiKey = getValue("qbt-api-key");
+    const username = getValue("qbt-username").trim();
+    const password = getValue("qbt-password");
+    if (apiKey) body.api_key = apiKey;
+    if (username) body.username = username;
+    if (password) body.password = password;
+    const resp = await fetch("/api/v1/connections/qbittorrent/test", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(body),
+    });
+    const data = await resp.json().catch(() => ({}));
+    if (!resp.ok) {
+      const detail = typeof data.detail === "string" ? data.detail : `HTTP ${resp.status}`;
+      show(`${T.settings_test_error} (${detail})`, false);
+      return;
+    }
+    show(`${data.ok ? "✓" : "✗"} ${data.message || ""}`.trim(), Boolean(data.ok));
+  } catch (err) {
+    show(`${T.settings_test_error} (${err.message})`, false);
   } finally {
     if (btn) btn.disabled = false;
   }
@@ -1142,6 +1240,9 @@ document.addEventListener("DOMContentLoaded", () => {
       )
     );
   }
+
+  const qbtTestBtn = $("qbt-test-btn");
+  if (qbtTestBtn) qbtTestBtn.addEventListener("click", testQbittorrent);
 
   const prowlarrTestBtn = $("prowlarr-test-btn");
   if (prowlarrTestBtn) {

@@ -32,6 +32,43 @@
         <span id="sab-msg" class="muted" role="status"></span>
       </div>
     </div>
+
+    <div class="settings-subsection">
+      <h3>{{ t.settings_dc_qbt_heading }}</h3>
+      <p class="muted small">{{ t.settings_dc_qbt_hint }}</p>
+      <label class="inline-check">
+        <input type="checkbox" id="qbt-enabled">
+        {{ t.settings_enabled_label }}
+      </label>
+      <label>{{ t.settings_field_name }}
+        <input type="text" id="qbt-name" autocomplete="off">
+      </label>
+      <label>{{ t.settings_base_url_label }}
+        <input type="text" id="qbt-url" autocomplete="off" placeholder="http://qbittorrent:8080">
+      </label>
+      <label>{{ t.settings_dc_category_label }}
+        <input type="text" id="qbt-category" autocomplete="off">
+      </label>
+      <label>{{ t.settings_dc_qbt_tag_label }}
+        <input type="text" id="qbt-tag" autocomplete="off">
+      </label>
+      <label>{{ t.settings_dc_qbt_api_key_label }}
+        <input type="password" id="qbt-api-key" autocomplete="new-password">
+      </label>
+      <p class="muted small">{{ t.settings_dc_qbt_api_key_hint }}</p>
+      <label>{{ t.settings_dc_qbt_username_label }}
+        <input type="text" id="qbt-username" autocomplete="off">
+      </label>
+      <label>{{ t.settings_dc_qbt_password_label }}
+        <input type="password" id="qbt-password" autocomplete="new-password">
+      </label>
+      <p class="muted small">{{ t.settings_dc_qbt_credentials_hint }}</p>
+      <p class="muted small">{{ t.settings_dc_qbt_import_hint }}</p>
+      <div class="button-row">
+        <button type="button" id="qbt-test-btn" class="btn btn-secondary">{{ t.settings_test }}</button>
+        <span id="qbt-msg" class="muted" role="status"></span>
+      </div>
+    </div>
   </section>
 
   <section class="card settings-form">
@@ -50,6 +87,6 @@
 {% endblock %}
 
 {% block scripts %}
-  <script src="/static/js/settings.js?v={{ version }}-remotepathmappings"></script>
+  <script src="/static/js/settings.js?v={{ version }}-qbittorrent"></script>
   <script src="/static/js/remote_path_mappings.js?v={{ version }}-remotepathmappings"></script>
 {% endblock %}

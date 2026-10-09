@@ -4,7 +4,8 @@ This wires the classic *arr automation loop:
 
 1. interactive release search via Prowlarr
 2. grab a release — pull the NZB through Prowlarr, hand it to SABnzbd
-   under the configured category
+   under the configured category; a manually selected torrent release
+   (magnet / torrent URL) goes to qBittorrent instead (issue #81)
 3. Activity: Queue — the live SABnzbd queue
 4. Activity: History — the SABnzbd history
 
@@ -16,7 +17,9 @@ yields a 503 so the UI can prompt the user to finish setup.
 from __future__ import annotations
 
 import logging
+import re
 import sqlite3
+from urllib.parse import urlsplit
 
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
@@ -24,6 +27,12 @@ from pydantic import BaseModel
 from app.config import get_db_path, load_settings
 from app.connect import dispatch_event
 from app.connections.prowlarr import ProwlarrClient
+from app.connections.qbittorrent import (
+    QBittorrentClient,
+    QBittorrentError,
+    magnet_info_hash,
+    normalize_magnet,
+)
 from app.connections.sabnzbd import SABnzbdClient
 from app.models.settings import (
     DownloadClient,
@@ -81,14 +90,21 @@ class ReleaseSearchResponse(BaseModel):
 class GrabRequest(BaseModel):
     indexer_id: int
     guid: str
-    download_url: str
+    # Required for usenet releases (enforced in grab_release); a torrent
+    # release may carry only ``magnet_url``.
+    download_url: str = ""
     title: str
+    # Prowlarr result fields (ReleaseRow). ``protocol == "torrent"`` or a
+    # magnet link routes to qBittorrent; anything else stays on SABnzbd.
+    protocol: str | None = None
+    magnet_url: str | None = None
 
 
 class GrabResponse(BaseModel):
     ok: bool
     message: str
     nzo_id: str | None = None
+    torrent_hash: str | None = None
 
 
 class QueueResponse(BaseModel):
@@ -125,6 +141,14 @@ def _enabled_sabnzbd() -> DownloadClient | None:
     return None
 
 
+def _enabled_qbittorrent() -> DownloadClient | None:
+    """Return the first enabled qBittorrent download client from settings, if any."""
+    for client in load_settings().download_clients:
+        if client.type == "qbittorrent" and client.enabled:
+            return client
+    return None
+
+
 def _require_prowlarr() -> Indexer:
     indexer = _enabled_prowlarr()
     if indexer is None:
@@ -136,6 +160,13 @@ def _require_sabnzbd() -> DownloadClient:
     client = _enabled_sabnzbd()
     if client is None:
         raise HTTPException(503, "No enabled SABnzbd download client configured")
+    return client
+
+
+def _require_qbittorrent() -> DownloadClient:
+    client = _enabled_qbittorrent()
+    if client is None:
+        raise HTTPException(503, "No enabled qBittorrent download client configured")
     return client
 
 
@@ -205,9 +236,128 @@ async def search_releases(query: str, limit: int = 50) -> ReleaseSearchResponse:
     return ReleaseSearchResponse(releases=rows, total_results=len(releases))
 
 
+def _is_torrent_request(request: GrabRequest) -> bool:
+    """A release is routed to qBittorrent when it is explicitly a torrent or
+    only reachable by magnet link; everything else keeps the SABnzbd path."""
+    protocol = (request.protocol or "").strip().lower()
+    if protocol == "usenet":
+        return False
+    if protocol == "torrent":
+        return True
+    return bool(request.magnet_url) or request.download_url.strip().lower().startswith("magnet:")
+
+
+def _origin(url: str) -> tuple[str, str, int | None] | None:
+    try:
+        parts = urlsplit(url.strip())
+        if parts.scheme not in ("http", "https") or not parts.hostname:
+            return None
+        return parts.scheme, parts.hostname.lower(), parts.port
+    except ValueError:
+        return None
+
+
+def _is_prowlarr_download_path(url: str, prowlarr_url: str) -> bool:
+    """True only for Prowlarr's canonical ``<base>/<indexer id>/download`` URL.
+
+    Same-origin alone would let a caller point qBittorrent at any Prowlarr
+    endpoint (e.g. ``/api/v1/...``); real result URLs always have this shape.
+    Embedded credentials (``user:pass@``) are rejected as well.
+    """
+    try:
+        parts = urlsplit(url.strip())
+        if parts.username is not None or parts.password is not None:
+            return False
+        base = urlsplit(prowlarr_url.strip()).path.rstrip("/")
+    except ValueError:
+        return False
+    return re.fullmatch(re.escape(base) + r"/\d+/download", parts.path) is not None
+
+
+def _select_torrent_url(request: GrabRequest, indexer: Indexer) -> str:
+    """Pick the URL handed to qBittorrent, or raise a 400 without echoing it.
+
+    A valid magnet link is preferred. An HTTP(S) ``download_url`` is accepted
+    only when it points at the configured Prowlarr (so a caller can't make
+    qBittorrent fetch an arbitrary address). Release URLs routinely embed API
+    keys, so no error message ever includes one.
+    """
+    for candidate in (request.magnet_url, request.download_url):
+        magnet = normalize_magnet(candidate)
+        if magnet:
+            return magnet
+    url = request.download_url.strip()
+    if url.lower().startswith("magnet:"):
+        raise HTTPException(400, "The release's magnet link is not valid")
+    wanted = _origin(url)
+    if wanted is None or len(url) > 4096:
+        raise HTTPException(400, "The release has no valid magnet or torrent URL")
+    if wanted != _origin(indexer.url) or not _is_prowlarr_download_path(url, indexer.url):
+        raise HTTPException(400, "The torrent URL does not point at the configured Prowlarr")
+    return url
+
+
+async def _grab_torrent(request: GrabRequest) -> GrabResponse:
+    """Manual torrent grab: hand the release URL to qBittorrent.
+
+    Only the configured, fixed category and tag are sent -- never a save
+    path -- so request input can't choose where files land.
+    """
+    indexer = _require_prowlarr()
+    qb = _require_qbittorrent()
+    tag = qb.tag.strip()
+    category = qb.category.strip()
+    if not tag or not category:
+        # Completion import needs both markers; a grab without them could
+        # never be imported (or would be indistinguishable from other torrents).
+        raise HTTPException(
+            422, "The qBittorrent client needs both a category and a tag configured"
+        )
+    url = _select_torrent_url(request, indexer)
+
+    client = QBittorrentClient(
+        base_url=qb.base_url(),
+        api_key=qb.api_key or None,
+        username=qb.username or None,
+        password=qb.password or None,
+    )
+    try:
+        await client.add_url(url, category, tag)
+    except QBittorrentError as exc:
+        log.warning("Grab %r: qBittorrent submission failed (%s)", request.title, exc.reason)
+        return GrabResponse(ok=False, message=str(exc))
+
+    info_hash = magnet_info_hash(url) if normalize_magnet(url) else None
+    log.info("Grab %r -> qBittorrent (category=%s, tag=%s)", request.title, category, tag)
+    await dispatch_event(
+        "grab",
+        {
+            "title": request.title,
+            "category": category,
+            "indexer_id": request.indexer_id,
+            "download_client": qb.name,
+            "protocol": "torrent",
+        },
+    )
+    return GrabResponse(
+        ok=True,
+        message=f"Sent to qBittorrent (category {category})" if category else "Sent to qBittorrent",
+        torrent_hash=info_hash,
+    )
+
+
 @router.post("/api/v1/releases/grab", response_model=GrabResponse)
 async def grab_release(request: GrabRequest) -> GrabResponse:
-    """Grab a release: fetch its NZB via Prowlarr and push it to SABnzbd."""
+    """Grab a release.
+
+    Usenet: fetch its NZB via Prowlarr and push it to SABnzbd. Torrent
+    (manual grab only): hand its magnet / torrent URL to qBittorrent.
+    """
+    if _is_torrent_request(request):
+        return await _grab_torrent(request)
+
+    if not request.download_url:
+        raise HTTPException(422, "download_url is required")
     indexer = _require_prowlarr()
     sab = _require_sabnzbd()
 

@@ -276,13 +276,56 @@ function renderResults() {
   });
 }
 
+// A release goes to qBittorrent when Prowlarr marks it a torrent or it only
+// has a magnet link; the server makes the same routing decision.
+function isTorrentRelease(r) {
+  const proto = String(r.protocol || "").toLowerCase();
+  if (proto === "usenet") return false;
+  return proto === "torrent" || Boolean(r.magnet_url);
+}
+
+// Request body for POST /api/v1/releases/grab. Never log this: magnet and
+// download URLs can embed tracker passkeys / indexer API keys.
+function buildGrabPayload(row) {
+  return {
+    indexer_id: row.indexer_id,
+    guid: row.guid,
+    download_url: row.download_url,
+    title: row.title,
+    protocol: row.protocol || null,
+    magnet_url: row.magnet_url || null,
+  };
+}
+
+// Per-client wording: qBittorrent for torrents, SABnzbd (existing keys) otherwise.
+function grabWording(isTorrent) {
+  return isTorrent
+    ? {
+        grabbing: T.search_grabbing_torrent,
+        grabbed: T.search_grabbed_torrent,
+        success: T.search_grab_success_torrent,
+        error: T.search_grab_error_torrent,
+        configMissing: T.search_config_missing_torrent,
+      }
+    : {
+        grabbing: T.search_grabbing,
+        grabbed: T.search_grabbed,
+        success: T.search_grab_success,
+        error: T.search_grab_error,
+        configMissing: T.search_config_missing,
+      };
+}
+
 function renderRow(r, i) {
   const proto = String(r.protocol || "").toLowerCase();
   const isUsenet = proto === "usenet";
+  const isTorrent = isTorrentRelease(r);
   const seeders = proto === "torrent" ? esc(r.seeders ?? "—") : "—";
   const action = isUsenet
     ? `<button type="button" class="btn btn-primary" data-index="${i}">${esc(T.search_grab)}</button>`
-    : `<button type="button" class="btn btn-secondary" disabled title="${esc(T.search_grab_torrent_unsupported)}">${esc(T.search_grab)}</button>`;
+    : isTorrent
+      ? `<button type="button" class="btn btn-primary" data-index="${i}" title="${esc(T.search_grab_torrent_title)}">${esc(T.search_grab)}</button>`
+      : `<button type="button" class="btn btn-secondary" disabled title="${esc(T.search_grab_torrent_unsupported)}">${esc(T.search_grab)}</button>`;
   return `
     <tr>
       <td>${protocolBadge(r.protocol)}</td>
@@ -303,47 +346,43 @@ async function grabRelease(index, btn) {
 
   const originalLabel = btn.textContent;
   btn.disabled = true;
-  btn.textContent = T.search_grabbing;
+  const words = grabWording(isTorrentRelease(row));
+  btn.textContent = words.grabbing;
   console.debug("grab: %s (indexer_id=%s)", row.title, row.indexer_id);
 
   try {
     const resp = await fetch("/api/v1/releases/grab", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        indexer_id: row.indexer_id,
-        guid: row.guid,
-        download_url: row.download_url,
-        title: row.title,
-      }),
+      body: JSON.stringify(buildGrabPayload(row)),
     });
     if (resp.status === 503) {
       btn.disabled = false;
       btn.textContent = originalLabel;
-      if (window.AudiarrToast) window.AudiarrToast.error(T.search_config_missing);
+      if (window.AudiarrToast) window.AudiarrToast.error(words.configMissing);
       return;
     }
     const data = await resp.json().catch(() => ({}));
     if (!resp.ok) throw new Error(data.detail || `HTTP ${resp.status}`);
 
     if (data.ok) {
-      btn.textContent = T.search_grabbed;
+      btn.textContent = words.grabbed;
       const suffix = data.nzo_id ? ` (${data.nzo_id})` : "";
       if (window.AudiarrToast) {
-        window.AudiarrToast.success(`${T.search_grab_success}: ${row.title}${suffix}`);
+        window.AudiarrToast.success(`${words.success}: ${row.title}${suffix}`);
       }
     } else {
       btn.disabled = false;
       btn.textContent = originalLabel;
       if (window.AudiarrToast) {
-        window.AudiarrToast.error(`${T.search_grab_error}: ${data.message || ""}`.trim());
+        window.AudiarrToast.error(`${words.error}: ${data.message || ""}`.trim());
       }
     }
   } catch (err) {
     btn.disabled = false;
     btn.textContent = originalLabel;
     if (window.AudiarrToast) {
-      window.AudiarrToast.error(`${T.search_grab_error} (${err.message})`);
+      window.AudiarrToast.error(`${words.error} (${err.message})`);
     }
   }
 }

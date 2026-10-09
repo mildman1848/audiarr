@@ -313,3 +313,29 @@ async def test_overlapping_tick_is_skipped(tmp_path, db, stub_chain, enabled_sab
 
     release.set()
     assert await first is True
+
+
+async def test_symlinked_root_folder_import_matches_scanned_result(
+    tmp_path, db, stub_chain, enabled_sab
+):
+    """No ASIN hint -> root-folder import. The root is registered through a
+    symlink and SABnzbd reports storage through it too, so the scanner's
+    result path must match the input folder via realpath on both sides."""
+    real_root = tmp_path / "real"
+    folder = real_root / "Bernhard Schlink - Der Vorleser"
+    folder.mkdir(parents=True)
+    (folder / "01 - Kapitel 1.mp3").write_bytes(b"\x00" * 1024)
+    link_root = tmp_path / "link"
+    link_root.symlink_to(real_root, target_is_directory=True)
+    db.execute("INSERT INTO root_folders (path) VALUES (?)", (str(link_root),))
+    db.commit()
+
+    StubSabClient.HISTORY = [_history_item(link_root / folder.name, nzo_id="nzo_link")]
+
+    await SabAutoImportScheduler().run_once()
+
+    state = db.execute(
+        "SELECT status, reason FROM sab_import_state WHERE nzo_key = 'nzo_link'"
+    ).fetchone()
+    assert state["status"] == "imported", state["reason"]
+    assert db.execute("SELECT COUNT(*) FROM books").fetchone()[0] == 1

@@ -18,7 +18,7 @@ from __future__ import annotations
 
 from typing import Literal
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, computed_field
 
 # Supported Audible marketplaces. The project default is now the US
 # marketplace, with German still fully supported as a first-class locale.
@@ -268,6 +268,18 @@ class DownloadClient(BaseModel):
     under. ``type="generic"`` remains a no-op placeholder for other
     clients. The connection test lives at
     ``/api/v1/connections/sabnzbd/test``.
+
+    ``type="qbittorrent"`` (issue #81) is a manual-grab torrent client:
+    ``api_key`` is the Bearer API key (qBittorrent >= 5.2.0, preferred);
+    ``username``/``password`` are an explicit legacy cookie-login fallback
+    used only when no ``api_key`` is set. ``category`` and ``tag`` are the
+    fixed marker Audiarr files its torrents under; they are never taken
+    from request input. The connection test lives at
+    ``/api/v1/connections/qbittorrent/test``.
+
+    ``api_key`` and ``password`` are write-only at the settings API: they
+    are excluded from every response (see app/api/routes_settings.py) and a
+    blank value on save keeps the stored secret.
     """
 
     name: str
@@ -278,8 +290,24 @@ class DownloadClient(BaseModel):
     host: str = ""
     port: int = 0
     api_key: str = ""
+    username: str = ""
+    password: str = ""
     category: str = "audiobooks"
+    # qBittorrent only: tag applied to every torrent Audiarr submits and
+    # required again when polling for completed items.
+    tag: str = "audiarr"
     enabled: bool = False
+
+    @computed_field  # type: ignore[prop-decorator]
+    @property
+    def api_key_set(self) -> bool:
+        """Read-only flag so a UI can show "stored" without the secret."""
+        return bool(self.api_key)
+
+    @computed_field  # type: ignore[prop-decorator]
+    @property
+    def password_set(self) -> bool:
+        return bool(self.password)
 
     def base_url(self) -> str:
         """Resolve a base URL from ``url`` or the ``host``/``port`` pair."""
