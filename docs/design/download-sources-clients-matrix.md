@@ -2,18 +2,19 @@
 
 Date: 2026-10-07 · Base: `32b734b` · Issue: [#81](https://github.com/mildman1848/audiarr/issues/81)
 
-> **Status: planning prerequisite only.** This document satisfies #81's
-> "document the matrix before implementation" criterion. It does **not** claim
-> that qBittorrent, any native source, or any new download path is implemented.
-> No live tracker, indexer, torrent client, credential, or account was contacted
-> while writing it; external facts come from public documentation pages only.
+> **Status: implemented in 1.1.12 (manual Prowlarr → qBittorrent).** This
+> document records the capability matrix behind #81 and how it was resolved:
+> qBittorrent is supported as a manual-grab torrent client; direct native
+> sources are deferred. No live tracker, indexer, torrent client, credential,
+> or account was contacted while writing it; external facts come from public
+> documentation pages only.
 
 ## 1. Three roles that must stay separate
 
 | Role | Question it answers | Today in Audiarr |
 | --- | --- | --- |
 | **Indexer / search source** | "Which releases exist for this query?" | Prowlarr (`app/connections/prowlarr.py`) |
-| **Download client** | "Fetch this release and tell me when it is done." | SABnzbd (`app/connections/sabnzbd.py`) |
+| **Download client** | "Fetch this release and tell me when it is done." | SABnzbd (`app/connections/sabnzbd.py`) and, since 1.1.12, qBittorrent (`app/connections/qbittorrent.py`) |
 | **Completed-download importer** | "A finished download exists at a path — scan, match, quality-check, import." | `app/sab_auto_import.py` → `app/library/importer.py` |
 
 qBittorrent is a **download client**, not a source: it cannot search for
@@ -23,7 +24,7 @@ conclusion in [`dewarr-feature-harvest.md`](dewarr-feature-harvest.md)
 
 ## 2. Verified facts
 
-### 2.1 Audiarr repository (inspected at base `32b734b`)
+### 2.1 Audiarr repository (inspected at base `32b734b`, before implementation)
 
 - `ProwlarrClient._normalize_release` already carries `protocol`,
   `download_url`, `magnet_url`, `seeders`, `leechers` (`app/connections/prowlarr.py:53-73`).
@@ -54,6 +55,8 @@ conclusion in [`dewarr-feature-harvest.md`](dewarr-feature-harvest.md)
   hash. The current UI masks the key visually, but that is not API-level
   secrecy: today `GET` settings returns download-client API keys in the clear.
   This is **not** a safe precedent for new secrets (see §4 item 10).
+  **Resolved in 1.1.12:** `api_key` and `password` are now write-only at the
+  settings API; the paragraph above describes the pre-implementation state.
 
 ### 2.2 qBittorrent (official WebUI API, 5.0)
 
@@ -109,16 +112,16 @@ Sources: [WebUI API (qBittorrent 5.0)](https://github.com/qbittorrent/qBittorren
 | Path | Capability / role | Documented interface & auth | Search / submission | Completed path & status | Audiarr reuse | Risks (security / maintenance / legal / access) | Decision |
 | --- | --- | --- | --- | --- | --- | --- | --- |
 | **Prowlarr + SABnzbd** (existing) | Source + usenet client | Prowlarr API key; SAB API key | Prowlarr search → NZB fetch → `addfile` | History `storage` + status `completed`, per-`nzo_id` dedupe | 100 % (it *is* the pipeline) | Already shipped; no change | **Keep as working default; do not alter behaviour** |
-| **Prowlarr + qBittorrent** | Same source, new torrent client | API key (Bearer) on qB ≥ 5.2.0 / WebAPI v2.14.1 (recommended); cookie `SID` session from username/password (Referer/Origin must match) only as compatibility for older releases | Prowlarr result `magnet_url`/`download_url` → `torrents/add` | `torrents/info?filter=completed`: `hash`, `state`, `progress`, `save_path`/`content_path` (`content_path` is a file path for single-file torrents) | Prowlarr search, quality/preference scoring, `resolve_remote_path`, importer all reusable; needs a client adapter, credential fields, a per-client state key (hash) | New stored secret (API key, or username+password on older qB) that must be excluded at the settings API boundary; session handling only on the legacy path; single-file `content_path` handling; completion keys off `filter=completed`, with `state` variants (completed/seeding/paused) tolerated; seeding obligations on private trackers are the user's concern, so never auto-remove | **Recommended first new client** (implement in a follow-up slice, see §4) |
+| **Prowlarr + qBittorrent** | Same source, new torrent client | API key (Bearer) on qB ≥ 5.2.0 / WebAPI v2.14.1 (recommended); cookie `SID` session from username/password (Referer/Origin must match) only as compatibility for older releases | Prowlarr result `magnet_url`/`download_url` → `torrents/add` | `torrents/info?filter=completed`: `hash`, `state`, `progress`, `save_path`/`content_path` (`content_path` is a file path for single-file torrents) | Prowlarr search, quality/preference scoring, `resolve_remote_path`, and the shared importer are reused; qB client adapter, write-only credentials, and per-client info-hash state are implemented | New stored secret (API key, or username+password on older qB) is excluded at the settings API boundary; session handling only on the legacy path; single-file `content_path` handling; completion keys off `filter=completed`, with `state` variants (completed/seeding/paused) tolerated; seeding obligations on private trackers are the user's concern, so never auto-remove | **Implemented in 1.1.12** as a manual-grab client (see §4) |
 | **Direct native MyAnonaMouse** | Tracker as source | Not verified: no stable, documented, authorized API reviewed for this work. Prowlarr has a definition, which already covers search through the existing source | Would duplicate Prowlarr search | Would still need a client | None beyond what Prowlarr already offers | Private account, per-user credentials/tokens, site-rule and ToS exposure, brittle if it relied on page structure, ongoing maintenance | **Defer.** Revisit only with a documented authorized API and a maintenance owner |
 | **Direct AudiobookBay-style** | Public-style site as source | Not verified: no official API reviewed; **not in Prowlarr's supported list** (build `2.6.5.5620`) | Would require site-specific access code | n/a | None | Scraping fragility, unclear authorization, legal/content-rights exposure, anti-bot measures (must not be bypassed) | **Defer / out of scope.** Do not implement or document access workarounds |
 
 User-exported or local inputs (e.g. files the user drops in a folder) are a
 separate option and not part of #81 unless already supported.
 
-## 4. Recommended narrow architecture (for the *next* slice)
+## 4. Architecture (as implemented in 1.1.12)
 
-Recommendations, not facts; each point needs its own review at implementation.
+The points below were the design recommendations; the shipped implementation follows them, with the deviations noted in §6 and the setup constraints.
 
 1. **Client adapter boundary.** A small interface (`add`, `list_completed`,
    `version`) with the SABnzbd client and a new qBittorrent client behind it.
@@ -191,9 +194,9 @@ default.
 
 | #81 criterion | Evidence required |
 | --- | --- |
-| Matrix documented before implementation | This document, reviewed first |
-| One new path implemented **or** explicitly deferred with rationale | qBittorrent: implement per §4. Native MAM / AudiobookBay: **deferred** per §3 |
-| Completed downloads use the same import / remote-path / quality pipeline | Test: fake qB completed item with a remote path → mapping applied → same importer entry points called |
+| Matrix documented before implementation | Done: this document predates the implementation |
+| One new path implemented **or** explicitly deferred with rationale | qBittorrent: **implemented** per §4 (manual grabs). Native MAM / AudiobookBay: **deferred** per §3 |
+| Completed downloads use the same import / remote-path / quality pipeline | **Done:** `tests/test_qbittorrent_auto_import.py` verifies remote-path mapping, shared importer use, root containment, retryable paths, and deduplication |
 | Submission test | Fake qB transport: a Bearer authorization header is sent (API-key mode) or a login cookie is sent (legacy mode); `torrents/add` receives `urls`/category/tags, no caller-controlled `savepath` |
 | Completion query test | Fake qB transport: `torrents/info` called with `filter=completed` plus category/tag |
 | Path-mapping test | Longest-prefix mapping applied to qB `content_path`/`save_path` before filesystem access; single-file torrent (`content_path` is a file) handled explicitly |
@@ -212,3 +215,31 @@ default.
 5. SABnzbd, [API reference 4.5](https://sabnzbd.org/wiki/configuration/4.5/api) — retrieved 2026-10-07; page carries an older-version warning.
 6. Servarr, [Prowlarr supported indexers](https://github.com/Servarr/Wiki/blob/master/prowlarr/supported-indexers.md) — retrieved 2026-10-07 (build `2.6.5.5620`).
 7. Internal: [`dewarr-feature-harvest.md`](dewarr-feature-harvest.md); source files cited in §2.1.
+
+## Setup constraints: completed-download paths (issue #81)
+
+The qBittorrent completed-download importer never widens filesystem access.
+`content_path` (after `resolve_remote_path`) must resolve — `..` and symlinks
+included — strictly beneath a configured root folder, otherwise nothing is
+probed or imported. To import torrents, therefore:
+
+- add the qBittorrent download directory (as Audiarr sees it) as a root
+  folder, **or** configure a remote path mapping that translates qBittorrent's
+  path into a directory beneath an existing root folder;
+- use a torrent content layout that creates a subfolder (single-file torrents
+  are skipped deliberately and are terminal);
+- a completed item with no `content_path` yet is also retryable, since the
+  client may not have populated the path in its first completion response;
+- a path outside every root, or one that does not exist yet (volume not
+  mounted), is recorded as a retryable state (`failed`, reason prefixed
+  `retry:`) and re-checked on every poll tick until it resolves, so fixing the
+  mapping/mount is enough; no manual re-trigger is needed. There is no retry
+  cap or backoff. Transient processing errors are retried the same way.
+  Imported torrents stay deduped.
+- A manual grab requires both a non-blank category and tag on the qBittorrent
+  client (completion import filters on both); `/releases/grab` answers 422
+  otherwise. Torrent HTTP(S) URLs are accepted only when they are Prowlarr's
+  canonical `<base>/<indexer id>/download` URL on the configured Prowlarr.
+  Connection-test endpoints reuse stored API keys only for the matching
+  configured client URL; blank settings fields preserve, but do not clear,
+  stored secrets.

@@ -96,7 +96,11 @@ def _stored_sabnzbd_values(url: str, api_key: str | None) -> tuple[str, str | No
         return url, api_key
 
     clients = [c for c in load_settings().download_clients if c.type == "sabnzbd"]
-    match = next((c for c in clients if c.base_url() == url), None) or (clients[0] if clients else None)
+    if url:
+        # Never hand a stored key to a URL that is not the configured client.
+        match = next((c for c in clients if c.base_url().rstrip("/") == url.rstrip("/")), None)
+    else:
+        match = clients[0] if clients else None
     if match is None:
         return url, api_key
     return url or match.base_url(), api_key or match.api_key or None
@@ -108,9 +112,11 @@ def _stored_prowlarr_values(url: str, api_key: str | None) -> tuple[str, str | N
         return url, api_key
 
     indexers = [i for i in load_settings().indexers if i.type == "prowlarr"]
-    match = next((i for i in indexers if i.url.rstrip("/") == url.rstrip("/")), None) or (
-        indexers[0] if indexers else None
-    )
+    if url:
+        # Never hand a stored key to a URL that is not the configured indexer.
+        match = next((i for i in indexers if i.url.rstrip("/") == url.rstrip("/")), None)
+    else:
+        match = indexers[0] if indexers else None
     if match is None:
         return url, api_key
     return url or match.url.rstrip("/"), api_key or match.api_key or None

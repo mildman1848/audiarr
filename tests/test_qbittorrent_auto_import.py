@@ -104,6 +104,11 @@ def _state(db, item_id=HASH):
     ).fetchone()
 
 
+def _assert_retry(row, reason_part):
+    assert row["status"] == "failed" and row["reason"].startswith("retry: ")
+    assert reason_part in row["reason"]
+
+
 async def test_completed_torrent_imports_once_via_shared_importer(tmp_path, db, stub_chain, qb):
     folder = _book_folder(tmp_path)
     FakeQb.ITEMS = [_item(folder)]
@@ -188,8 +193,7 @@ def _settings_with_mapping(remote: str, local: str):
 async def test_unmapped_remote_path_is_skipped_not_probed_as_local(tmp_path, db, stub_chain, qb):
     FakeQb.ITEMS = [_item("/qb/complete/Nowhere")]
     await SabAutoImportScheduler().run_once()
-    state = _state(db)
-    assert state["status"] == "skipped" and "root folder" in state["reason"]
+    _assert_retry(_state(db), "root folder")
 
 
 async def test_single_file_torrent_is_skipped_with_reason(tmp_path, db, stub_chain, qb):
@@ -206,13 +210,26 @@ async def test_single_file_torrent_is_skipped_with_reason(tmp_path, db, stub_cha
     assert single.exists()
 
 
-@pytest.mark.parametrize("content_path", ["", "relative/path", "/downloads/../etc"])
+@pytest.mark.parametrize("content_path", ["relative/path", "/downloads/../etc"])
 async def test_missing_or_unsafe_content_path_is_recorded_skip(
     tmp_path, db, stub_chain, qb, content_path
 ):
     FakeQb.ITEMS = [_item(content_path)]
     await SabAutoImportScheduler().run_once()
     assert _state(db)["status"] == "skipped"
+
+
+async def test_missing_content_path_is_retryable(tmp_path, db, stub_chain, qb):
+    folder = _book_folder(tmp_path)
+    FakeQb.ITEMS = [_item("")]
+    scheduler = SabAutoImportScheduler()
+
+    await scheduler.run_once()
+    _assert_retry(_state(db), "no content path")
+
+    FakeQb.ITEMS = [_item(folder)]
+    await scheduler.run_once()
+    assert _state(db)["status"] == "imported"
 
 
 async def test_failures_are_contained_per_item(tmp_path, db, stub_chain, qb, monkeypatch):
@@ -234,9 +251,8 @@ async def test_failures_are_contained_per_item(tmp_path, db, stub_chain, qb, mon
     monkeypatch.setattr(mod, "_import_folder", flaky)
     await SabAutoImportScheduler().run_once()
 
-    assert _state(db, HASH2)["status"] == "skipped"
-    failed = _state(db, HASH)
-    assert failed["status"] == "failed" and failed["reason"] == "unexpected error during import"
+    _assert_retry(_state(db, HASH2), "root folder")
+    _assert_retry(_state(db, HASH), "unexpected error during import")
 
 
 async def test_listing_failure_does_not_abort_tick_or_block_sab(
@@ -308,15 +324,14 @@ def _forbid_probes(monkeypatch):
     monkeypatch.setattr(Path, "is_file", guarded(real_is_file))
 
 
-async def test_asin_folder_outside_root_folders_is_skipped_without_probe(
+async def test_asin_folder_outside_root_folders_is_retryable_without_probe(
     tmp_path, db, stub_chain, qb, monkeypatch
 ):
     outside = _book_folder(tmp_path, "elsewhere")  # ASIN-bearing, in no root folder
     FakeQb.ITEMS = [_item(outside)]
     _forbid_probes(monkeypatch)
     await SabAutoImportScheduler().run_once()
-    state = _state(db)
-    assert state["status"] == "skipped" and "root folder" in state["reason"]
+    _assert_retry(_state(db), "root folder")
     assert db.execute("SELECT COUNT(*) FROM books").fetchone()[0] == 0
 
 
@@ -330,7 +345,7 @@ async def test_symlink_escape_from_root_folder_is_skipped_without_probe(
     FakeQb.ITEMS = [_item(link)]
     _forbid_probes(monkeypatch)
     await SabAutoImportScheduler().run_once()
-    assert _state(db)["status"] == "skipped"
+    _assert_retry(_state(db), "root folder")
     assert db.execute("SELECT COUNT(*) FROM books").fetchone()[0] == 0
 
 
@@ -339,7 +354,7 @@ async def test_root_folder_itself_is_not_importable(tmp_path, db, stub_chain, qb
     FakeQb.ITEMS = [_item(tmp_path / "downloads")]
     _forbid_probes(monkeypatch)
     await SabAutoImportScheduler().run_once()
-    assert _state(db)["status"] == "skipped"
+    _assert_retry(_state(db), "root folder")
 
 
 @pytest.mark.parametrize("category,tag", [("audiobooks", ""), ("audiobooks", "  "), ("", "audiarr")])
@@ -349,4 +364,127 @@ async def test_blank_tag_or_category_fails_closed(tmp_path, db, stub_chain, qb, 
     assert await SabAutoImportScheduler().run_once() is True
     assert all("tag" not in c for c in FakeQb.CALLS)  # list_completed never called
     assert db.execute("SELECT COUNT(*) FROM download_client_import_state").fetchone()[0] == 0
+    assert db.execute("SELECT COUNT(*) FROM books").fetchone()[0] == 0
+
+
+# --- retryable states -------------------------------------------------------
+
+
+def _row_count(db):
+    return db.execute("SELECT COUNT(*) FROM download_client_import_state").fetchone()[0]
+
+
+async def test_not_yet_mounted_path_is_retried_and_imported_once_it_appears(
+    tmp_path, db, stub_chain, qb
+):
+    folder = tmp_path / "downloads" / "Bernhard Schlink - Der Vorleser [B004UWRY6M]"
+    FakeQb.ITEMS = [_item(folder)]
+    scheduler = SabAutoImportScheduler()
+
+    await scheduler.run_once()
+    await scheduler.run_once()  # still missing: same single row, no duplicates
+    _assert_retry(_state(db), "path not found")
+    assert _row_count(db) == 1
+
+    _book_folder(tmp_path)  # the volume shows up
+    await scheduler.run_once()
+    assert _state(db)["status"] == "imported" and _row_count(db) == 1
+    assert db.execute("SELECT COUNT(*) FROM books").fetchone()[0] == 1
+
+    await scheduler.run_once()  # imported stays deduped
+    assert _row_count(db) == 1 and db.execute("SELECT COUNT(*) FROM books").fetchone()[0] == 1
+
+
+async def test_transient_error_is_retried_on_next_tick(tmp_path, db, stub_chain, qb, monkeypatch):
+    folder = _book_folder(tmp_path)
+    FakeQb.ITEMS = [_item(folder)]
+    import app.sab_auto_import as mod
+
+    real = mod._import_folder
+    calls = {"n": 0}
+
+    async def flaky(conn, chain, folder_path, name, locale):
+        calls["n"] += 1
+        if calls["n"] == 1:
+            raise RuntimeError("provider timeout")
+        return await real(conn, chain, folder_path, name, locale)
+
+    monkeypatch.setattr(mod, "_import_folder", flaky)
+    scheduler = SabAutoImportScheduler()
+    await scheduler.run_once()
+    _assert_retry(_state(db), "unexpected error")
+    await scheduler.run_once()
+    assert _state(db)["status"] == "imported" and _row_count(db) == 1
+
+
+async def test_single_file_and_unsafe_path_stay_terminal(tmp_path, db, stub_chain, qb, monkeypatch):
+    shared = tmp_path / "downloads"
+    shared.mkdir()
+    single = shared / "Der Vorleser [B004UWRY6M].m4b"
+    single.write_bytes(b"\x00" * 64)
+    FakeQb.ITEMS = [_item(single), _item("relative/path", hash=HASH2)]
+    scheduler = SabAutoImportScheduler()
+    await scheduler.run_once()
+
+    import app.sab_auto_import as mod
+
+    def boom(*a, **k):
+        raise AssertionError("terminal item must not be reprocessed")
+
+    monkeypatch.setattr(mod.SabAutoImportScheduler, "_process_qb_item", boom)
+    await scheduler.run_once()
+    assert _state(db)["status"] == "skipped" and _state(db, HASH2)["status"] == "skipped"
+
+
+# --- symlinked root folder ---------------------------------------------------
+
+
+@pytest.mark.parametrize("via_link", [True, False])
+async def test_symlinked_root_folder_matches_resolved_download_path(
+    tmp_path, db, stub_chain, qb, via_link
+):
+    real_root = tmp_path / "real-downloads"
+    real_root.mkdir()
+    link_root = tmp_path / "downloads"  # configured root row points here
+    link_root.symlink_to(real_root, target_is_directory=True)
+    book = real_root / "Bernhard Schlink - Der Vorleser [B004UWRY6M]"
+    book.mkdir()
+    (book / "01 - Kapitel 1.mp3").write_bytes(b"\x00" * 1024)
+    reported = link_root / book.name if via_link else book
+    FakeQb.ITEMS = [_item(reported)]
+
+    await SabAutoImportScheduler().run_once()
+    assert _state(db)["status"] == "imported"
+
+
+async def test_symlinked_root_folder_without_asin_uses_root_import(tmp_path, db, stub_chain, qb):
+    real_root = tmp_path / "real-downloads"
+    book = real_root / "Bernhard Schlink - Der Vorleser"
+    book.mkdir(parents=True)
+    (book / "01 - Kapitel 1.mp3").write_bytes(b"\x00" * 1024)
+    (tmp_path / "downloads").symlink_to(real_root, target_is_directory=True)
+    FakeQb.ITEMS = [_item(tmp_path / "downloads" / book.name)]
+
+    await SabAutoImportScheduler().run_once()
+    state = _state(db)
+    assert "no configured root folder" not in state["reason"]
+    assert "not found by scan" not in state["reason"]
+
+
+async def test_traversal_and_symlink_escape_are_still_rejected_with_symlink_root(
+    tmp_path, db, stub_chain, qb, monkeypatch
+):
+    real_root = tmp_path / "real-downloads"
+    real_root.mkdir()
+    (tmp_path / "downloads").symlink_to(real_root, target_is_directory=True)
+    outside = _book_folder(tmp_path, "elsewhere")
+    (real_root / "innocent").symlink_to(outside, target_is_directory=True)
+    FakeQb.ITEMS = [
+        _item(tmp_path / "downloads" / "innocent"),
+        _item(tmp_path / "downloads" / ".." / "elsewhere" / outside.name, hash=HASH2),
+    ]
+    _forbid_probes(monkeypatch)
+    await SabAutoImportScheduler().run_once()
+    assert _state(db)["status"] == "failed" and _state(db)["reason"].startswith("retry: ")
+    assert _state(db, HASH2)["status"] == "skipped"  # ".." is never accepted
     assert db.execute("SELECT COUNT(*) FROM books").fetchone()[0] == 0

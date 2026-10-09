@@ -1,5 +1,14 @@
 # Changelog
 
+## 1.1.12
+
+- qBittorrent torrent grabs (#81): `POST /api/v1/releases/grab` can now send a torrent release the user picked from Prowlarr results to a qBittorrent download client (`type="qbittorrent"`). Grabs are **manual only**; usenet releases still go to SABnzbd exactly as before, and no automatic torrent searching or grabbing was added.
+- A category **and** a tag are required on the qBittorrent client. Audiarr files every torrent under them (never from request input, and with no caller-controlled save path) and filters on both when looking for completed downloads; a grab without them is rejected with 422. HTTP(S) torrent URLs are accepted only when they are Prowlarr's own download URL on the configured Prowlarr.
+- Completed qBittorrent downloads are imported through the shared importer used for SABnzbd, with the same remote-path mapping. The mapped path must resolve (symlinks and `..` included) beneath a configured root folder, otherwise nothing is probed or imported. Single-file torrents are terminally skipped. Missing paths, paths not yet visible and transient processing errors are recorded as retryable and re-checked on each poll (there is no retry cap/backoff); imported torrents are deduped by hash. Source files and torrents are never moved, paused or deleted.
+- Secrets are write-only: download-client `api_key` and `password` are excluded from every settings API response, and a blank value on save keeps the stored secret. Connection-test endpoints reuse stored secrets only for the same configured URL. This also covers the existing SABnzbd `api_key`. The qBittorrent API key (qBittorrent >= 5.2.0) is preferred; username/password is a legacy fallback used only when no API key is set. Secrets can be replaced but not cleared through the current settings UI.
+- SABnzbd behaviour and its connection test are unchanged.
+- Direct native sources (MyAnonaMouse, AudiobookBay-style sites) are **deliberately deferred**: Prowlarr remains the only source. See `docs/design/download-sources-clients-matrix.md`.
+
 ## 1.1.11
 
 - Author and series follows (#80): a new Follows page (and follow actions on Book Detail) lets you follow an author or a series by name. Follows and their candidates are persisted (schema v16, `016_follows.sql`) and reviewed as candidates instead of being imported blindly.

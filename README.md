@@ -3,7 +3,7 @@
 **A Servarr-style audiobook manager — an automation loop bolted around your existing media stack, not a replacement for it.**
 
 Audiarr handles metadata search, import matching, quality/profile decisions,
-and outbound integrations (Audiobookshelf, Prowlarr/SABnzbd, m4b-convertarr)
+and outbound integrations (Audiobookshelf, Prowlarr/SABnzbd/qBittorrent, m4b-convertarr)
 so your audiobook library behaves like the rest of the Arr family. `1.0.0`
 has shipped and the project is still actively developed — everything below
 is implemented and tested, not just modeled in a settings page.
@@ -19,12 +19,13 @@ is implemented and tested, not just modeled in a settings page.
   matching, dry-run preview before any write, manual match/ignore review for
   unmatched folders, and hardlink/copy/move import strategies (hardlink by
   default).
-- 🚀 **Automation** — periodic import scans, SABnzbd auto-import on
+- 🚀 **Automation** — periodic import scans, SABnzbd and qBittorrent auto-import on
   completed downloads, and metadata-refresh / wanted-search schedulers.
 - 🎯 **Quality** — audiobook-specific profiles and quality definitions
   (container/codec/bitrate band/lossless/chapter expectations), per-book
   profile assignment, and cutoff-driven upgrade search.
-- 🔁 **Integrations** — Prowlarr release search with SABnzbd grab/queue,
+- 🔁 **Integrations** — Prowlarr release search with SABnzbd grab/queue and manual qBittorrent
+  torrent grabs,
   Audiobookshelf connection test + scan trigger, m4b-convertarr conversion
   job tracking, and outbound Connect webhooks for grab/import/health events.
 - 🔐 **Security** — forms login and API-key (`X-Api-Key`) authentication
@@ -58,8 +59,8 @@ Docker Compose quick start:
 ```yaml
 services:
   audiarr:
-    image: ghcr.io/mildman1848/audiarr:1.1.11
-    # or: docker.io/mildman1848/audiarr:1.1.11
+    image: ghcr.io/mildman1848/audiarr:1.1.12
+    # or: docker.io/mildman1848/audiarr:1.1.12
     container_name: audiarr
     restart: unless-stopped
     ports:
@@ -88,7 +89,7 @@ Important defaults:
 | Audible locale | `us` |
 | UI language | `en`, with `de` available |
 | Optional translation backend | `none` by default; LibreTranslate-compatible backend optional |
-| Version | `1.1.11` |
+| Version | `1.1.12` |
 
 Versioning follows the Audiarr roadmap, not the household/fork `mldm<N>`
 suffix used for image revisions:

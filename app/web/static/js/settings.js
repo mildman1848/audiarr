@@ -111,14 +111,15 @@ async function loginAfterAuthChange(username, password) {
 }
 
 // Return the first SABnzbd download client, or a fresh default (not yet
-// attached to the document).
+// attached to the document). Like qBittorrent, the settings API never
+// returns the SAB api_key, only api_key_set.
 function readSab(s) {
   return (
     (s.download_clients || []).find((c) => c.type === "sabnzbd") || {
       name: "SABnzbd",
       type: "sabnzbd",
       url: "",
-      api_key: "",
+      api_key_set: false,
       category: "audiobooks",
       enabled: false,
     }
@@ -717,7 +718,7 @@ function populate(s) {
   setValue("sab-name", sab.name || "SABnzbd");
   setValue("sab-url", sab.url || "");
   setValue("sab-category", sab.category || "audiobooks");
-  setPlaceholder("sab-api-key", sab.api_key ? MASK : "");
+  setPlaceholder("sab-api-key", sab.api_key_set ? MASK : "");
 
   const qbt = readQbittorrent(s);
   setChecked("qbt-enabled", qbt.enabled);

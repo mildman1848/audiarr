@@ -65,6 +65,17 @@ _TERMINAL_STATUSES = {"imported", "failed", "skipped"}
 
 QBITTORRENT_CLIENT_KEY = "qbittorrent"
 
+# A torrent whose path is not available *yet* (volume not mounted, mapping not
+# configured) or whose processing hit a transient error is stored as
+# status="failed" with this reason prefix. The poller treats such rows as
+# pending and retries them on later ticks; the (client, item_id) upsert keeps
+# it a single row. Imported rows and permanent decisions stay terminal.
+RETRY_PREFIX = "retry: "
+
+
+def _is_retryable_state(row: sqlite3.Row | None) -> bool:
+    return row is not None and row["status"] == "failed" and row["reason"].startswith(RETRY_PREFIX)
+
 
 def history_item_key(item: dict[str, Any]) -> str:
     """Stable dedup key for one SABnzbd history item.
@@ -91,11 +102,17 @@ def _open_db() -> sqlite3.Connection:
 
 
 def _find_root_folder(conn: sqlite3.Connection, folder_path: str) -> int | None:
-    """Return the id of the DB root folder that contains ``folder_path``, if any."""
+    """Return the id of the DB root folder that contains ``folder_path``, if any.
+
+    Both sides are resolved with ``realpath`` so a root folder configured as
+    (or beneath) a symlink still matches the resolved download path, while a
+    path that resolves outside every root never does.
+    """
+    resolved = os.path.realpath(folder_path)
     rows = conn.execute("SELECT id, path FROM root_folders").fetchall()
     for row in rows:
-        root = row["path"].rstrip("/")
-        if folder_path == root or folder_path.startswith(root + "/"):
+        root = os.path.realpath(row["path"]).rstrip("/")
+        if resolved == root or resolved.startswith(root + "/"):
             return int(row["id"])
     return None
 
@@ -128,8 +145,11 @@ async def _import_folder(
     already be an existing, Audiarr-local directory. Returns
     ``(status, reason, book_id)`` with status ``imported`` or ``failed``.
     """
+    real_folder = os.path.realpath(folder_path)
     scanned = scan_folder(folder_path.parent)
-    candidate = next((c for c in scanned if c.folder_path == str(folder_path)), None)
+    candidate = next(
+        (c for c in scanned if os.path.realpath(c.folder_path) == real_folder), None
+    )
 
     if candidate is not None and candidate.asin_hints:
         asin = candidate.asin_hints[0]
@@ -152,7 +172,12 @@ async def _import_folder(
         return "failed", "no configured root folder contains this path", None
 
     summary = await run_import(conn, chain, root_folder_id, dry_run=False, locale=locale)
-    match = next((r for r in summary.results if r.folder_path == str(folder_path)), None)
+    # The scanner reports paths under the root as configured (possibly a
+    # symlink or non-canonical), so compare canonical paths on both sides.
+    match = next(
+        (r for r in summary.results if os.path.realpath(r.folder_path) == real_folder),
+        None,
+    )
     if match is None:
         return "failed", "folder not found by scan after import", None
     if match.status in ("matched", "skipped-duplicate"):
@@ -330,10 +355,11 @@ class SabAutoImportScheduler:
             conn = _open_db()
             try:
                 seen = conn.execute(
-                    "SELECT 1 FROM download_client_import_state WHERE client = ? AND item_id = ?",
+                    "SELECT status, reason FROM download_client_import_state "
+                    "WHERE client = ? AND item_id = ?",
                     (QBITTORRENT_CLIENT_KEY, item_id),
                 ).fetchone()
-                if seen is not None:
+                if seen is not None and not _is_retryable_state(seen):
                     continue
                 if chain is None:
                     chain = build_provider_chain()
@@ -342,14 +368,13 @@ class SabAutoImportScheduler:
                 )
                 conn.commit()
                 processed += 1
-            except Exception:  # noqa: BLE001 — one bad item must not stop the tick
+            except Exception as exc:  # noqa: BLE001 — one bad item must not stop the tick
                 conn.rollback()
                 log.warning(
-                    "torrent auto-import: failed processing %r", item.get("name"), exc_info=True
+                    "torrent auto-import: failed processing %r (%s); will retry",
+                    item.get("name"), type(exc).__name__, exc_info=log.isEnabledFor(logging.DEBUG),
                 )
-                self._record_client_state(
-                    conn, item_id, item, "", "failed", "unexpected error during import"
-                )
+                self._record_retry(conn, item_id, item, "", "unexpected error during import")
                 conn.commit()
             finally:
                 conn.close()
@@ -371,10 +396,8 @@ class SabAutoImportScheduler:
         # content_path, never save_path: save_path is the shared download root.
         reported = str(item.get("content_path") or "").strip()
         if not reported:
-            log.warning("torrent auto-import: torrent %r has no content path", name)
-            self._record_client_state(
-                conn, item_id, item, "", "skipped", "no content path reported by qBittorrent"
-            )
+            log.debug("torrent auto-import: torrent %r has no content path yet", name)
+            self._record_retry(conn, item_id, item, "", "no content path reported by qBittorrent")
             return
 
         # Resolve the remote path BEFORE any filesystem probe.
@@ -391,10 +414,10 @@ class SabAutoImportScheduler:
         # the path, so it is untrusted until proven beneath a root folder).
         contained = _find_root_folder_strict(conn, folder)
         if contained is None:
-            log.warning("torrent auto-import: %r is outside every configured root folder", name)
-            self._record_client_state(
-                conn, item_id, item, folder, "skipped",
-                "path is not beneath any configured root folder",
+            log.debug("torrent auto-import: %r is outside every configured root folder", name)
+            # Retryable: a root folder or remote path mapping may be added later.
+            self._record_retry(
+                conn, item_id, item, folder, "path is not beneath any configured root folder"
             )
             return
         folder_path = Path(contained)
@@ -410,14 +433,19 @@ class SabAutoImportScheduler:
             )
             return
         if not folder_path.is_dir():
-            log.warning("torrent auto-import: completed path %s is not a directory", folder)
-            self._record_client_state(
-                conn, item_id, item, folder, "skipped", f"path not found: {folder}"
-            )
+            log.debug("torrent auto-import: completed path %s is not a directory yet", folder)
+            # Retryable: the volume may simply not be mounted/synced yet.
+            self._record_retry(conn, item_id, item, folder, f"path not found: {folder}")
             return
 
         status, reason, book_id = await _import_folder(conn, chain, folder_path, name, locale)
         self._record_client_state(conn, item_id, item, folder, status, reason, book_id)
+
+    @classmethod
+    def _record_retry(
+        cls, conn: sqlite3.Connection, item_id: str, item: dict[str, Any], folder: str, reason: str
+    ) -> None:
+        cls._record_client_state(conn, item_id, item, folder, "failed", RETRY_PREFIX + reason)
 
     @staticmethod
     def _record_client_state(

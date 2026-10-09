@@ -104,7 +104,7 @@ def _settings_doc(extra_clients):
     }
 
 
-SAB = {"name": "SABnzbd", "type": "sabnzbd", "url": "http://sab", "category": "books", "enabled": True}
+SAB = {"name": "SABnzbd", "type": "sabnzbd", "url": "http://sab", "category": "books", "enabled": True, "api_key_set": True}
 QBT_STORED = {
     "name": "qB",
     "type": "qbittorrent",
@@ -160,6 +160,29 @@ def test_populate_uses_secret_indicators_and_never_shows_secrets():
     assert out["qbt-api-key"] == {"v": "", "c": False, "p": "•••••"}
     assert out["qbt-password"] == {"v": "", "c": False, "p": "•••••"}
     assert out["sab-url"]["v"] == "http://sab"
+
+
+@needs_node
+def test_sab_populate_masks_from_api_key_set_not_omitted_api_key():
+    stored = _run(
+        SETTINGS_JS,
+        f"populate({json.dumps(_settings_doc([SAB]))}); return els['sab-api-key'].placeholder;",
+        SETTINGS_IDS,
+    )
+    assert stored == "•••••"
+    blank = _run(
+        SETTINGS_JS,
+        f"populate({json.dumps(_settings_doc([{**SAB, 'api_key_set': False}]))}); return els['sab-api-key'].placeholder;",
+        SETTINGS_IDS,
+    )
+    assert blank == ""
+    # A leaked legacy api_key must not drive the mask on its own.
+    legacy = _run(
+        SETTINGS_JS,
+        f"populate({json.dumps(_settings_doc([{**SAB, 'api_key_set': False, 'api_key': 'x'}]))}); return els['sab-api-key'].placeholder;",
+        SETTINGS_IDS,
+    )
+    assert legacy == ""
 
 
 @needs_node

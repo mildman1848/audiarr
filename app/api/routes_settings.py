@@ -4,11 +4,11 @@ from __future__ import annotations
 
 import logging
 
-from fastapi import APIRouter
+from fastapi import APIRouter, HTTPException
 
 from app.auth import hash_password
 from app.config import load_settings, save_settings
-from app.models.settings import Settings
+from app.models.settings import DownloadClient, Settings
 
 log = logging.getLogger("audiarr.api.settings")
 
@@ -32,15 +32,43 @@ _SETTINGS_RESPONSE_EXCLUDE = {
 def _preserve_download_client_secrets(incoming: Settings, stored: Settings) -> None:
     """Fill blank write-only download-client secrets from the stored entry.
 
-    Entries are matched by ``(type, name)``; an entry with no stored match
-    (new, or renamed) keeps whatever was sent. A non-blank value always wins,
-    so sending a new secret replaces the stored one.
+    Entries are matched by ``(type, name)``. A renamed entry is matched by
+    type only when that is unambiguous (exactly one unmatched stored and one
+    unmatched incoming client of that type). If a stored secret would be
+    silently dropped because the match is ambiguous, the save is rejected
+    with a 422 instead. A non-blank value always wins.
     """
     previous = {(c.type, c.name): c for c in stored.download_clients}
-    for client in incoming.download_clients:
+    matched: dict[int, DownloadClient] = {}
+    for idx, client in enumerate(incoming.download_clients):
         old = previous.get((client.type, client.name))
-        if old is None:
+        if old is not None:
+            matched[idx] = old
+    used = {id(old) for old in matched.values()}
+
+    for type_ in {c.type for c in incoming.download_clients}:
+        new_idx = [
+            i for i, c in enumerate(incoming.download_clients)
+            if c.type == type_ and i not in matched
+        ]
+        old_left = [c for c in stored.download_clients if c.type == type_ and id(c) not in used]
+        if len(new_idx) == 1 and len(old_left) == 1:
+            matched[new_idx[0]] = old_left[0]
             continue
+        would_lose = any(
+            (not incoming.download_clients[i].api_key and any(c.api_key for c in old_left))
+            or (not incoming.download_clients[i].password and any(c.password for c in old_left))
+            for i in new_idx
+        )
+        if would_lose:
+            raise HTTPException(
+                422,
+                f"Ambiguous {type_} download client rename: re-enter its API key / "
+                "password or save one client change at a time",
+            )
+
+    for idx, old in matched.items():
+        client = incoming.download_clients[idx]
         if not client.api_key:
             client.api_key = old.api_key
         if not client.password:

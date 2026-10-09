@@ -56,8 +56,10 @@ def _configure(*, qb=True, sab=True, prowlarr=True, qb_kwargs=None) -> None:
     if qb:
         kwargs = {"api_key": "qb-key-secret"}
         kwargs.update(qb_kwargs or {})
-        clients.append(DownloadClient(name="qBittorrent", type="qbittorrent", url=QB_URL,
-                                      category="audiobooks", tag="audiarr", enabled=True, **kwargs))
+        clients.append(DownloadClient(**{
+            "name": "qBittorrent", "type": "qbittorrent", "url": QB_URL,
+            "category": "audiobooks", "tag": "audiarr", "enabled": True, **kwargs,
+        }))
     settings.download_clients = clients
     save_settings(settings)
 
@@ -171,6 +173,65 @@ def test_invalid_torrent_urls_are_rejected_without_echo(
     resp = _grab(app_client, **overrides)
     assert resp.status_code == 400
     assert "LEAKME" not in resp.text and "evil.example" not in resp.text
+
+
+@pytest.mark.parametrize("qb_kwargs", [{"tag": ""}, {"tag": "  "}, {"category": ""}, {"category": " "}])
+def test_grab_fails_clearly_when_category_or_tag_is_blank(
+    app_client, monkeypatch, forbid_sab, no_events, qb_kwargs
+):
+    _configure(qb_kwargs=qb_kwargs)
+
+    def handler(request):  # pragma: no cover
+        raise AssertionError("qBittorrent must not be contacted without category and tag")
+
+    monkeypatch.setattr("app.api.routes_releases.QBittorrentClient", _qb_factory(handler))
+    resp = _grab(app_client)
+    assert resp.status_code == 422
+    assert "category and a tag" in resp.json()["detail"]
+    assert no_events == []
+
+
+@pytest.mark.parametrize(
+    "download_url",
+    [
+        "http://prowlarr.local/api/v1/system/status?apikey=LEAKME",
+        "http://prowlarr.local/1/download/../../api/v1/indexer?apikey=LEAKME",
+        "http://prowlarr.local/x/download?apikey=LEAKME",
+        "http://prowlarr.local/1/download/extra?apikey=LEAKME",
+        "http://prowlarr.local/%2e%2e/1/download?apikey=LEAKME",
+        "http://user:pw@prowlarr.local/1/download?apikey=LEAKME",
+        "http://prowlarr.local:9999/1/download?apikey=LEAKME",
+    ],
+)
+def test_prowlarr_origin_urls_must_be_canonical_download_urls(
+    app_client, monkeypatch, forbid_sab, no_events, download_url
+):
+    _configure()
+
+    def handler(request):  # pragma: no cover
+        raise AssertionError("qBittorrent must not be contacted for a non-download URL")
+
+    monkeypatch.setattr("app.api.routes_releases.QBittorrentClient", _qb_factory(handler))
+    resp = _grab(app_client, magnet_url=None, download_url=download_url)
+    assert resp.status_code == 400
+    assert "LEAKME" not in resp.text
+
+
+def test_prowlarr_download_url_with_url_base_is_accepted(
+    app_client, monkeypatch, forbid_sab, no_events
+):
+    _configure()
+    settings = load_settings()
+    settings.indexers[0].url = "http://prowlarr.local/prowlarr/"
+    save_settings(settings)
+    seen: list[httpx.Request] = []
+    monkeypatch.setattr(
+        "app.api.routes_releases.QBittorrentClient",
+        _qb_factory(lambda r: (seen.append(r), httpx.Response(200, text="Ok."))[1]),
+    )
+    ok = "http://prowlarr.local/prowlarr/12/download?apikey=K&link=Zm9v&file=b.torrent"
+    assert _grab(app_client, magnet_url=None, download_url=ok).status_code == 200
+    assert _grab(app_client, magnet_url=None, download_url=PROWLARR_DL).status_code == 400
 
 
 def test_torrent_grab_503_without_qbittorrent_and_does_not_fall_back_to_sab(
@@ -386,11 +447,58 @@ def test_new_non_blank_secret_replaces_stored_and_only_matching_client_is_filled
         if c["type"] == "qbittorrent":
             c["api_key"] = "rotated-key"
         if c["type"] == "sabnzbd":
-            c["name"] = "Renamed SAB"  # no stored match -> nothing to preserve
+            c["name"] = "Renamed SAB"  # sole SAB client: unambiguous rename keeps the key
     assert app_client.put("/api/v1/settings", json=doc).status_code == 200
     stored = {c.type: c for c in load_settings().download_clients}
     assert stored["qbittorrent"].api_key == "rotated-key"
-    assert stored["sabnzbd"].api_key == ""
+    assert stored["sabnzbd"].api_key == "sab-key" and stored["sabnzbd"].name == "Renamed SAB"
+
+
+def _two_sab_settings():
+    settings = load_settings()
+    settings.download_clients = [
+        DownloadClient(name="SAB A", type="sabnzbd", url="http://a", api_key="key-a", enabled=True),
+        DownloadClient(name="SAB B", type="sabnzbd", url="http://b", api_key="key-b", enabled=True),
+    ]
+    save_settings(settings)
+
+
+def test_ambiguous_rename_with_blank_secrets_is_rejected_and_stores_nothing(app_client):
+    _two_sab_settings()
+    doc = json.loads(_raw_get(app_client))
+    doc["download_clients"][0]["name"] = "SAB A renamed"
+    doc["download_clients"][1]["name"] = "SAB B renamed"
+    resp = app_client.put("/api/v1/settings", json=doc)
+    assert resp.status_code == 422
+    assert "key-a" not in resp.text and "key-b" not in resp.text
+    assert [c.name for c in load_settings().download_clients] == ["SAB A", "SAB B"]
+    assert [c.api_key for c in load_settings().download_clients] == ["key-a", "key-b"]
+
+
+def test_ambiguous_rename_succeeds_when_secrets_are_re_entered(app_client):
+    _two_sab_settings()
+    doc = json.loads(_raw_get(app_client))
+    for c, key in zip(doc["download_clients"], ("new-a", "new-b"), strict=True):
+        c["name"] += " renamed"
+        c["api_key"] = key
+    assert app_client.put("/api/v1/settings", json=doc).status_code == 200
+    assert [c.api_key for c in load_settings().download_clients] == ["new-a", "new-b"]
+
+
+def test_adding_second_client_keeps_existing_secrets(app_client):
+    _two_sab_settings()
+    doc = json.loads(_raw_get(app_client))
+    doc["download_clients"].append({"name": "SAB C", "type": "sabnzbd", "url": "http://c"})
+    assert app_client.put("/api/v1/settings", json=doc).status_code == 200
+    assert [c.api_key for c in load_settings().download_clients] == ["key-a", "key-b", ""]
+
+
+def test_deleting_a_client_is_not_blocked(app_client):
+    _two_sab_settings()
+    doc = json.loads(_raw_get(app_client))
+    doc["download_clients"] = doc["download_clients"][:1]
+    assert app_client.put("/api/v1/settings", json=doc).status_code == 200
+    assert [c.api_key for c in load_settings().download_clients] == ["key-a"]
 
 
 def test_indexer_secret_handling_is_unchanged(app_client):

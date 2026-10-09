@@ -17,6 +17,7 @@ yields a 503 so the UI can prompt the user to finish setup.
 from __future__ import annotations
 
 import logging
+import re
 import sqlite3
 from urllib.parse import urlsplit
 
@@ -256,6 +257,23 @@ def _origin(url: str) -> tuple[str, str, int | None] | None:
         return None
 
 
+def _is_prowlarr_download_path(url: str, prowlarr_url: str) -> bool:
+    """True only for Prowlarr's canonical ``<base>/<indexer id>/download`` URL.
+
+    Same-origin alone would let a caller point qBittorrent at any Prowlarr
+    endpoint (e.g. ``/api/v1/...``); real result URLs always have this shape.
+    Embedded credentials (``user:pass@``) are rejected as well.
+    """
+    try:
+        parts = urlsplit(url.strip())
+        if parts.username is not None or parts.password is not None:
+            return False
+        base = urlsplit(prowlarr_url.strip()).path.rstrip("/")
+    except ValueError:
+        return False
+    return re.fullmatch(re.escape(base) + r"/\d+/download", parts.path) is not None
+
+
 def _select_torrent_url(request: GrabRequest, indexer: Indexer) -> str:
     """Pick the URL handed to qBittorrent, or raise a 400 without echoing it.
 
@@ -274,7 +292,7 @@ def _select_torrent_url(request: GrabRequest, indexer: Indexer) -> str:
     wanted = _origin(url)
     if wanted is None or len(url) > 4096:
         raise HTTPException(400, "The release has no valid magnet or torrent URL")
-    if wanted != _origin(indexer.url):
+    if wanted != _origin(indexer.url) or not _is_prowlarr_download_path(url, indexer.url):
         raise HTTPException(400, "The torrent URL does not point at the configured Prowlarr")
     return url
 
@@ -287,9 +305,15 @@ async def _grab_torrent(request: GrabRequest) -> GrabResponse:
     """
     indexer = _require_prowlarr()
     qb = _require_qbittorrent()
-    url = _select_torrent_url(request, indexer)
     tag = qb.tag.strip()
     category = qb.category.strip()
+    if not tag or not category:
+        # Completion import needs both markers; a grab without them could
+        # never be imported (or would be indistinguishable from other torrents).
+        raise HTTPException(
+            422, "The qBittorrent client needs both a category and a tag configured"
+        )
+    url = _select_torrent_url(request, indexer)
 
     client = QBittorrentClient(
         base_url=qb.base_url(),

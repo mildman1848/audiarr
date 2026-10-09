@@ -120,7 +120,7 @@ def test_sabnzbd_test_endpoint_uses_stored_api_key_when_blank(app_client, monkey
     )
     response = app_client.post(
         "/api/v1/connections/sabnzbd/test",
-        json={"url": "http://sab.local"},
+        json={"url": "http://sab.local/"},
     )
     assert response.status_code == 200
     assert response.json()["ok"] is True
@@ -213,3 +213,73 @@ def test_prowlarr_test_endpoint_uses_stored_api_key_when_blank(app_client, monke
     assert response.status_code == 200
     assert response.json()["ok"] is True
     assert seen["x-api-key"] == "stored-prowlarr-key"
+
+
+def test_sabnzbd_test_endpoint_does_not_send_stored_key_to_other_url(app_client, monkeypatch):
+    settings = app_client.get("/api/v1/settings").json()
+    settings["download_clients"] = [
+        {
+            "name": "SABnzbd",
+            "type": "sabnzbd",
+            "url": "http://sab.local",
+            "api_key": "stored-sab-key",
+            "category": "audiobooks",
+            "enabled": True,
+        }
+    ]
+    assert app_client.put("/api/v1/settings", json=settings).status_code == 200
+
+    seen: list[str] = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        seen.append(request.url.params.get("apikey", ""))
+        return httpx.Response(200, json={"version": "4.3.2"})
+
+    monkeypatch.setattr(
+        "app.api.routes_connections.SABnzbdClient", _factory(SABnzbdClient, handler)
+    )
+    response = app_client.post(
+        "/api/v1/connections/sabnzbd/test",
+        json={"url": "http://other.local"},
+    )
+    assert response.status_code == 200
+    assert seen == [""]
+
+
+def test_prowlarr_test_endpoint_does_not_send_stored_key_to_other_url(app_client, monkeypatch):
+    settings = app_client.get("/api/v1/settings").json()
+    settings["indexers"] = [
+        {
+            "name": "Prowlarr",
+            "type": "prowlarr",
+            "url": "http://prowlarr.local/",
+            "api_key": "stored-prowlarr-key",
+            "enabled": True,
+        }
+    ]
+    assert app_client.put("/api/v1/settings", json=settings).status_code == 200
+
+    seen: list[str] = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        seen.append(request.headers.get("X-Api-Key", ""))
+        return httpx.Response(200, json={"version": "1.21.0", "appName": "Prowlarr"})
+
+    monkeypatch.setattr(
+        "app.api.routes_connections.ProwlarrClient", _factory(ProwlarrClient, handler)
+    )
+    other = app_client.post(
+        "/api/v1/connections/prowlarr/test",
+        json={"url": "http://other.local"},
+    )
+    assert other.status_code == 200
+    assert seen == [""]
+
+    # Same URL (trailing-slash normalized) still reuses the stored key.
+    seen.clear()
+    same = app_client.post(
+        "/api/v1/connections/prowlarr/test",
+        json={"url": "http://prowlarr.local"},
+    )
+    assert same.status_code == 200
+    assert seen == ["stored-prowlarr-key"]
