@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import importlib
 import logging
+import os
 from pathlib import Path
 
 import pytest
@@ -469,6 +470,37 @@ async def test_symlinked_root_folder_without_asin_uses_root_import(tmp_path, db,
     state = _state(db)
     assert "no configured root folder" not in state["reason"]
     assert "not found by scan" not in state["reason"]
+
+
+async def test_symlinked_root_folder_still_applies_its_import_strategy(
+    tmp_path, db, stub_chain, qb
+):
+    """The ASIN path hands the importer the resolved (real) folder; the importer
+    must still recognise the symlinked root as governing it and place the files
+    with the root's configured strategy instead of recording them in place."""
+    real_root = tmp_path / "real-downloads"
+    book = real_root / "nested" / "Bernhard Schlink - Der Vorleser [B004UWRY6M]"
+    book.mkdir(parents=True)
+    source = book / "01 - Kapitel 1.mp3"
+    source.write_bytes(b"\x00" * 1024)
+    link_root = tmp_path / "downloads"
+    link_root.symlink_to(real_root, target_is_directory=True)
+    # 'hardlink' differs from the column default ('copy') and from "unplaced",
+    # so only the root's own strategy can produce a shared inode below.
+    db.execute(
+        "UPDATE root_folders SET import_strategy = 'hardlink' WHERE path = ?", (str(link_root),)
+    )
+    db.commit()
+    FakeQb.ITEMS = [_item(link_root / "nested" / book.name)]
+
+    await SabAutoImportScheduler().run_once()
+    assert _state(db)["status"] == "imported"
+    placed = db.execute("SELECT path FROM library_files").fetchone()[0]
+    # Placed at the root's top level, not left at the nested scanner location.
+    expected = real_root / book.name / source.name
+    assert placed == str(expected)
+    assert os.path.samefile(expected, source)  # hardlinked
+    assert source.stat().st_nlink == 2
 
 
 async def test_traversal_and_symlink_escape_are_still_rejected_with_symlink_root(

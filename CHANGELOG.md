@@ -1,5 +1,9 @@
 # Changelog
 
+## 1.1.13
+
+- Corrective release for the qBittorrent symlink-root import strategy (#81, follow-up to 1.1.12): the importer's root-folder lookup (`_find_root_folder_for_path`) now resolves both the candidate folder and the configured root with `realpath` and compares on path boundaries. Previously a root folder configured as a symlink was not recognised for the resolved path the qBittorrent poller hands in, so the files were recorded in place instead of being placed with that root's import strategy. `..` traversal, symlink escapes and sibling directories sharing a textual prefix are still never treated as contained. The poller's pre-probe containment gate is unchanged.
+
 ## 1.1.12
 
 - qBittorrent torrent grabs (#81): `POST /api/v1/releases/grab` can now send a torrent release the user picked from Prowlarr results to a qBittorrent download client (`type="qbittorrent"`). Grabs are **manual only**; usenet releases still go to SABnzbd exactly as before, and no automatic torrent searching or grabbing was added.

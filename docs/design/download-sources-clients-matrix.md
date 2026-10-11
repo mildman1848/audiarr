@@ -221,7 +221,11 @@ default.
 The qBittorrent completed-download importer never widens filesystem access.
 `content_path` (after `resolve_remote_path`) must resolve — `..` and symlinks
 included — strictly beneath a configured root folder, otherwise nothing is
-probed or imported. To import torrents, therefore:
+probed or imported. Since 1.1.13 the importer matches that resolved path to a
+root folder by comparing real paths on both sides (so a root configured as a
+symlink works and applies its import strategy); containment is still required,
+and `..`, symlink escapes and sibling-prefix paths never match. To import
+torrents, therefore:
 
 - add the qBittorrent download directory (as Audiarr sees it) as a root
   folder, **or** configure a remote path mapping that translates qBittorrent's
