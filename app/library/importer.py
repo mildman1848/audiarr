@@ -19,6 +19,7 @@ guard in `_import_one`, which returns before any strategy/persist call.
 from __future__ import annotations
 
 import logging
+import os
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
@@ -510,15 +511,22 @@ async def _persist_files(
 def _find_root_folder_for_path(conn: Any, folder_path: str) -> Any:
     """Return the root_folders row whose configured path contains ``folder_path``.
 
-    Same containment rule as app.sab_auto_import.SabAutoImportScheduler.
-    _find_root_folder (kept local rather than shared to avoid coupling this
-    module to the SAB poller).
+    Both sides are resolved with ``realpath`` and compared on path boundaries,
+    so a root configured as (or beneath) a symlink still governs the resolved
+    folder path a download-client poller hands in, while ``..`` traversal,
+    symlink escapes and sibling directories sharing a textual prefix never
+    match. Kept local rather than shared to avoid coupling this module to the
+    SAB poller.
     """
+    resolved = os.path.realpath(folder_path)
     rows = conn.execute("SELECT id, path, import_strategy FROM root_folders").fetchall()
     for row in rows:
-        root = row["path"].rstrip("/")
-        if folder_path == root or folder_path.startswith(root + "/"):
-            return row
+        root = os.path.realpath(row["path"])
+        try:
+            if os.path.commonpath([resolved, root]) == root:
+                return row
+        except ValueError:  # no common base (e.g. different drives): not contained
+            continue
     return None
 
 

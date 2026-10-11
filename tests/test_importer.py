@@ -12,7 +12,7 @@ import pytest
 from app.config import load_settings, save_settings
 from app.db import get_conn, migrate
 from app.library import BookCreate, create_book
-from app.library.importer import _maybe_enqueue_conversion, run_import
+from app.library.importer import _find_root_folder_for_path, _maybe_enqueue_conversion, run_import
 from app.library.scanner import BookCandidate
 from app.models.settings import QualityProfile
 from app.providers.base import (
@@ -561,3 +561,72 @@ async def test_book_quality_profile_overrides_default_for_conversion_enqueue(db,
     await _maybe_enqueue_conversion(db, mp3_book_id, candidate)
 
     assert calls == [default_book_id]
+
+
+# -- _find_root_folder_for_path: realpath containment ------------------------
+
+
+def _add_root(db, path: Path, strategy: str) -> int:
+    cur = db.execute(
+        "INSERT INTO root_folders (path, import_strategy) VALUES (?, ?)", (str(path), strategy)
+    )
+    db.commit()
+    return cur.lastrowid
+
+
+def test_find_root_folder_matches_symlinked_root_by_resolved_target(tmp_path, db):
+    real_root = tmp_path / "real"
+    book = real_root / "nested" / "Book"
+    book.mkdir(parents=True)
+    link_root = tmp_path / "link"
+    link_root.symlink_to(real_root, target_is_directory=True)
+    root_id = _add_root(db, link_root, "hardlink")
+
+    # The resolved target path (what a download-client poller hands in) and the
+    # path spelled through the symlink must both resolve to the configured root.
+    for probe in (book, link_root / "nested" / "Book", real_root, link_root):
+        row = _find_root_folder_for_path(db, str(probe))
+        assert row is not None, probe
+        assert row["id"] == root_id
+        assert row["import_strategy"] == "hardlink"
+
+
+def test_find_root_folder_rejects_dotdot_traversal(tmp_path, db):
+    root = tmp_path / "root"
+    root.mkdir()
+    (tmp_path / "outside").mkdir()
+    _add_root(db, root, "copy")
+
+    # Textually beneath "<root>/" but resolves outside the root.
+    assert _find_root_folder_for_path(db, f"{root}/../outside") is None
+    assert _find_root_folder_for_path(db, f"{root}/../outside/book") is None
+
+
+def test_find_root_folder_rejects_symlink_escape(tmp_path, db):
+    real_root = tmp_path / "real"
+    real_root.mkdir()
+    link_root = tmp_path / "link"
+    link_root.symlink_to(real_root, target_is_directory=True)
+    outside = tmp_path / "outside"
+    outside.mkdir()
+    (real_root / "escape").symlink_to(outside, target_is_directory=True)
+    _add_root(db, link_root, "copy")
+
+    assert _find_root_folder_for_path(db, str(link_root / "escape")) is None
+    assert _find_root_folder_for_path(db, str(real_root / "escape")) is None
+
+
+def test_find_root_folder_rejects_sibling_with_textual_prefix(tmp_path, db):
+    root = tmp_path / "books"
+    root.mkdir()
+    sibling = tmp_path / "books-evil"
+    sibling.mkdir()
+    link_root = tmp_path / "shelf"
+    link_root.symlink_to(root, target_is_directory=True)
+    _add_root(db, root, "copy")
+    _add_root(db, link_root, "move")
+
+    assert _find_root_folder_for_path(db, str(sibling)) is None
+    assert _find_root_folder_for_path(db, str(sibling / "Book")) is None
+    # Prefix of the configured (symlink) spelling, not of the resolved target.
+    assert _find_root_folder_for_path(db, f"{link_root}-evil") is None
