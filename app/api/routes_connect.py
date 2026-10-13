@@ -43,15 +43,32 @@ def _stored_connect_values(
     routes_connections.py: the browser never renders a saved header_value
     back into the page, so a Test click with a blank header field must
     still use the stored secret rather than sending no header at all.
+
+    The stored secret is bound to its destination: it is attached only when
+    the effective url and header name equal the stored entry's (a blank url
+    may itself fall back to the stored one, and a blank name does so while
+    the url is unchanged, so a new url can be tested without a header). A blank value
+    aimed at a different url/name is rejected with a 422 rather than
+    silently sent without it, and the stored secret is never sent there.
+    Only a uniquely matched id is used; unknown or duplicated ids inherit
+    nothing.
     """
-    stored = next((n for n in load_settings().connect if n.id == connect_id), None)
+    matches = [n for n in load_settings().connect if n.id == connect_id]
+    stored = matches[0] if len(matches) == 1 else None
     if stored is None:
         return url, header_name, header_value
-    return (
-        url or stored.url,
-        header_name or stored.header_name,
-        header_value or stored.header_value,
-    )
+    url = url or stored.url.strip()
+    same_url = url == stored.url.strip()
+    if not header_name and same_url:
+        header_name = stored.header_name.strip()
+    if header_value or not stored.header_value or not header_name:
+        return url, header_name, header_value
+    if not same_url or header_name != stored.header_name.strip():
+        raise HTTPException(
+            422,
+            "The webhook URL or header name changed: re-enter the header value to test it",
+        )
+    return url, header_name, stored.header_value
 
 
 @router.post("/api/v1/connect/test/{connect_id}", response_model=ConnectTestResponse)

@@ -1,3 +1,8 @@
+import pytest
+
+from app.config import load_settings
+
+
 def test_get_settings_defaults(app_client):
     response = app_client.get("/api/v1/settings")
     assert response.status_code == 200
@@ -283,6 +288,129 @@ def test_quality_definitions_and_profiles_persist(app_client):
     assert profile["quality_ids"] == ["custom-tier"]
     assert profile["cutoff_quality_id"] == "custom-tier"
     assert profile["upgrade_allowed"] is False
+
+
+
+_SECRET_CASES = [
+    pytest.param(
+        ("connections", "audiobookshelf", "api_key"),
+        ("connections", "audiobookshelf", "api_key_set"),
+        ("connections", "audiobookshelf", "url"),
+        id="audiobookshelf",
+    ),
+    pytest.param(
+        ("connections", "m4b_convertarr", "api_key"),
+        ("connections", "m4b_convertarr", "api_key_set"),
+        ("connections", "m4b_convertarr", "url"),
+        id="m4b-convertarr",
+    ),
+    pytest.param(
+        ("connections", "liberatarr", "token"),
+        ("connections", "liberatarr", "token_set"),
+        ("connections", "liberatarr", "base_url"),
+        id="liberatarr",
+    ),
+    pytest.param(
+        ("conversion", "api_key"),
+        ("conversion", "api_key_set"),
+        ("conversion", "base_url"),
+        id="conversion-api",
+    ),
+    pytest.param(
+        ("translation", "api_key"),
+        ("translation", "api_key_set"),
+        ("translation", "base_url"),
+        id="translation",
+    ),
+    pytest.param(
+        ("conversion", "webhook_api_key"),
+        ("conversion", "webhook_api_key_set"),
+        None,
+        id="conversion-webhook",
+    ),
+]
+
+
+def _nested_value(document, path):
+    value = document
+    for part in path:
+        value = value[part]
+    return value
+
+
+def _set_nested_value(document, path, value):
+    parent = document
+    for part in path[:-1]:
+        parent = parent[part]
+    parent[path[-1]] = value
+
+
+@pytest.mark.parametrize(("secret_path", "flag_path", "url_path"), _SECRET_CASES)
+def test_integration_settings_secrets_are_write_only_and_preserved(
+    app_client, secret_path, flag_path, url_path
+):
+    secret = "test-only-integration-secret"
+    replacement = "test-only-replacement-secret"
+    settings = app_client.get("/api/v1/settings").json()
+    original_url = "http://configured.example/base"
+    if url_path:
+        _set_nested_value(settings, url_path, original_url)
+    _set_nested_value(settings, secret_path, secret)
+
+    created = app_client.put("/api/v1/settings", json=settings)
+    assert created.status_code == 200
+    for response in (created, app_client.get("/api/v1/settings")):
+        assert secret not in response.text
+        assert _nested_value(response.json(), flag_path) is True
+        assert secret_path[-1] not in _nested_value(response.json(), secret_path[:-1])
+
+    # A regular blank-secret PUT at the same destination retains the value.
+    blank = app_client.get("/api/v1/settings").json()
+    same_destination = app_client.put("/api/v1/settings", json=blank)
+    assert same_destination.status_code == 200
+    assert secret not in same_destination.text
+    assert _nested_value(same_destination.json(), flag_path) is True
+    stored = load_settings()
+    assert _nested_value(stored.model_dump(), secret_path) == secret
+
+    if url_path:
+        # A blank secret must not be inherited by a changed endpoint.
+        changed = app_client.get("/api/v1/settings").json()
+        _set_nested_value(changed, url_path, "http://new-destination.example/base")
+        rejected = app_client.put("/api/v1/settings", json=changed)
+        assert rejected.status_code == 422
+        assert secret not in rejected.text
+        persisted = load_settings().model_dump()
+        assert _nested_value(persisted, url_path) == original_url
+        assert _nested_value(persisted, secret_path) == secret
+
+        # Explicitly entering a replacement permits the endpoint change.
+        _set_nested_value(changed, secret_path, replacement)
+        accepted = app_client.put("/api/v1/settings", json=changed)
+        assert accepted.status_code == 200
+        assert replacement not in accepted.text
+        assert _nested_value(accepted.json(), flag_path) is True
+        persisted = load_settings().model_dump()
+        assert _nested_value(persisted, url_path) == "http://new-destination.example/base"
+        assert _nested_value(persisted, secret_path) == replacement
+    else:
+        # The conversion webhook key is inbound; changing the outbound base URL
+        # must not clear or retarget it.
+        changed = app_client.get("/api/v1/settings").json()
+        changed["conversion"]["base_url"] = "http://new-converter.example"
+        preserved = app_client.put("/api/v1/settings", json=changed)
+        assert preserved.status_code == 200
+        assert secret not in preserved.text
+        assert preserved.json()["conversion"]["webhook_api_key_set"] is True
+        assert load_settings().conversion.webhook_api_key == secret
+
+
+def test_auth_api_key_remains_in_settings_response(app_client):
+    settings = app_client.get("/api/v1/settings").json()
+    settings["auth"]["api_key"] = "test-only-auth-key"
+    response = app_client.put("/api/v1/settings", json=settings)
+    assert response.status_code == 200
+    assert response.json()["auth"]["api_key"] == "test-only-auth-key"
 
 
 def test_release_preferences_have_audiobook_shaped_defaults(app_client):

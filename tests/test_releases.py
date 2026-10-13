@@ -95,6 +95,55 @@ async def test_search_returns_empty_on_transport_error():
     await mock.aclose()
 
 
+_MALFORMED_BASE_URLS = ["http://p.local:abc", "http://[::1"]
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("base_url", _MALFORMED_BASE_URLS)
+async def test_search_returns_empty_for_malformed_base_url(base_url):
+    # No injected client: the owned httpx client itself rejects the URL.
+    client = ProwlarrClient(base_url=base_url, api_key="p-key")
+
+    assert await client.search("x") == []
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("base_url", _MALFORMED_BASE_URLS)
+async def test_status_returns_none_for_malformed_base_url(base_url):
+    client = ProwlarrClient(base_url=base_url, api_key="p-key")
+
+    assert await client.status() is None
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("method", ["search", "status"])
+async def test_cross_origin_redirect_is_not_followed_and_key_not_forwarded(method):
+    """Even an injected client that follows redirects must not forward the
+    custom X-Api-Key header to the redirect target."""
+    calls: list[httpx.Request] = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        calls.append(request)
+        if request.url.host == "evil.example":
+            return httpx.Response(200, json=[] if method == "search" else {"version": "x"})
+        return httpx.Response(302, headers={"location": "http://evil.example/steal"})
+
+    mock = httpx.AsyncClient(
+        transport=httpx.MockTransport(handler),
+        base_url="http://p.local",
+        follow_redirects=True,
+    )
+    client = ProwlarrClient(base_url="http://p.local", api_key="p-key", client=mock)
+
+    result = await (client.search("x") if method == "search" else client.status())
+    await mock.aclose()
+
+    assert result == ([] if method == "search" else None)
+    assert len(calls) == 1
+    assert calls[0].url.host == "p.local"
+    assert all(call.url.host != "evil.example" for call in calls)
+
+
 _PROXY_URL = "http://p.local/1/download?apikey=p-key&link=Zm9vYmFy&file=book.nzb"
 
 
@@ -113,26 +162,125 @@ async def test_download_nzb_returns_bytes():
 
 @pytest.mark.asyncio
 async def test_download_nzb_none_on_404():
+    calls: list[httpx.Request] = []
+
     def handler(request: httpx.Request) -> httpx.Response:
+        calls.append(request)
         return httpx.Response(404)
 
     mock = httpx.AsyncClient(transport=httpx.MockTransport(handler), base_url="http://p.local")
-    client = ProwlarrClient(base_url="http://p.local", client=mock)
+    client = ProwlarrClient(base_url="http://p.local", api_key="p-key", client=mock)
 
     assert await client.download_nzb(_PROXY_URL) is None
     await mock.aclose()
+    assert len(calls) == 1
 
 
 @pytest.mark.asyncio
 async def test_download_nzb_none_on_magnet_redirect():
+    calls: list[httpx.Request] = []
+
     def handler(request: httpx.Request) -> httpx.Response:
+        calls.append(request)
         return httpx.Response(200, content=b"magnet:?xt=urn:btih:deadbeef&dn=book")
 
     mock = httpx.AsyncClient(transport=httpx.MockTransport(handler), base_url="http://p.local")
-    client = ProwlarrClient(base_url="http://p.local", client=mock)
+    client = ProwlarrClient(base_url="http://p.local", api_key="p-key", client=mock)
 
     assert await client.download_nzb(_PROXY_URL) is None
     await mock.aclose()
+    assert len(calls) == 1
+
+
+_NZB_BYTES = b"<nzb>payload</nzb>"
+
+
+@pytest.mark.asyncio
+async def test_download_nzb_redirect_to_foreign_indexer_drops_api_key():
+    """Prowlarr's proxy URL redirects to the real indexer: the key is sent to
+    the configured Prowlarr only and never to the redirect target."""
+    seen: list[httpx.Request] = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        seen.append(request)
+        if request.url.host == "p.local":
+            return httpx.Response(302, headers={"location": "http://indexer.example/get/abc?t=1"})
+        return httpx.Response(200, content=_NZB_BYTES)
+
+    mock = httpx.AsyncClient(transport=httpx.MockTransport(handler), base_url="http://p.local")
+    client = ProwlarrClient(base_url="http://p.local", api_key="p-key", client=mock)
+
+    assert await client.download_nzb(_PROXY_URL) == _NZB_BYTES
+    await mock.aclose()
+
+    assert [r.url.host for r in seen] == ["p.local", "indexer.example"]
+    assert seen[0].headers["x-api-key"] == "p-key"
+    assert "x-api-key" not in seen[1].headers
+
+
+@pytest.mark.asyncio
+async def test_download_nzb_key_is_not_reattached_when_redirect_returns_to_prowlarr():
+    """Once a hop has left the Prowlarr origin the key is gone for good, even
+    if a later redirect points back at it."""
+    seen: list[httpx.Request] = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        seen.append(request)
+        if request.url.host == "p.local" and request.url.path == "/1/download":
+            return httpx.Response(302, headers={"location": "http://indexer.example/hop"})
+        if request.url.host == "indexer.example":
+            return httpx.Response(302, headers={"location": "http://p.local/files/book.nzb"})
+        return httpx.Response(200, content=_NZB_BYTES)
+
+    mock = httpx.AsyncClient(transport=httpx.MockTransport(handler), base_url="http://p.local")
+    client = ProwlarrClient(base_url="http://p.local", api_key="p-key", client=mock)
+
+    assert await client.download_nzb(_PROXY_URL) == _NZB_BYTES
+    await mock.aclose()
+
+    assert [r.url.host for r in seen] == ["p.local", "indexer.example", "p.local"]
+    assert seen[0].headers["x-api-key"] == "p-key"
+    assert "x-api-key" not in seen[1].headers
+    assert "x-api-key" not in seen[2].headers
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    "download_url",
+    [
+        pytest.param(
+            "http://evil.example/1/download?apikey=p-key&link=Zm9v&file=b.nzb", id="foreign-host"
+        ),
+        pytest.param(
+            "http://p.local:9999/1/download?apikey=p-key&link=Zm9v&file=b.nzb", id="other-port"
+        ),
+        pytest.param(
+            "https://p.local/1/download?apikey=p-key&link=Zm9v&file=b.nzb", id="other-scheme"
+        ),
+        pytest.param(
+            "http://p.local/1/download?apikey=other-key&link=Zm9v&file=b.nzb", id="wrong-apikey"
+        ),
+        pytest.param(f"{_PROXY_URL}\n", id="trailing-lf"),
+        pytest.param(f"{_PROXY_URL}\r\n", id="trailing-crlf"),
+        pytest.param(f"{_PROXY_URL}\r\nhttp://evil.example/steal", id="crlf-smuggled-url"),
+        pytest.param("http://p.\rlocal/1/download?apikey=p-key&link=Zm9v&file=b.nzb", id="cr-host"),
+        pytest.param("http://p.local/1/down\nload?apikey=p-key&link=Zm9v&file=b.nzb", id="lf-path"),
+    ],
+)
+async def test_download_nzb_rejects_off_origin_and_raw_control_urls_without_a_request(download_url):
+    seen: list[httpx.Request] = []
+
+    def handler(request: httpx.Request) -> httpx.Response:  # pragma: no cover - must not run
+        seen.append(request)
+        return httpx.Response(200, content=_NZB_BYTES)
+
+    mock = httpx.AsyncClient(transport=httpx.MockTransport(handler), base_url="http://p.local")
+    client = ProwlarrClient(base_url="http://p.local", api_key="p-key", client=mock)
+
+    assert await client.download_nzb(download_url) is None
+    await mock.aclose()
+
+    assert seen == []
 
 
 # ---------------------------------------------------------------------------

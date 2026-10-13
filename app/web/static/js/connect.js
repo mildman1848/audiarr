@@ -7,11 +7,13 @@
 // button; settings.js calls into populate()/collectForSave() at the right
 // points in its own load/save flow.
 //
-// Secrets: header_value is never populated from the settings GET response
-// into an input field -- a stored value only ever shows as a masked
-// placeholder, and a blank field on save means "keep the stored value"
-// (collectForSave falls back to the value already in the freshly-fetched
-// document passed in by settings.js).
+// Secrets: header_value is write-only at the settings API. The GET response
+// never contains it, only the derived header_value_set flag, which drives
+// the masked placeholder. collectForSave submits only a value the user
+// newly typed; a blank header_value on save means "keep the stored secret",
+// which the server resolves by the entry's stable id (see
+// _preserve_connect_header_secrets in app/api/routes_settings.py). A blank
+// header name clears the header (name and value) server-side.
 
 // Wrapped in an IIFE: this page also loads settings.js, and both modules
 // declare a top-level `const T` -- a bare top-level declaration here makes
@@ -164,6 +166,8 @@ async function testRow(id) {
     const resp = await fetch(`/api/v1/connect/test/${encodeURIComponent(id)}`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
+      // A blank header_value falls back to the stored secret server-side
+      // (app/api/routes_connect.py); the stored value is never read here.
       body: JSON.stringify({
         url: row.url.trim(),
         header_name: row.header_name.trim(),
@@ -197,7 +201,7 @@ function populate(connectList) {
     on_health_issue: Boolean(c.on_health_issue),
     header_name: c.header_name || "",
     header_value: "",
-    _hasHeaderValue: Boolean(c.header_value),
+    _hasHeaderValue: Boolean(c.header_value_set),
     last_event: c.last_event || "",
     last_status: c.last_status || "",
     last_status_code: c.last_status_code ?? null,
@@ -208,9 +212,9 @@ function populate(connectList) {
 }
 
 // existingConnect is doc.connect from the fresh GET settings.js already did
-// at the top of saveSettings() -- it still carries the real, unmasked
-// header_value for every already-saved entry, which is how a blank
-// password field on a row here means "keep the stored secret".
+// at the top of saveSettings(). It carries no header_value (write-only), so
+// it is only used to carry over the read-only last-delivery metadata; the
+// row's header_value is submitted exactly as typed (blank = keep stored).
 function collectForSave(existingConnect) {
   const byId = new Map((existingConnect || []).map((c) => [c.id, c]));
   return state
@@ -227,7 +231,7 @@ function collectForSave(existingConnect) {
         on_import: Boolean(row.on_import),
         on_health_issue: Boolean(row.on_health_issue),
         header_name: row.header_name.trim(),
-        header_value: row.header_value ? row.header_value : stored ? stored.header_value : "",
+        header_value: row.header_value,
         last_event: stored ? stored.last_event : "",
         last_status: stored ? stored.last_status : "",
         last_status_code: stored ? stored.last_status_code : null,

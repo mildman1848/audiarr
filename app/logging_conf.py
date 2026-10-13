@@ -141,6 +141,65 @@ class RedactingRingBufferHandler(logging.Handler):
             self._records.clear()
 
 
+# httpx logs ``HTTP Request: <METHOD> <full URL> "HTTP/1.1 200 OK"`` at INFO.
+# The URL may carry userinfo, a path and a query token, so it is stripped.
+_HTTPX_REQUEST_PREFIX = "HTTP Request:"
+# Parsed from the *end* of the formatted line so a URL can never confuse the
+# status match; the method is the first token after the prefix.
+_HTTPX_REQUEST_RE = re.compile(
+    r'^HTTP Request: (?P<method>[A-Za-z]{3,16}) .*"HTTP/[0-9.]+ (?P<status>[1-5][0-9]{2})(?: [^"]*)?"$',
+    re.DOTALL,
+)
+# Output of the rewrite below; matching it keeps the filter idempotent.
+_HTTPX_SANITIZED_RE = re.compile(
+    r"^HTTP Request: (?:[A-Za-z]{3,16} -> [1-5][0-9]{2}|request completed)$"
+)
+
+
+class HttpxRequestUrlFilter(logging.Filter):
+    """Strip the request URL from httpx's ``HTTP Request:`` log records.
+
+    The record is rewritten in place (``msg`` replaced, ``args`` emptied), so
+    every handler downstream -- stdout and the ring buffer alike -- only ever
+    sees ``HTTP Request: GET -> 200``, or a generic ``request completed`` when
+    the line cannot be parsed safely. The URL (userinfo, path, query) is never
+    carried over, and applying the filter twice is a no-op.
+    """
+
+    def filter(self, record: logging.LogRecord) -> bool:
+        if not isinstance(record.msg, str) or not record.msg.startswith(_HTTPX_REQUEST_PREFIX):
+            return True
+        if not record.args and _HTTPX_SANITIZED_RE.match(record.msg):
+            return True
+        try:
+            message = record.getMessage()
+        except Exception:  # noqa: BLE001 -- malformed %-args fall back to the generic line
+            message = ""
+        match = _HTTPX_REQUEST_RE.match(message)
+        if match:
+            safe = f"{_HTTPX_REQUEST_PREFIX} {match['method'].upper()} -> {match['status']}"
+        else:
+            safe = f"{_HTTPX_REQUEST_PREFIX} request completed"
+        record.msg = safe
+        record.args = None
+        return True
+
+
+def install_httpx_url_filter(logger: logging.Logger | None = None) -> None:
+    """Attach :class:`HttpxRequestUrlFilter` to the ``httpx`` logger once.
+
+    httpx emits its request line directly on the ``httpx`` logger, so a
+    logger-level filter runs before any handler (and before caplog/ring
+    buffer copies are made) for every request in the process, not only
+    Connect webhooks. It coexists with the contextual webhook suppression in
+    app/connect.py, which keys on the same ``HTTP Request:`` prefix.
+    """
+    target = logger or logging.getLogger("httpx")
+    if not any(isinstance(f, HttpxRequestUrlFilter) for f in target.filters):
+        # Insert first so later filters (and handlers) never see the URL.
+        target.filters.insert(0, HttpxRequestUrlFilter())
+
+
 # Process-wide buffer shared by every configure_logging() call.
 LOG_BUFFER = RedactingRingBufferHandler()
 
@@ -160,6 +219,7 @@ def configure_logging(level: str | None = None) -> None:
         format="%(asctime)s %(levelname)s [%(name)s] %(message)s",
     )
     install_log_buffer()
+    install_httpx_url_filter()
     # Never log secret values; provider/connection modules only log that a
     # secret was resolved and from which source (see app/secrets_util.py).
     # The in-memory buffer additionally redacts common secret patterns.

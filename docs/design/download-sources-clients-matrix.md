@@ -37,6 +37,18 @@ conclusion in [`dewarr-feature-harvest.md`](dewarr-feature-harvest.md)
   (`_quality_fit_fields`, `_preference_fields`).
 - `SABnzbdClient` exposes `add_nzb`, `queue`, `history` (completed items carry
   a `storage` path), remove/retry actions and `version`.
+- The deployment key (`SABNZBD_API_KEY` / `FILE__SABNZBD_API_KEY`) is bound to
+  the required non-secret `SABNZBD_URL`: `SABnzbdClient` only resolves it when
+  its `base_url` matches `SABNZBD_URL` (http(s) only; scheme/host case and one
+  trailing slash tolerated; no userinfo/query/fragment). If `SABNZBD_URL` is
+  unset, malformed or different, no key is sent. A key saved in settings or
+  typed into the test form is used as-is; an explicit empty key means none.
+- The same binding applies to `AUDIOBOOKSHELF_API_KEY` /
+  `FILE__AUDIOBOOKSHELF_API_KEY` (bound to `AUDIOBOOKSHELF_URL`) and
+  `M4B_CONVERTARR_API_KEY` / `FILE__M4B_CONVERTARR_API_KEY` (bound to
+  `M4B_CONVERTARR_URL`), using the same URL rules. **Migration:** deployments
+  that supply these keys via env/`FILE__` must now also set the matching URL
+  variable, otherwise no key is sent; keys saved in settings are unaffected.
 - `app/sab_auto_import.py`: polls history, filters on status `completed` and
   category, dedupes via `sab_import_state` keyed by `nzo_id` (hash fallback),
   applies `resolve_remote_path()` to `storage` **before** any `is_dir()` /
@@ -160,13 +172,13 @@ The points below were the design recommendations; the shipped implementation fol
     in the UI/docs. Any #81 qB secret (API key, or legacy username/password)
     must be **excluded at the settings API response boundary** (not merely
     masked in the UI), never logged, and covered by tests. The current
-    behaviour is **not** a precedent: `download_clients[*].api_key` is
-    returned in the raw settings response today. Either bring the existing
-    `api_key` under the same exclusion in this slice, or treat that exposure
-    as a pre-existing defect that must be fixed before `api_key` is reused for
-    qBittorrent. Preserve-on-save semantics (an omitted/blank secret keeps the
-    stored value) must be designed alongside, so excluding secrets does not
-    wipe them on the next settings write.
+    behaviour was **not** a precedent: `download_clients[*].api_key` used to
+    be returned in the raw settings response. As implemented, download-client
+    `api_key`/`password` are write-only at the settings API, and the Prowlarr
+    indexer `api_key` is now write-only too (unreleased working branch; only
+    the derived `api_key_set` flag is returned). A blank value on save keeps
+    the stored secret; for an indexer that holds only while its URL is
+    unchanged, so changing the destination requires re-entering the key.
 
 Automating Prowlarr search/grab for already-configured wanted workflows is not
 new native-source behaviour: it remains Prowlarr-sourced and bound by the same
@@ -203,7 +215,7 @@ default.
 | Safe-failure tests | Login 403, timeout, malformed JSON, missing path, unmapped/nonexistent path, no qB configured → recorded failure/skip or 503, never an unhandled exception or deletion |
 | SABnzbd preserved | Existing SAB tests pass unmodified; usenet grab behaviour unchanged |
 | Dedupe | Same hash on two ticks imports once |
-| No secret leakage | Test that the qB API key (and legacy username/password) is **absent from the raw settings API response** (excluded, not just masked) and from logs; test covers the existing `download_clients[*].api_key` exposure (fixed in this slice, or explicitly tracked as a blocking pre-existing defect); secret survives a settings save that omits it |
+| No secret leakage | **Done:** the qB API key (and legacy username/password) and the existing `download_clients[*].api_key` are **absent from the raw settings API response** (excluded, not just masked) and from logs; the Prowlarr indexer `api_key` is likewise absent (unreleased working branch, `api_key_set` flag only); a secret survives a settings save that omits it, except that an indexer key is not inherited when its URL changes (422, re-enter the key) |
 | Real subprocess / tests per repo convention | Run the project's test and lint commands and record real output in the PR |
 
 ## 7. Sources
@@ -243,7 +255,15 @@ torrents, therefore:
 - A manual grab requires both a non-blank category and tag on the qBittorrent
   client (completion import filters on both); `/releases/grab` answers 422
   otherwise. Torrent HTTP(S) URLs are accepted only when they are Prowlarr's
-  canonical `<base>/<indexer id>/download` URL on the configured Prowlarr.
-  Connection-test endpoints reuse stored API keys only for the matching
-  configured client URL; blank settings fields preserve, but do not clear,
-  stored secrets.
+  canonical `<base>/<indexer id>/download` URL on the configured Prowlarr, with
+  exactly one non-empty `apikey`, `link`, and `file` query parameter and no
+  fragment or extra keys; the decoded `apikey` must match the configured
+  Prowlarr API key. Duplicate keys and malformed percent escapes are rejected.
+  This query-level restriction is an #82 security-review follow-up against base
+  `3584259` (not yet released). Connection-test endpoints reuse stored API keys
+  only for the matching configured client URL; blank settings fields preserve,
+  but do not clear, stored secrets.
+- Both the torrent and the usenet (NZB) grab paths require the canonical
+  configured-Prowlarr proxy URL and query, and reject raw URL controls. When
+  Prowlarr redirects an NZB fetch to the indexer, the API-key header is
+  dropped once the request leaves Prowlarr.

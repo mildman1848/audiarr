@@ -144,14 +144,15 @@ function readQbittorrent(s) {
   );
 }
 
-// Return the first Prowlarr indexer, or a fresh default.
+// Return the first Prowlarr indexer, or a fresh default. The settings API
+// never returns the Prowlarr api_key, only api_key_set.
 function readProwlarr(s) {
   return (
     (s.indexers || []).find((i) => i.type === "prowlarr") || {
       name: "Prowlarr",
       type: "prowlarr",
       url: "",
-      api_key: "",
+      api_key_set: false,
       enabled: false,
     }
   );
@@ -711,7 +712,7 @@ function populate(s) {
   setValue("conversion-backend", s.conversion.backend || "disabled");
   setChecked("conversion-delete-originals", s.conversion.delete_originals);
   setValue("conversion-job-timeout", s.conversion.job_timeout_hours ?? 6);
-  setPlaceholder("conversion-webhook-key", s.conversion.webhook_api_key ? MASK : "");
+  setPlaceholder("conversion-webhook-key", s.conversion.webhook_api_key_set ? MASK : "");
 
   const sab = readSab(s);
   setChecked("sab-enabled", sab.enabled);
@@ -738,7 +739,7 @@ function populate(s) {
   setChecked("prowlarr-enabled", prowlarr.enabled);
   setValue("prowlarr-name", prowlarr.name || "Prowlarr");
   setValue("prowlarr-url", prowlarr.url || "");
-  setPlaceholder("prowlarr-api-key", prowlarr.api_key ? MASK : "");
+  setPlaceholder("prowlarr-api-key", prowlarr.api_key_set ? MASK : "");
 
   // Update check (issue #33): display-only, single GET to GitHub releases
   // when enabled. Repository/releases URL are shown read-only.
@@ -1029,6 +1030,8 @@ async function saveSettings(event) {
       prowlarr.enabled = getChecked("prowlarr-enabled");
       prowlarr.name = getValue("prowlarr-name").trim() || "Prowlarr";
       prowlarr.url = getValue("prowlarr-url").trim();
+      // Write-only secret: blank means keep the stored key, so omit it.
+      delete prowlarr.api_key;
       const prowlarrKey = getValue("prowlarr-api-key");
       if (prowlarrKey) prowlarr.api_key = prowlarrKey;
     }
