@@ -352,6 +352,11 @@ class Indexer(BaseModel):
     The MVP implements Prowlarr (``type="prowlarr"``) as an indexer
     manager: configure ``url`` and ``api_key``. The connection test lives
     at ``/api/v1/connections/prowlarr/test``.
+
+    ``api_key`` is write-only at the settings API: it is excluded from every
+    response (see app/api/routes_settings.py), only the derived
+    ``api_key_set`` flag is exposed, and a blank value on save keeps the
+    stored key while the ``url`` is unchanged.
     """
 
     name: str
@@ -360,16 +365,23 @@ class Indexer(BaseModel):
     api_key: str = ""
     enabled: bool = False
 
+    @computed_field  # type: ignore[prop-decorator]
+    @property
+    def api_key_set(self) -> bool:
+        """Read-only flag so a UI can show "stored" without the secret."""
+        return bool(self.api_key)
+
 
 class ConnectNotification(BaseModel):
     """Outbound webhook notification, mirrors Radarr/Sonarr's "Connect" tab.
 
     ``header_value`` is a secret (e.g. a bearer token or API key some
-    receivers require). Like DownloadClient.api_key/Indexer.api_key, it is
-    NOT excluded from the raw settings API response (see routes_settings.py)
-    -- only the UI is responsible for never rendering it back into the page
-    (a stored value shows as a masked placeholder; see connect.js). ``id``
-    is a stable key generated client-side so the Connect test endpoint
+    receivers require). It is write-only at the settings API: it is
+    excluded from every GET/PUT response (see routes_settings.py) and only
+    the derived ``header_value_set`` flag is exposed, so the UI can show a
+    masked placeholder (see connect.js). A blank value on PUT keeps the
+    stored secret of the entry with the same ``id``. ``id`` is a stable key
+    generated client-side so the settings save, the Connect test endpoint
     (app/api/routes_connect.py) and delivery dispatcher (app/connect.py)
     can address one entry without relying on name/index, which can be
     duplicated or reordered.
@@ -390,6 +402,12 @@ class ConnectNotification(BaseModel):
     last_status_code: int | None = None
     last_error: str = ""
     last_delivered_at: str = ""
+
+    @computed_field  # type: ignore[prop-decorator]
+    @property
+    def header_value_set(self) -> bool:
+        """Read-only flag so a UI can show "stored" without the secret."""
+        return bool(self.header_value)
 
 
 class MetadataSettings(BaseModel):
@@ -461,6 +479,10 @@ class ConversionSettings(BaseModel):
     ``delete_originals`` defaults to False — originals are NEVER deleted
     unless the user explicitly opts in (safe default; the conversion
     backend owns file movements).
+
+    ``api_key`` and ``webhook_api_key`` are write-only at the settings API
+    (see app/api/routes_settings.py): responses expose only the derived
+    ``*_set`` flags and a blank value on save keeps the stored secret.
     """
 
     backend: Literal["disabled", "m4b-convertarr", "command"] = "disabled"
@@ -476,6 +498,18 @@ class ConversionSettings(BaseModel):
     # many hours (webhook lost / converter crashed).
     job_timeout_hours: int = 6
 
+    @computed_field  # type: ignore[prop-decorator]
+    @property
+    def api_key_set(self) -> bool:
+        """Read-only flag so a UI can show "stored" without the secret."""
+        return bool(self.api_key)
+
+    @computed_field  # type: ignore[prop-decorator]
+    @property
+    def webhook_api_key_set(self) -> bool:
+        """Read-only flag so a UI can show "stored" without the secret."""
+        return bool(self.webhook_api_key)
+
 
 class UiSettings(BaseModel):
     """UI/localization settings."""
@@ -490,6 +524,8 @@ class TranslationSettings(BaseModel):
 
     The default is offline-safe and sends no text anywhere. Users can opt
     into a LibreTranslate-compatible backend, preferably self-hosted.
+    ``api_key`` is write-only at the settings API (derived ``api_key_set``
+    flag only; a blank value on save keeps the stored key).
     """
 
     backend: Literal["none", "libretranslate"] = "none"
@@ -497,6 +533,12 @@ class TranslationSettings(BaseModel):
     api_key: str = ""
     default_source_language: str = "en"
     default_target_language: str = "de"
+
+    @computed_field  # type: ignore[prop-decorator]
+    @property
+    def api_key_set(self) -> bool:
+        """Read-only flag so a UI can show "stored" without the secret."""
+        return bool(self.api_key)
 
 
 class LoggingSettings(BaseModel):
@@ -539,6 +581,7 @@ class AudiobookshelfConnection(BaseModel):
 
     ``api_key`` set here is only used when no FILE__/env secret is
     configured; see app/connections/audiobookshelf.py for resolution order.
+    It is write-only at the settings API (derived ``api_key_set`` flag only).
     """
 
     url: str = ""
@@ -548,19 +591,32 @@ class AudiobookshelfConnection(BaseModel):
     library_id: str = ""
     enabled: bool = False
 
+    @computed_field  # type: ignore[prop-decorator]
+    @property
+    def api_key_set(self) -> bool:
+        """Read-only flag so a UI can show "stored" without the secret."""
+        return bool(self.api_key)
+
 
 class M4BConvertarrConnection(BaseModel):
     """Connection to an m4b-convertarr instance for audio conversion jobs.
 
     Audiarr intentionally delegates conversion to the external
     m4b-convertarr service rather than embedding a converter (see
-    docs/design/architecture.md for the rationale).
+    docs/design/architecture.md for the rationale). ``api_key`` is
+    write-only at the settings API (derived ``api_key_set`` flag only).
     """
 
     url: str = ""
     api_key: str = ""
     webhook_path: str = "/api/v1/convert"
     enabled: bool = False
+
+    @computed_field  # type: ignore[prop-decorator]
+    @property
+    def api_key_set(self) -> bool:
+        """Read-only flag so a UI can show "stored" without the secret."""
+        return bool(self.api_key)
 
 
 class LiberatarrSettings(BaseModel):
@@ -571,7 +627,8 @@ class LiberatarrSettings(BaseModel):
     monitored books. ``token`` is sent as ``Authorization: Bearer <token>``
     and is only used when non-empty (see app/connections/liberatarr.py).
     This is a read-only integration: Audiarr only ever calls Liberatarr's
-    GET /health and GET /api/library endpoints.
+    GET /health and GET /api/library endpoints. ``token`` is write-only at
+    the settings API (derived ``token_set`` flag only).
 
     The ``sync_status``/``last_sync_*`` fields track Liberatarr's status as
     an import-list source in Starr terms (issue #72), same pattern as
@@ -588,6 +645,12 @@ class LiberatarrSettings(BaseModel):
     last_sync_error: str = ""
     last_sync_created: int = 0
     last_sync_skipped: int = 0
+
+    @computed_field  # type: ignore[prop-decorator]
+    @property
+    def token_set(self) -> bool:
+        """Read-only flag so a UI can show "stored" without the secret."""
+        return bool(self.token)
 
 
 class MetadataProfile(BaseModel):

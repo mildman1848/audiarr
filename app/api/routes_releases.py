@@ -17,16 +17,21 @@ yields a 503 so the UI can prompt the user to finish setup.
 from __future__ import annotations
 
 import logging
-import re
 import sqlite3
-from urllib.parse import urlsplit
 
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
 
 from app.config import get_db_path, load_settings
 from app.connect import dispatch_event
-from app.connections.prowlarr import ProwlarrClient
+from app.connections.prowlarr import (
+    CONTROL_CHARS,
+    ProwlarrClient,
+    has_canonical_prowlarr_proxy_query,
+    is_prowlarr_download_path,
+    resolve_prowlarr_api_key,
+    url_origin,
+)
 from app.connections.qbittorrent import (
     QBittorrentClient,
     QBittorrentError,
@@ -247,31 +252,24 @@ def _is_torrent_request(request: GrabRequest) -> bool:
     return bool(request.magnet_url) or request.download_url.strip().lower().startswith("magnet:")
 
 
-def _origin(url: str) -> tuple[str, str, int | None] | None:
-    try:
-        parts = urlsplit(url.strip())
-        if parts.scheme not in ("http", "https") or not parts.hostname:
-            return None
-        return parts.scheme, parts.hostname.lower(), parts.port
-    except ValueError:
-        return None
+def _require_prowlarr_download_url(
+    url: str, indexer: Indexer, label: str, invalid_message: str
+) -> None:
+    """Raise a 400 unless ``url`` is a canonical Prowlarr proxy download URL.
 
-
-def _is_prowlarr_download_path(url: str, prowlarr_url: str) -> bool:
-    """True only for Prowlarr's canonical ``<base>/<indexer id>/download`` URL.
-
-    Same-origin alone would let a caller point qBittorrent at any Prowlarr
-    endpoint (e.g. ``/api/v1/...``); real result URLs always have this shape.
-    Embedded credentials (``user:pass@``) are rejected as well.
+    Checks origin, ``<base>/<indexer id>/download`` path and the exact
+    ``apikey``/``link``/``file`` query against the *effective* configured key
+    (stored, else ``PROWLARR_API_KEY`` / ``FILE__`` when the indexer URL is the
+    trusted ``PROWLARR_URL``). Shared by the torrent and usenet grab paths; no
+    message ever includes the URL or a key.
     """
-    try:
-        parts = urlsplit(url.strip())
-        if parts.username is not None or parts.password is not None:
-            return False
-        base = urlsplit(prowlarr_url.strip()).path.rstrip("/")
-    except ValueError:
-        return False
-    return re.fullmatch(re.escape(base) + r"/\d+/download", parts.path) is not None
+    wanted = url_origin(url)
+    if wanted is None or len(url) > 4096:
+        raise HTTPException(400, invalid_message)
+    if wanted != url_origin(indexer.url) or not is_prowlarr_download_path(url, indexer.url):
+        raise HTTPException(400, f"The {label} URL does not point at the configured Prowlarr")
+    if not has_canonical_prowlarr_proxy_query(url, resolve_prowlarr_api_key(indexer.api_key, indexer.url)):
+        raise HTTPException(400, f"The {label} URL is not a valid Prowlarr download link")
 
 
 def _select_torrent_url(request: GrabRequest, indexer: Indexer) -> str:
@@ -281,7 +279,15 @@ def _select_torrent_url(request: GrabRequest, indexer: Indexer) -> str:
     only when it points at the configured Prowlarr (so a caller can't make
     qBittorrent fetch an arbitrary address). Release URLs routinely embed API
     keys, so no error message ever includes one.
+
+    Raw C0/C1 control characters are rejected first, on the unmodified
+    strings: URL parsers silently drop CR/LF/TAB before validating, while the
+    raw value is what qBittorrent receives in its newline-separated ``urls``
+    field, so a CRLF-embedded second URL would otherwise slip through.
     """
+    for candidate in (request.magnet_url, request.download_url):
+        if candidate and CONTROL_CHARS.search(candidate):
+            raise HTTPException(400, "The release URL contains invalid characters")
     for candidate in (request.magnet_url, request.download_url):
         magnet = normalize_magnet(candidate)
         if magnet:
@@ -289,11 +295,24 @@ def _select_torrent_url(request: GrabRequest, indexer: Indexer) -> str:
     url = request.download_url.strip()
     if url.lower().startswith("magnet:"):
         raise HTTPException(400, "The release's magnet link is not valid")
-    wanted = _origin(url)
-    if wanted is None or len(url) > 4096:
-        raise HTTPException(400, "The release has no valid magnet or torrent URL")
-    if wanted != _origin(indexer.url) or not _is_prowlarr_download_path(url, indexer.url):
-        raise HTTPException(400, "The torrent URL does not point at the configured Prowlarr")
+    _require_prowlarr_download_url(
+        url, indexer, "torrent", "The release has no valid magnet or torrent URL"
+    )
+    return url
+
+
+def _select_nzb_url(request: GrabRequest, indexer: Indexer) -> str:
+    """Validate the usenet ``download_url`` before it is fetched, or raise a 400.
+
+    The URL is caller-supplied and ProwlarrClient attaches the Prowlarr API key
+    to the request, so only the configured Prowlarr's own canonical proxy
+    download URL is accepted (same rules as the torrent path). Raw control
+    characters are rejected first, on the unmodified string.
+    """
+    if CONTROL_CHARS.search(request.download_url):
+        raise HTTPException(400, "The release URL contains invalid characters")
+    url = request.download_url.strip()
+    _require_prowlarr_download_url(url, indexer, "NZB", "The release has no valid NZB URL")
     return url
 
 
@@ -361,12 +380,15 @@ async def grab_release(request: GrabRequest) -> GrabResponse:
     indexer = _require_prowlarr()
     sab = _require_sabnzbd()
 
+    # Validate before any outbound request: the key is attached to the fetch.
+    nzb_url = _select_nzb_url(request, indexer)
+
     prowlarr = ProwlarrClient(base_url=indexer.url, api_key=indexer.api_key or None)
     # The search result's download_url is already a self-contained Prowlarr
     # proxy URL, so no indexer_id is needed for the fetch; we keep it in the
     # request for forward-compat and log it.
     log.debug("Grab %r: indexer_id=%s", request.title, request.indexer_id)
-    nzb = await prowlarr.download_nzb(request.download_url)
+    nzb = await prowlarr.download_nzb(nzb_url)
     if nzb is None:
         log.warning("Grab %r: NZB fetch from Prowlarr failed", request.title)
         return GrabResponse(

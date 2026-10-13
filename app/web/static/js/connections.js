@@ -47,18 +47,19 @@ function populate(settings) {
   document.getElementById("abs-url").value = abs.url || "";
   document.getElementById("abs-library-id").value = abs.library_id || "";
   document.getElementById("abs-enabled").checked = Boolean(abs.enabled);
-  // Never place the key in .value; only hint that one is stored.
-  document.getElementById("abs-api-key").placeholder = abs.api_key ? MASK : "";
+  // Never place the key in .value; only hint that one is stored. The
+  // settings API never returns the secret itself, only api_key_set.
+  document.getElementById("abs-api-key").placeholder = abs.api_key_set ? MASK : "";
 
   const m4b = settings.connections.m4b_convertarr;
   document.getElementById("m4b-url").value = m4b.url || "";
   document.getElementById("m4b-enabled").checked = Boolean(m4b.enabled);
-  document.getElementById("m4b-api-key").placeholder = m4b.api_key ? MASK : "";
+  document.getElementById("m4b-api-key").placeholder = m4b.api_key_set ? MASK : "";
 
   const liberatarr = settings.connections.liberatarr;
   document.getElementById("liberatarr-url").value = liberatarr.base_url || "";
   document.getElementById("liberatarr-enabled").checked = Boolean(liberatarr.enabled);
-  document.getElementById("liberatarr-token").placeholder = liberatarr.token ? MASK : "";
+  document.getElementById("liberatarr-token").placeholder = liberatarr.token_set ? MASK : "";
 
   // Starr-style status/last-sync summary (issue #72), same fields the
   // generic /api/v1/import-lists status endpoint reports.
