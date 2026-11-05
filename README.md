@@ -29,8 +29,9 @@ is implemented and tested, not just modeled in a settings page.
   Audiobookshelf connection test + scan trigger, m4b-convertarr conversion
   job tracking, and outbound Connect webhooks for grab/import/health events.
 - 🔐 **Security** — forms login and API-key (`X-Api-Key`) authentication
-  enforced by middleware, login rate limiting, PBKDF2 password hashing, and
-  automatic config backups with retention rotation.
+  enforced by middleware, login rate limiting, PBKDF2 password hashing,
+  write-only integration secrets, and automatic config backups with
+  retention rotation.
 - 🖥️ **UI** — server-rendered, Starr-family dark UI (dense data pages,
   System Status/Tasks/Events/Logs tabs, Activity queue/history) with full
   English and German i18n. System Logs is a bounded, redacted, in-memory
@@ -132,6 +133,30 @@ archive with a manifest and retention rotation — see
 contents, restore procedures, rollback, and a verification checklist.
 Update checks are display-only (GitHub releases API) and never trigger an
 auto-update.
+
+Integration secrets (indexer, download-client, Audiobookshelf, m4b-convertarr,
+Liberatarr, conversion/translation and Connect webhook header values) are
+write-only: the settings API returns `*_set` flags instead of the values, and
+a blank value on save keeps the stored secret only while its destination URL
+is unchanged. Secrets can be replaced but not read back; the login API key is
+a separate mechanism. Connection tests and logs avoid echoing keys and URLs.
+This reduces accidental exposure; it is not a substitute for network
+isolation or for protecting `settings.json` and backups, which still contain
+the secrets.
+
+Deployment keys from environment variables or `FILE__` secrets are sent only
+to the destination named by the matching non-secret URL variable, so set both
+together:
+
+| Key (env or `FILE__`) | URL variable |
+|---|---|
+| `SABNZBD_API_KEY` | `SABNZBD_URL` |
+| `AUDIOBOOKSHELF_API_KEY` | `AUDIOBOOKSHELF_URL` |
+| `M4B_CONVERTARR_API_KEY` | `M4B_CONVERTARR_URL` |
+
+Without the matching URL the key is intentionally not sent. Credentials
+entered in the UI and stored in settings are unaffected. See
+[`.env.example`](.env.example) and the [changelog](CHANGELOG.md).
 
 Publishing is gated: `make validate` must pass, registry secrets must be
 configured explicitly, and a Docker build/smoke test must succeed on a host

@@ -2,17 +2,22 @@
 
 from __future__ import annotations
 
+import asyncio
+import io
 import logging
 from pathlib import Path
 
+import httpx
 import pytest
 
 from app import logging_conf
 from app.logging_conf import (
     LOG_BUFFER,
     REDACTED,
+    HttpxRequestUrlFilter,
     RedactingRingBufferHandler,
     configure_logging,
+    install_httpx_url_filter,
     redact_secrets,
 )
 
@@ -430,3 +435,145 @@ def test_endpoint_never_returns_raw_secrets_from_any_field(app_client, live_buff
     for raw in [*raw_values, "api-name-secret-1"]:
         assert raw not in text
     assert REDACTED in text
+
+
+# --- httpx request-URL stripping ------------------------------------------
+
+_SECRET_REQUEST_URL = (
+    "https://uinfo-marker:upass-marker@hooks.example.test/path-marker/x?token=tok-marker&k=1"
+)
+_URL_MARKERS = ("uinfo-marker", "upass-marker", "hooks.example.test", "path-marker", "tok-marker")
+
+
+@pytest.fixture()
+def httpx_capture():
+    """Stdout-like stream and a private ring buffer on the real httpx logger."""
+    logger = logging.getLogger("httpx")
+    install_httpx_url_filter()
+    stream = io.StringIO()
+    stream_handler = logging.StreamHandler(stream)
+    stream_handler.setFormatter(logging.Formatter("%(levelname)s [%(name)s] %(message)s"))
+    buffer = RedactingRingBufferHandler(capacity=10)
+    previous_level = logger.level
+    logger.setLevel(logging.INFO)
+    logger.addHandler(stream_handler)
+    logger.addHandler(buffer)
+    yield stream, buffer
+    logger.removeHandler(stream_handler)
+    logger.removeHandler(buffer)
+    logger.setLevel(previous_level)
+
+
+def _assert_no_url(text: str) -> None:
+    for marker in _URL_MARKERS:
+        assert marker not in text
+
+
+@pytest.mark.parametrize(("status", "method"), [(204, "POST"), (500, "GET")])
+def test_httpx_request_log_keeps_method_and_status_but_not_url(httpx_capture, status, method):
+    stream, buffer = httpx_capture
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        return httpx.Response(status)
+
+    with httpx.Client(transport=httpx.MockTransport(handler)) as client:
+        client.request(method, _SECRET_REQUEST_URL)
+
+    expected = f"HTTP Request: {method} -> {status}"
+    assert stream.getvalue().strip() == f"INFO [httpx] {expected}"
+    (entry,) = buffer.snapshot(10)
+    assert entry["message"] == expected
+    _assert_no_url(stream.getvalue())
+    _assert_no_url(str(buffer.snapshot(10)))
+
+
+def test_httpx_async_request_log_is_stripped_too(httpx_capture):
+    stream, buffer = httpx_capture
+
+    async def run() -> None:
+        transport = httpx.MockTransport(lambda request: httpx.Response(200))
+        async with httpx.AsyncClient(transport=transport) as client:
+            await client.get(_SECRET_REQUEST_URL)
+
+    asyncio.run(run())
+
+    assert stream.getvalue().strip() == "INFO [httpx] HTTP Request: GET -> 200"
+    (entry,) = buffer.snapshot(10)
+    assert entry["message"] == "HTTP Request: GET -> 200"
+    _assert_no_url(stream.getvalue() + str(buffer.snapshot(10)))
+
+
+def _httpx_record(msg: str, args: tuple | None) -> logging.LogRecord:
+    return logging.LogRecord("httpx", logging.INFO, __file__, 1, msg, args, None)
+
+
+def test_httpx_filter_drops_url_args_and_is_idempotent():
+    record = _httpx_record(
+        'HTTP Request: %s %s "%s %d %s"',
+        ("PATCH", _SECRET_REQUEST_URL, "HTTP/1.1", 201, "Created"),
+    )
+    flt = HttpxRequestUrlFilter()
+
+    assert flt.filter(record) is True
+    assert record.msg == "HTTP Request: PATCH -> 201"
+    assert not record.args
+    first = record.getMessage()
+    assert flt.filter(record) is True
+    assert record.getMessage() == first == "HTTP Request: PATCH -> 201"
+    _assert_no_url(repr(record.__dict__))
+
+
+@pytest.mark.parametrize(
+    ("msg", "args"),
+    [
+        # No parseable status line: URL must still disappear.
+        ("HTTP Request: %s %s", ("GET", _SECRET_REQUEST_URL)),
+        (f"HTTP Request: GET {_SECRET_REQUEST_URL} garbled", None),
+        # Malformed %-args (too few) cannot be formatted at all.
+        ('HTTP Request: %s %s "%s %d %s"', (_SECRET_REQUEST_URL,)),
+        # Non-token method position.
+        (f'HTTP Request: {_SECRET_REQUEST_URL} "HTTP/1.1 200 OK"', None),
+    ],
+)
+def test_httpx_filter_falls_back_to_generic_line(msg, args):
+    record = _httpx_record(msg, args)
+
+    assert HttpxRequestUrlFilter().filter(record) is True
+    assert record.getMessage() == "HTTP Request: request completed"
+    assert not record.args
+    _assert_no_url(repr(record.__dict__))
+
+
+def test_httpx_filter_ignores_unrelated_records():
+    record = _httpx_record("something else %s", ("https://example.test/x",))
+
+    assert HttpxRequestUrlFilter().filter(record) is True
+    assert record.getMessage() == "something else https://example.test/x"
+
+
+def test_install_httpx_url_filter_is_idempotent_and_runs_via_configure_logging():
+    logger = logging.getLogger("httpx")
+    install_httpx_url_filter()
+    install_httpx_url_filter()
+    configure_logging()
+    installed = [f for f in logger.filters if isinstance(f, HttpxRequestUrlFilter)]
+    assert len(installed) == 1
+    assert isinstance(logger.filters[0], HttpxRequestUrlFilter)
+
+
+def test_httpx_url_filter_composes_with_webhook_suppression():
+    from app import connect
+
+    logger = logging.getLogger("httpx")
+    install_httpx_url_filter()
+    args = ("POST", _SECRET_REQUEST_URL, "HTTP/1.1", 200, "OK")
+    token = connect._webhook_send_active.set(True)
+    try:
+        suppressed = _httpx_record('HTTP Request: %s %s "%s %d %s"', args)
+        assert not logger.filter(suppressed)
+    finally:
+        connect._webhook_send_active.reset(token)
+
+    passed = _httpx_record('HTTP Request: %s %s "%s %d %s"', args)
+    assert logger.filter(passed)  # truthy: record (py>=3.12) or True
+    assert passed.getMessage() == "HTTP Request: POST -> 200"

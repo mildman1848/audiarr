@@ -115,7 +115,7 @@ _FITTING_RELEASE = {
     "seeders": 5,
     "leechers": 0,
     "publishDate": "2026-09-01T12:00:00Z",
-    "downloadUrl": "https://indexer.example/download/m4b-1.nzb",
+    "downloadUrl": "http://prowlarr.local/4/download?apikey=p-key&link=m4b-1&file=m4b-1.nzb",
     "magnetUrl": None,
     "protocol": "usenet",
     "age": 1,

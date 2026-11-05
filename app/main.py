@@ -42,6 +42,7 @@ from app.api import (
 )
 from app.auth import AuthMiddleware
 from app.config import get_db_path, load_settings, save_settings
+from app.connect import sanitize_connect_errors
 from app.db import init_db
 from app.logging_conf import configure_logging
 from app.scheduler_status import (
@@ -132,6 +133,15 @@ async def lifespan(app: FastAPI):
         settings.auth.api_key = secrets.token_hex(16)
         save_settings(settings)
         log.info("auth: generated api key (see settings)")
+
+    # Scrub unsafe delivery errors persisted by older versions (issue #82)
+    # before any request is served. Runs after the api-key bootstrap so that
+    # save cannot overwrite it. Logs a constant message only: the stored
+    # error text may itself contain a webhook URL.
+    try:
+        sanitize_connect_errors()
+    except Exception:  # noqa: BLE001 -- must never block startup
+        log.warning("connect: could not sanitize stored delivery errors")
 
     # Conversion worker: only runs when a backend is configured.
     stop_event = asyncio.Event()

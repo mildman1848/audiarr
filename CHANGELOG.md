@@ -1,5 +1,25 @@
 # Changelog
 
+## Unreleased — security follow-up (not a release; not the completion of #82)
+
+Security hardening split out of the #82 work into its own follow-up. Issue #82 (rich notifications, discovery events, idempotent digests) remains open: none of those features are part of this entry.
+
+- **Integration secrets are write-only.** The settings API no longer returns the Prowlarr indexer `api_key`, Connect webhook `header_value`, Audiobookshelf/m4b-convertarr `api_key`, Liberatarr `token`, conversion `api_key`/`webhook_api_key` or translation `api_key`; responses carry derived `*_set` flags instead. A blank value on save keeps the stored secret, but only while its destination (URL, plus header name for webhooks) is unchanged; if the destination changed, the save is rejected with a 422 asking for the secret to be re-entered. Webhook secrets are matched by stable id, and a save that would silently drop a legacy secret is rejected. The login `auth.api_key` is not covered.
+- **Connection tests no longer leak stored or deployment keys.** A key typed into the test request is always used; a blank key falls back to the stored/deployment key only when the tested URL is the configured destination, otherwise no key is sent. Test results are logged without the URL.
+- **Prowlarr proxy URLs are validated strictly.** Usenet and torrent grabs accept only the configured Prowlarr's canonical `<base>/<indexer id>/download` URL with the exact expected query (`apikey`/`link`/`file`); control characters, embedded credentials and foreign origins are rejected before any request is made, and the API key is stripped from redirects.
+- **Deployment keys are bound to trusted URLs.** Keys supplied through the environment or `FILE__` variables are now sent only to the destination named by a matching non-secret URL variable (exact scheme, host, port and path).
+- **Logs and Connect output are redacted.** HTTPX request URLs are stripped from logs. Connect payloads redact paths, URLs, credentials and client/job identifiers; only a bounded safe error label is stored for a failed delivery, and the `last_*` delivery metadata is server-owned and cannot be set through the settings API.
+
+**Migration — deployments using env/`FILE__` API keys:** set the matching URL variable next to each key, or the key is intentionally no longer sent:
+
+| Key (env or `FILE__`) | Required URL variable |
+|---|---|
+| `SABNZBD_API_KEY` | `SABNZBD_URL` |
+| `AUDIOBOOKSHELF_API_KEY` | `AUDIOBOOKSHELF_URL` (new) |
+| `M4B_CONVERTARR_API_KEY` | `M4B_CONVERTARR_URL` (new) |
+
+Credentials entered in the UI and stored in settings keep working and are sent to their configured URL.
+
 ## 1.1.13
 
 - Corrective release for the qBittorrent symlink-root import strategy (#81, follow-up to 1.1.12): the importer's root-folder lookup (`_find_root_folder_for_path`) now resolves both the candidate folder and the configured root with `realpath` and compares on path boundaries. Previously a root folder configured as a symlink was not recognised for the resolved path the qBittorrent poller hands in, so the files were recorded in place instead of being placed with that root's import strategy. `..` traversal, symlink escapes and sibling directories sharing a textual prefix are still never treated as contained. The poller's pre-probe containment gate is unchanged.

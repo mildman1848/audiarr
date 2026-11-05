@@ -21,7 +21,7 @@ router = APIRouter()
 
 
 class ConnectionTestRequest(BaseModel):
-    url: str
+    url: str = ""
     api_key: str | None = None
 
 
@@ -30,11 +30,34 @@ class ConnectionTestResponse(BaseModel):
     message: str
 
 
+def _bound_test_key(
+    url: str, api_key: str | None, configured_url: str, configured_key: str
+) -> str | None:
+    """Pick the API key for an Audiobookshelf/m4b-convertarr connection test.
+
+    The returned value follows the clients' convention: ``None`` lets the
+    client fall back to the ``*_API_KEY`` / ``FILE__*_API_KEY`` deployment
+    secret, ``""`` means "send no key". A key typed into the request is always
+    honoured. Otherwise the stored key (and, behind it, the deployment secret)
+    is only used when ``url`` is exactly the persisted configured destination,
+    so a blank-key test against an arbitrary URL can never collect it.
+    """
+    if api_key:
+        return api_key
+    configured = configured_url.strip().rstrip("/")
+    if configured and url.strip().rstrip("/") == configured:
+        return configured_key or None
+    return ""
+
+
 @router.post("/api/v1/connections/audiobookshelf/test", response_model=ConnectionTestResponse)
 async def test_audiobookshelf(request: ConnectionTestRequest) -> ConnectionTestResponse:
-    client = AudiobookshelfClient(base_url=request.url, api_key=request.api_key)
+    conn = load_settings().connections.audiobookshelf
+    api_key = _bound_test_key(request.url, request.api_key, conn.url, conn.api_key)
+    client = AudiobookshelfClient(base_url=request.url, api_key=api_key)
     ok = await client.health()
-    log.info("Audiobookshelf connection test to %s -> %s", request.url, ok)
+    # The URL may carry userinfo or query tokens, so it is never logged.
+    log.info("Audiobookshelf connection test -> %s", "ok" if ok else "failed")
     message = "Audiobookshelf reachable" if ok else "Could not reach Audiobookshelf"
     if not ok:
         await dispatch_event(
@@ -73,9 +96,11 @@ async def scan_audiobookshelf() -> ConnectionTestResponse:
 
 @router.post("/api/v1/connections/m4b-convertarr/test", response_model=ConnectionTestResponse)
 async def test_m4b_convertarr(request: ConnectionTestRequest) -> ConnectionTestResponse:
-    client = M4BConvertarrClient(base_url=request.url, api_key=request.api_key)
+    conn = load_settings().connections.m4b_convertarr
+    api_key = _bound_test_key(request.url, request.api_key, conn.url, conn.api_key)
+    client = M4BConvertarrClient(base_url=request.url, api_key=api_key)
     ok = await client.health()
-    log.info("m4b-convertarr connection test to %s -> %s", request.url, ok)
+    log.info("m4b-convertarr connection test -> %s", "ok" if ok else "failed")
     message = "m4b-convertarr reachable" if ok else "Could not reach m4b-convertarr"
     if not ok:
         await dispatch_event(
@@ -102,12 +127,23 @@ def _stored_sabnzbd_values(url: str, api_key: str | None) -> tuple[str, str | No
     else:
         match = clients[0] if clients else None
     if match is None:
-        return url, api_key
+        # ``""`` (not ``None``) marks "send no key": the deployment secret
+        # (SABNZBD_API_KEY / FILE__) must not be aimed at an arbitrary URL.
+        # For a configured URL, ``None`` lets SABnzbdClient use the secret
+        # only when the non-secret SABNZBD_URL names the same destination.
+        return url, api_key or ""
     return url or match.base_url(), api_key or match.api_key or None
 
 
 def _stored_prowlarr_values(url: str, api_key: str | None) -> tuple[str, str | None]:
-    """Fill missing Prowlarr test values from persisted settings."""
+    """Fill missing Prowlarr test values from persisted settings.
+
+    The returned key follows ProwlarrClient's convention: ``None`` lets the
+    client fall back to the ``PROWLARR_API_KEY`` / ``FILE__`` secret, ``""``
+    means "send no key". That fallback is a deployment secret, so it is only
+    allowed for a destination that is a configured Prowlarr; an arbitrary URL
+    with a blank key gets no key at all.
+    """
     if url and api_key:
         return url, api_key
 
@@ -118,7 +154,7 @@ def _stored_prowlarr_values(url: str, api_key: str | None) -> tuple[str, str | N
     else:
         match = indexers[0] if indexers else None
     if match is None:
-        return url, api_key
+        return url, api_key or ""
     return url or match.url.rstrip("/"), api_key or match.api_key or None
 
 
@@ -129,7 +165,7 @@ async def test_sabnzbd(request: ConnectionTestRequest) -> ConnectionTestResponse
     client = SABnzbdClient(base_url=url, api_key=api_key)
     version = await client.version()
     ok = version is not None
-    log.info("SABnzbd connection test to %s -> %s", url, ok)
+    log.info("SABnzbd connection test -> %s", "ok" if ok else "failed")
     message = f"SABnzbd {version}" if ok else "Could not reach SABnzbd"
     if not ok:
         await dispatch_event(
@@ -207,7 +243,7 @@ async def test_prowlarr(request: ConnectionTestRequest) -> ConnectionTestRespons
     status = await client.status()
     ok = status is not None
     version = (status or {}).get("version")
-    log.info("Prowlarr connection test to %s -> %s", url, ok)
+    log.info("Prowlarr connection test -> %s", "ok" if ok else "failed")
     message = f"Prowlarr {version}".strip() if ok else "Could not reach Prowlarr"
     if not ok:
         await dispatch_event(

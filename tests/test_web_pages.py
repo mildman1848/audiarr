@@ -847,22 +847,29 @@ def test_active_settings_pages_keep_save_bar(app_client, path):
 
 
 def test_connect_js_never_populates_header_value_from_settings():
-    """Issue #28: a stored header_value must never be written into a
-    visible input's value -- only a masked placeholder when one exists."""
+    """Issue #28/#82: header_value is write-only at the settings API. The
+    script must never read a secret from the GET response -- only the
+    derived header_value_set flag, which drives a masked placeholder."""
     script = (Path(__file__).parents[1] / "app/web/static/js/connect.js").read_text()
 
     assert "header_value: \"\"," in script
-    assert "_hasHeaderValue: Boolean(c.header_value)" in script
+    assert "_hasHeaderValue: Boolean(c.header_value_set)" in script
     assert "placeholder=\"${row._hasHeaderValue ? MASK : \"\"}\"" in script
+    # No read of a stored/returned header_value anywhere (the flag
+    # ``header_value_set`` is the only allowed response field).
+    assert not re.search(r"\b(?:c|stored|existing\w*)\.header_value\b(?!_set)", script)
 
 
-def test_connect_js_keeps_stored_header_value_when_field_left_blank():
-    """A blank header_value field on save must keep the stored secret, not
-    overwrite it with an empty string (same pattern as sab-api-key /
-    prowlarr-api-key in settings.js)."""
+def test_connect_js_submits_only_a_newly_typed_header_value():
+    """A blank header_value field on save is sent blank (server-side
+    "keep the stored secret"); it must not be backfilled from the GET."""
     script = (Path(__file__).parents[1] / "app/web/static/js/connect.js").read_text()
 
-    assert "row.header_value ? row.header_value : stored ? stored.header_value : \"\"" in script
+    assert "header_value: row.header_value," in script
+    assert "stored.header_value" not in script
+    # The Test button still sends the typed value (or blank for the
+    # server-side stored fallback) to the unchanged endpoint.
+    assert script.count("header_value: row.header_value,") == 2
 
 
 def test_connect_js_is_wrapped_in_an_iife():
